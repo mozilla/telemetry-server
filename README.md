@@ -26,10 +26,14 @@ The new Value for a Histogram will be calculated as an array containing:
 Having the metadata fields at the end of the array has the advantage that buckets are located at the expected offset in the array, and metadata can be referenced with "N from the end" type indices (or negative indices, depending on the language).
 
 As an example, we'll look at the `DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT` Histogram:
-``` json Original format (minimal)
+
+Original format (minimal)
+```json
 "DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT":{"log_sum_squares":624.027626294358,"log_sum":873.474196434021,"sum":1279,"values":{"8":0,"3":7,"1":1232,"0":0},"histogram_type":0,"bucket_count":10,"range":[1,3000]}
 ```
-``` json Original format (expanded for readability)
+
+Original format (expanded for readability)
+```json
 "DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT": {
   "log_sum_squares": 624.027626294358,
   "log_sum": 873.474196434021,
@@ -50,10 +54,13 @@ As an example, we'll look at the `DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT` Histogram
 ```
 
 In the new storage form, this becomes:
-``` json Converted format (minimal)
+Converted format (minimal)
+```json
 "162":[0,1232,0,7,0,0,0,0,0,0,1279,873.474196434021,624.027626294358]
 ```
-``` json Converted format (expanded)
+
+Converted format (expanded)
+```json
 "162": [                // DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT is the 162nd Histogram in Histograms.json (by name)
   0,                    // Bucket 0
   1232,                 // Bucket 1
@@ -82,8 +89,8 @@ The basic idea is to partition the data by a number of useful dimensions, then u
 
 The main thing to define here is exactly which dimensions will be used for partitioning, and in which order to apply them.
 
-If we used channel, submission day, and operating system, we would end up with a structure like this
-``` bash File Layout
+If we used channel, submission day, and operating system, we would end up with a structure like this:
+```bash
 20130612/
   nightly/
     winnt/
