@@ -14,6 +14,9 @@ import sys
 import urllib2
 import re
 import gzip
+import revision_cache
+import histogram_tools
+import traceback
 
 help_message = '''
     Takes a list of raw telemetry pings and writes them back out in a more
@@ -26,74 +29,80 @@ help_message = '''
 '''
 
 # TODO:
-# - fetch (and cache) all revisions of Histograms.json using something like:
+# - pre-fetch (and cache) all revisions of Histograms.json using something like:
 #   http://hg.mozilla.org/mozilla-central/log/tip/toolkit/components/telemetry/Histograms.json
 #   http://hg.mozilla.org/releases/mozilla-aurora/log/tip/toolkit/components/telemetry/Histograms.json
 #   http://hg.mozilla.org/releases/mozilla-beta/log/tip/toolkit/components/telemetry/Histograms.json
 #   http://hg.mozilla.org/releases/mozilla-release/log/tip/toolkit/components/telemetry/Histograms.json
 
-# cache the full details of Histograms.json
-hist_details = dict()
+valid_revisions = re.compile('^(http://.*)/([^/]+)/rev/([0-9a-f]+)/?$')
+cache = None
 
-# cache just the name -> id mapping (by revision)
-hist_name_to_id = dict()
-
-valid_revisions = re.compile('^(http://.*)/rev/([0-9a-f]+)/?$')
-
-def map_name(revision, histogram_name):
-   if revision not in hist_name_to_id:
-      get_file_from_revision(revision, "toolkit/components/telemetry/Histograms.json")
-
-   rev_cache = hist_name_to_id[revision]
-   if histogram_name not in rev_cache:
-      sys.stderr.write("Histogram %s not found in revision %s\n" % (histogram_name, revision))
-   return rev_cache[histogram_name]
-
-def map_value(revision, val):
+def map_value(histogram, val):
    rewritten = []
+   try:
+      bucket_count = int(histogram.n_buckets())
+      #sys.stderr.write("Found %d buckets for %s\n" % (bucket_count, histogram.name()))
+      rewritten = [0] * bucket_count
+      value_map = val["values"]
+      try:
+         # TODO: this is horribly inefficient
+         allowed_ranges = histogram.ranges()
+         range_map = dict()
+         for index, allowed_range in enumerate(allowed_ranges):
+            range_map[allowed_range] = index
+
+         for bucket in value_map.keys():
+            ib = int(bucket)
+            try:
+               #sys.stderr.write("Writing %s.values[%s] to buckets[%d] (size %d)\n" % (histogram.name(), bucket, range_map[ib], bucket_count))
+               rewritten[range_map[ib]] = value_map[bucket]
+            except KeyError:
+               sys.stderr.write("Found bogus bucket %s.values[%s]\n" % (histogram.name(), str(bucket)))
+      except:
+         sys.stderr.write("Could not find ranges for histogram: %s: %s\n" % (histogram.name(), sys.exc_info()))
+         traceback.print_exc(file=sys.stderr)
+   except ValueError:
+      # TODO: what should we do for non-numeric bucket counts?
+      #       - output buckets based on observed keys?
+      #       - skip this histogram
+      pass
+
    for k in ("sum", "log_sum", "log_sum_squares"):
       rewritten.append(val.get(k, -1))
-   rewritten.append(val["values"])
    return rewritten
 
-def get_file_from_revision(revision, file_path):
-   # revision is like
+# Returns (repository name, revision)
+def revision_url_to_parts(revision_url):
+   global valid_revisions
+   m = valid_revisions.match(revision_url)
+   if m:
+      #sys.stderr.write("Matched\n")
+      return (m.group(2), m.group(3))
+   else:
+      #sys.stderr.write("Did not Match: %s\n" % revision_url)
+      return (None, None)
+
+def get_histograms_for_revision(revision_url):
+   # revision_url is like
    #   http://hg.mozilla.org/releases/mozilla-aurora/rev/089956e907ed
    # and path should be like
    #   toolkit/components/telemetry/Histograms.json
    # to produce a full URL like
    #   http://hg.mozilla.org/releases/mozilla-aurora/raw-file/089956e907ed/toolkit/components/telemetry/Histograms.json
-   global hist_name_to_id
-   global hist_details
-   global valid_revisions
-   if revision not in hist_name_to_id:
-      hist_name_to_id[revision] = dict()
-   m = valid_revisions.match(revision)
-   if m:
-      url = "/".join((m.group(1), "raw-file", m.group(2), file_path))
-      sys.stderr.write("Fetching '%s'\n" % url)
-      # TODO: cache locally
-      response = urllib2.urlopen(url)
-      histograms_json = response.read()
-      histograms = json.loads(histograms_json)
-      hist_details[revision] = histograms
-      cache = hist_name_to_id[revision]
-      current_id = 0
-      for hist_name in iter(sorted(histograms.keys())):
-         sys.stderr.write("mapping %s to %d\n" % (hist_name, current_id))
-         cache[hist_name] = current_id
-         histograms[hist_name]["id"] = current_id
-         current_id += 1
-      sys.stderr.write("Histograms.%s.json" % m.group(2))
-      sys.stderr.write(json.dumps(histograms))
-   else:
-      sys.stderr.write("Invalid revision: '%s'\n" % (revision))
+   repo, revision = revision_url_to_parts(revision_url)
+   sys.stderr.write("Getting histograms for %s/%s\n" % (repo, revision))
+   histograms = cache.get_revision(repo, revision)
+   return histograms
 
-   
-def rewrite_hists(revision, histograms):
+def rewrite_hists(revision_url, histograms):
+   histogram_defs = get_histograms_for_revision(revision_url)
    rewritten = dict()
    for key, val in histograms.iteritems():
-      rewritten[map_name(revision, key)] = map_value(revision, val)
+      if key in histogram_defs:
+         rewritten[key] = map_value(histogram_tools.Histogram(key, histogram_defs[key]), val)
+      else:
+         sys.stderr.write("ERROR: no histogram definition found for %s\n" % key)
    return rewritten
 
 def process(input_file, output_file):
@@ -162,6 +171,7 @@ class Usage(Exception):
 
 
 def main(argv=None):
+   global cache
    if argv is None:
       argv = sys.argv
    try:
@@ -172,6 +182,8 @@ def main(argv=None):
       
       input_file = None
       output_file = None
+      cache_dir = None
+      server = None
       # option processing
       for option, value in opts:
          if option == "-v":
@@ -179,9 +191,21 @@ def main(argv=None):
          elif option in ("-h", "--help"):
             raise Usage(help_message)
          elif option in ("-i", "--input"):
-             input_file = value
+            input_file = value
          elif option in ("-o", "--output"):
             output_file = value
+         elif option in ("-c", "--cache"):
+            cache_dir = value
+         elif option in ("-s", "--server"):
+            server = value
+
+      if cache_dir == None:
+         cache_dir = "./histogram_cache"
+
+      if server == None:
+         server = "hg.mozilla.org"
+
+      cache = revision_cache.RevisionCache(cache_dir, server)
       
       process(input_file, output_file)
 

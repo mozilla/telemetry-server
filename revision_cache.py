@@ -15,10 +15,10 @@ class RevisionCache:
       self._hist_filepath = "toolkit/components/telemetry/" + self._hist_filename
 
    def get_revision(self, repo, revision):
-      if repo not in _repos:
-         _repos[repo] = dict()
+      if repo not in self._repos:
+         self._repos[repo] = dict()
 
-      cached_repo = _repos[repo]
+      cached_repo = self._repos[repo]
 
       cached_revision = None
       if revision not in cached_repo:
@@ -31,6 +31,8 @@ class RevisionCache:
             cached_revision = self.fetch_server(repo, revision)
             if cached_revision:
                cached_repo[revision] = cached_revision
+      else:
+         cached_revision = cached_repo[revision]
       return cached_revision
 
    def fetch_disk(self, repo, revision):
