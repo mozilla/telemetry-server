@@ -12,11 +12,11 @@ import getopt
 import json
 import sys
 import urllib2
-import re
 import gzip
 import revision_cache
 import histogram_tools
 import traceback
+import persist
 
 help_message = '''
     Takes a list of raw telemetry pings and writes them back out in a more
@@ -105,6 +105,12 @@ def rewrite_hists(revision_url, histograms):
          sys.stderr.write("ERROR: no histogram definition found for %s\n" % key)
    return rewritten
 
+def defaultGet(info, key):
+   result = "UNKNOWN"
+   if info and key in info:
+      result = info.get(key)
+   return result
+
 def process(input_file, output_file):
     line = 0
     if input_file == '-':
@@ -153,11 +159,12 @@ def process(input_file, output_file):
         except KeyError:
            sys.stderr.write("Missing histogram on line %d: %s\n" % (line, json.dumps(info)))
 
-        fout.write(date)
-        fout.write("\t")
+        reason = defaultGet(info, "reason")
+        channel = defaultGet(info, "appUpdateChannel")
+        buildid = defaultGet(info, "appBuildID")
+        dimensions = [date, reason, channel, buildid]
+        persist.write(uuid, json_dict, dimensions)
         fout.write(uuid)
-#        fout.write("\t")
-#        fout.write(revision)
         fout.write("\t")
         fout.write(json.dumps(json_dict))
         fout.write("\n")
