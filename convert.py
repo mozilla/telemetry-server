@@ -99,10 +99,16 @@ def rewrite_hists(revision_url, histograms):
    histogram_defs = get_histograms_for_revision(revision_url)
    rewritten = dict()
    for key, val in histograms.iteritems():
+      real_histogram_name = key
       if key in histogram_defs:
-         rewritten[key] = map_value(histogram_tools.Histogram(key, histogram_defs[key]), val)
+         real_histogram_name = key
+      elif key.startswith("STARTUP_") and key[8:] in histogram_defs:
+         # chop off leading "STARTUP_" per http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#532
+         real_histogram_name = key[8:]
       else:
          sys.stderr.write("ERROR: no histogram definition found for %s\n" % key)
+
+      rewritten[key] = map_value(histogram_tools.Histogram(key, histogram_defs[real_histogram_name]), val)
    return rewritten
 
 def defaultGet(info, key):
