@@ -2,3 +2,5 @@
 *.gz
 *.swp
 *.swo
+data/
+histogram_cache/

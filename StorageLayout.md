@@ -70,18 +70,31 @@ compression less effective), we will want to bucket certain rarely-occuring
 dimensions into an "other" directory.  This way we do not need to maintain a
 mostly-empty directory tree for customized channels, for example.
 
-One way to accomplish this is to maintain a predefined schema of which values
+The way we accomplish this is to maintain a predefined schema of which values
 are acceptable in a dimension, with anything outside the whitelist being
 grouped into "other".
 
-Another way is not to use a schema, but to "roll up" small partitions based on
-the number/size of documents.
 
 Schema-based Storage
 --------------------
 
-### Option 1: Filesystem as Schema
-One possibility is to use the filesystem itself as the schema, whereby if an
+We specify the schema as a list of acceptable values for each dimension, and
+any value will be replaced with "other".  The code can then create any
+directories on demand.
+
+This has the advantage that the schema is defined explicitly, and is easily
+shared in a multi-server scenario.
+
+One disadvantage is that you would have to signal the partitioner of any change
+to the schema so that documents could be re-routed with the updated schema.
+
+This is the approach that will be used.
+
+Considered, but unused approaches
+---------------------------------
+
+### Filesystem as Schema
+One can use the filesystem itself as the schema, whereby if an
 expected directory does not exist, a document is automatically put in the 
 "other" category for that level.
 
@@ -96,22 +109,13 @@ could be created say 5 days ahead).
 Another disadvantage is that the schema is not defined explicitly, so it could
 become inconsistent across servers or days.
 
-### Option 2: Schema document
-Another possibility is to keep the schema documented separately, and have the 
-partitioning code consult the schema and create any directories on demand.
+### Size-based partitions
+Another way is not to use a schema, but to "roll up" small partitions based on
+the number/size of documents.
 
-This has the advantage that the schema is defined explicitly, and is easily
-shared in a multi-server scenario.
-
-One disadvantage is that you would have to signal the partitioner of any change
-to the schema so that documents could be re-routed with the updated schema.
-
-
-Size-based partitions
----------------------
-
-One could have a batch process to go through the data for the previous day,
-and combine any files that contained less than a certain amount of data.
+Rather than using a schema, one could have a batch process to go through the
+data for the previous day, and combine any files that contained less than a
+certain amount of data.
 
 This has the advantage that it does not require manual intervention to maintain
 reasonably well-balanced splitting of data files.
@@ -119,3 +123,5 @@ reasonably well-balanced splitting of data files.
 A disadvantage is that during the current day, the "long tail" of infrequently
 appearing dimension values could result in a huge number of files and
 directories being created.
+
+

@@ -8,41 +8,54 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import os
 import sys
-import getopt
 import json
-import sys
-import urllib2
 import re
-import gzip
-import revision_cache
-import histogram_tools
-import traceback
 
-help_message = '''
-    Takes a list of raw telemetry pings and writes them back out in a more
-    compact form
-    Required:
-        -i, --input <input_file>
-        -o, --output <output_file>
-    Optional:
-        -h, --help
-'''
+import urllib2
 
-def write(uuid, obj, dimensions):
-   filename = get_filename(dimensions)
-   sys.stderr.write("Writing %s to %s" % (uuid, filename))
-   try:
-      fout = open(filename, "a")
-   except IOError:
-      os.makedirs(os.path.dirname(filename))
-      fout = open(filename, "a")
-   fout.write(uuid)
-   fout.write("\t")
-   fout.write(json.dumps(obj))
-   fout.write("\n")
-   fout.close()
 
-def get_filename(dimensions):
-   dirname = os.path.join(*dimensions)
-   # TODO: get files in order, find newest non-full one
-   return os.path.join("./data", re.sub(r'[^a-zA-Z0-9_/]', "_", dirname))
+class StorageLayout:
+   """A class for encapsulating the on-disk data layout for Telemetry"""
+
+   def __init__(self, schema, basedir):
+      self._schema = schema
+      self._dimensions = self._schema["dimensions"]
+      self._basedir = basedir
+      #if !self._schema:
+      #   schema = json.load(os.path.join(self._basedir, "telemetry_schema.json"))
+
+   def write(self, uuid, obj, dimensions):
+      filename = self.get_filename(dimensions)
+      sys.stderr.write("Writing %s to %s\n" % (uuid, filename))
+      try:
+         fout = open(filename, "a")
+      except IOError:
+         os.makedirs(os.path.dirname(filename))
+         fout = open(filename, "a")
+      fout.write(uuid)
+      fout.write("\t")
+      fout.write(json.dumps(obj))
+      fout.write("\n")
+      fout.close()
+
+   def get_allowed_value(self, value, allowed_values):
+      if allowed_values == "*":
+         return str(value)
+      elif isinstance(allowed_values, list):
+         if value in allowed_values:
+            return value
+      # elif it's a regex, apply the regex.
+      # elif it's a special case (date-in-past, uuid, etc)
+      return "OTHER"
+
+   def apply_schema(self, dimensions):
+      cleaned = ["OTHER"] * len(self._dimensions)
+      for i, v in enumerate(dimensions):
+         cleaned[i] = self.get_allowed_value(v, self._dimensions[i]["allowed_values"])
+
+      return cleaned
+
+   def get_filename(self, dimensions):
+      dirname = os.path.join(*self.apply_schema(dimensions))
+      # TODO: get files in order, find newest non-full one
+      return os.path.join("./data", re.sub(r'[^a-zA-Z0-9_/.]', "_", dirname)) + ".000"

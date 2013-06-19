@@ -129,6 +129,10 @@ def process(input_file, output_file):
     else:
        fout = gzip.open(output_file, "wb")
 
+    schema_data = open("./telemetry_schema.json")
+    schema = json.load(schema_data)
+    storage = persist.StorageLayout(schema, "./data")
+
     while True:
         line += 1
         first_byte = fin.read(1)
@@ -166,10 +170,13 @@ def process(input_file, output_file):
            sys.stderr.write("Missing histogram on line %d: %s\n" % (line, json.dumps(info)))
 
         reason = defaultGet(info, "reason")
+        appname = defaultGet(info, "appName")
         channel = defaultGet(info, "appUpdateChannel")
+        appver = defaultGet(info, "appVersion")
         buildid = defaultGet(info, "appBuildID")
-        dimensions = [date, reason, channel, buildid]
-        persist.write(uuid, json_dict, dimensions)
+        # TODO: get dimensions in order from schema (field_name)
+        dimensions = [date, reason, appname, channel, appver, buildid]
+        storage.write(uuid, json_dict, dimensions)
         fout.write(uuid)
         fout.write("\t")
         fout.write(json.dumps(json_dict))
