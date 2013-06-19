@@ -10,7 +10,6 @@ import re
 import sys
 import getopt
 import json
-import sys
 import urllib2
 import gzip
 import revision_cache
@@ -38,84 +37,85 @@ help_message = '''
 valid_revisions = re.compile('^(http://.*)/([^/]+)/rev/([0-9a-f]+)/?$')
 cache = None
 
+
 def map_value(histogram, val):
-   rewritten = []
-   try:
-      bucket_count = int(histogram.n_buckets())
-      #sys.stderr.write("Found %d buckets for %s\n" % (bucket_count, histogram.name()))
-      rewritten = [0] * bucket_count
-      value_map = val["values"]
-      try:
-         # TODO: this is horribly inefficient
-         allowed_ranges = histogram.ranges()
-         range_map = dict()
-         for index, allowed_range in enumerate(allowed_ranges):
-            range_map[allowed_range] = index
+    rewritten = []
+    try:
+        bucket_count = int(histogram.n_buckets())
+        #sys.stderr.write("Found %d buckets for %s\n" % (bucket_count, histogram.name()))
+        rewritten = [0] * bucket_count
+        value_map = val["values"]
+        try:
+            # TODO: this is horribly inefficient
+            allowed_ranges = histogram.ranges()
+            range_map = dict()
+            for index, allowed_range in enumerate(allowed_ranges):
+                range_map[allowed_range] = index
 
-         for bucket in value_map.keys():
-            ib = int(bucket)
-            try:
-               #sys.stderr.write("Writing %s.values[%s] to buckets[%d] (size %d)\n" % (histogram.name(), bucket, range_map[ib], bucket_count))
-               rewritten[range_map[ib]] = value_map[bucket]
-            except KeyError:
-               sys.stderr.write("Found bogus bucket %s.values[%s]\n" % (histogram.name(), str(bucket)))
-      except:
-         sys.stderr.write("Could not find ranges for histogram: %s: %s\n" % (histogram.name(), sys.exc_info()))
-         traceback.print_exc(file=sys.stderr)
-   except ValueError:
-      # TODO: what should we do for non-numeric bucket counts?
-      #       - output buckets based on observed keys?
-      #       - skip this histogram
-      pass
+            for bucket in value_map.keys():
+                ib = int(bucket)
+                try:
+                    #sys.stderr.write("Writing %s.values[%s] to buckets[%d] (size %d)\n" % (histogram.name(), bucket, range_map[ib], bucket_count))
+                    rewritten[range_map[ib]] = value_map[bucket]
+                except KeyError:
+                    sys.stderr.write("Found bogus bucket %s.values[%s]\n" % (histogram.name(), str(bucket)))
+        except:
+            sys.stderr.write("Could not find ranges for histogram: %s: %s\n" % (histogram.name(), sys.exc_info()))
+            traceback.print_exc(file=sys.stderr)
+    except ValueError:
+        # TODO: what should we do for non-numeric bucket counts?
+        #   - output buckets based on observed keys?
+        #   - skip this histogram
+        pass
 
-   for k in ("sum", "log_sum", "log_sum_squares"):
-      rewritten.append(val.get(k, -1))
-   return rewritten
+    for k in ("sum", "log_sum", "log_sum_squares"):
+        rewritten.append(val.get(k, -1))
+    return rewritten
 
 # Returns (repository name, revision)
 def revision_url_to_parts(revision_url):
-   global valid_revisions
-   m = valid_revisions.match(revision_url)
-   if m:
-      #sys.stderr.write("Matched\n")
-      return (m.group(2), m.group(3))
-   else:
-      #sys.stderr.write("Did not Match: %s\n" % revision_url)
-      return (None, None)
+    global valid_revisions
+    m = valid_revisions.match(revision_url)
+    if m:
+        #sys.stderr.write("Matched\n")
+        return (m.group(2), m.group(3))
+    else:
+        #sys.stderr.write("Did not Match: %s\n" % revision_url)
+        return (None, None)
 
 def get_histograms_for_revision(revision_url):
-   # revision_url is like
-   #   http://hg.mozilla.org/releases/mozilla-aurora/rev/089956e907ed
-   # and path should be like
-   #   toolkit/components/telemetry/Histograms.json
-   # to produce a full URL like
-   #   http://hg.mozilla.org/releases/mozilla-aurora/raw-file/089956e907ed/toolkit/components/telemetry/Histograms.json
-   repo, revision = revision_url_to_parts(revision_url)
-   sys.stderr.write("Getting histograms for %s/%s\n" % (repo, revision))
-   histograms = cache.get_revision(repo, revision)
-   return histograms
+    # revision_url is like
+    #    http://hg.mozilla.org/releases/mozilla-aurora/rev/089956e907ed
+    # and path should be like
+    #    toolkit/components/telemetry/Histograms.json
+    # to produce a full URL like
+    #    http://hg.mozilla.org/releases/mozilla-aurora/raw-file/089956e907ed/toolkit/components/telemetry/Histograms.json
+    repo, revision = revision_url_to_parts(revision_url)
+    sys.stderr.write("Getting histograms for %s/%s\n" % (repo, revision))
+    histograms = cache.get_revision(repo, revision)
+    return histograms
 
 def rewrite_hists(revision_url, histograms):
-   histogram_defs = get_histograms_for_revision(revision_url)
-   rewritten = dict()
-   for key, val in histograms.iteritems():
-      real_histogram_name = key
-      if key in histogram_defs:
-         real_histogram_name = key
-      elif key.startswith("STARTUP_") and key[8:] in histogram_defs:
-         # chop off leading "STARTUP_" per http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#532
-         real_histogram_name = key[8:]
-      else:
-         sys.stderr.write("ERROR: no histogram definition found for %s\n" % key)
+    histogram_defs = get_histograms_for_revision(revision_url)
+    rewritten = dict()
+    for key, val in histograms.iteritems():
+        real_histogram_name = key
+        if key in histogram_defs:
+            real_histogram_name = key
+        elif key.startswith("STARTUP_") and key[8:] in histogram_defs:
+            # chop off leading "STARTUP_" per http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#532
+            real_histogram_name = key[8:]
+        else:
+            sys.stderr.write("ERROR: no histogram definition found for %s\n" % key)
 
-      rewritten[key] = map_value(histogram_tools.Histogram(key, histogram_defs[real_histogram_name]), val)
-   return rewritten
+        rewritten[key] = map_value(histogram_tools.Histogram(key, histogram_defs[real_histogram_name]), val)
+    return rewritten
 
 def defaultGet(info, key):
-   result = "UNKNOWN"
-   if info and key in info:
-      result = info.get(key)
-   return result
+    result = "UNKNOWN"
+    if info and key in info:
+        result = info.get(key)
+    return result
 
 def process(input_file, output_file):
     line = 0
@@ -159,15 +159,15 @@ def process(input_file, output_file):
 
         info = json_dict.get("info")
         if "revision" not in info:
-           sys.stderr.write("no revision found on line %d: %s\n" % (line, json.dumps(info)))
-           continue
+            sys.stderr.write("no revision found on line %d: %s\n" % (line, json.dumps(info)))
+            continue
 
         revision = info.get("revision")
 
         try:
-           json_dict["histograms"] = rewrite_hists(revision, json_dict["histograms"])
+            json_dict["histograms"] = rewrite_hists(revision, json_dict["histograms"])
         except KeyError:
-           sys.stderr.write("Missing histogram on line %d: %s\n" % (line, json.dumps(info)))
+            sys.stderr.write("Missing histogram on line %d: %s\n" % (line, json.dumps(info)))
 
         reason = defaultGet(info, "reason")
         appname = defaultGet(info, "appName")
@@ -186,53 +186,49 @@ def process(input_file, output_file):
     fout.close()  
 
 class Usage(Exception):
-   def __init__(self, msg):
-      self.msg = msg
-
+    def __init__(self, msg):
+        self.msg = msg
 
 def main(argv=None):
-   global cache
-   if argv is None:
-      argv = sys.argv
-   try:
-      try:
-         opts, args = getopt.getopt(argv[1:], "hi:o:v", ["help", "input=", "output="])
-      except getopt.error, msg:
-         raise Usage(msg)
-      
-      input_file = None
-      output_file = None
-      cache_dir = None
-      server = None
-      # option processing
-      for option, value in opts:
-         if option == "-v":
-            verbose = True
-         elif option in ("-h", "--help"):
-            raise Usage(help_message)
-         elif option in ("-i", "--input"):
-            input_file = value
-         elif option in ("-o", "--output"):
-            output_file = value
-         elif option in ("-c", "--cache"):
-            cache_dir = value
-         elif option in ("-s", "--server"):
-            server = value
+    global cache
+    if argv is None:
+        argv = sys.argv
+    try:
+        try:
+            opts, args = getopt.getopt(argv[1:], "hi:o:v", ["help", "input=", "output="])
+        except getopt.error, msg:
+            raise Usage(msg)
+        
+        input_file = None
+        output_file = None
+        cache_dir = None
+        server = None
+        # option processing
+        for option, value in opts:
+            if option == "-v":
+                verbose = True
+            elif option in ("-h", "--help"):
+                raise Usage(help_message)
+            elif option in ("-i", "--input"):
+                input_file = value
+            elif option in ("-o", "--output"):
+                output_file = value
+            elif option in ("-c", "--cache"):
+                cache_dir = value
+            elif option in ("-s", "--server"):
+                server = value
+        if cache_dir is None:
+            cache_dir = "./histogram_cache"
 
-      if cache_dir == None:
-         cache_dir = "./histogram_cache"
+        if server is None:
+            server = "hg.mozilla.org"
+        cache = revision_cache.RevisionCache(cache_dir, server)
+        process(input_file, output_file)
 
-      if server == None:
-         server = "hg.mozilla.org"
-
-      cache = revision_cache.RevisionCache(cache_dir, server)
-      
-      process(input_file, output_file)
-
-   except Usage, err:
-       print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
-       print >> sys.stderr, " for help use --help"
-       return 2
+    except Usage, err:
+        print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
+        print >> sys.stderr, " for help use --help"
+        return 2
 
 if __name__ == "__main__":
-   sys.exit(main())
+    sys.exit(main())
