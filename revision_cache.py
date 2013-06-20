@@ -14,6 +14,10 @@ class RevisionCache:
         self._hist_filename = "Histograms.json"
         self._hist_filepath = "toolkit/components/telemetry/" + self._hist_filename
 
+    # TODO:
+    #  [ ] deal with 'tip' and other named revisions / tags (fetch from source
+    #      with no local cache?)
+    #  [ ] add ability to return raw unparsed data (skip string->json->string)
     def get_revision(self, repo, revision):
         if repo not in self._repos:
             self._repos[repo] = dict()
