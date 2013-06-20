@@ -4,6 +4,13 @@ import os
 import urllib2
 import gzip
 
+# TODO:
+# [ ] Pre-fetch (and cache) all revisions of Histograms.json using something like:
+#      http://hg.mozilla.org/mozilla-central/log/tip/toolkit/components/telemetry/Histograms.json
+#      http://hg.mozilla.org/releases/mozilla-aurora/log/tip/toolkit/components/telemetry/Histograms.json
+#      http://hg.mozilla.org/releases/mozilla-beta/log/tip/toolkit/components/telemetry/Histograms.json
+#      http://hg.mozilla.org/releases/mozilla-release/log/tip/toolkit/components/telemetry/Histograms.json
+#     then link other repository revisions to the relevant Histograms.json revision.
 class RevisionCache:
     """A class for fetching and caching revisions of a file in mercurial"""
 

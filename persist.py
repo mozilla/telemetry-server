@@ -26,6 +26,14 @@ class StorageLayout:
 
     def write(self, uuid, obj, dimensions):
         filename = self.get_filename(dimensions)
+        self.write_filename(uuid, obj, filename)
+
+    def write_invalid(self, uuid, obj, dimensions, err):
+        # TODO: put 'err' into file?
+        filename = self.get_filename_invalid(dimensions)
+        self.write_filename(uuid, obj, filename, err)
+
+    def write_filename(self, uuid, obj, filename, err=None):
         sys.stderr.write("Writing %s to %s\n" % (uuid, filename))
         try:
             fout = open(filename, "a")
@@ -34,7 +42,13 @@ class StorageLayout:
             fout = open(filename, "a")
         fout.write(uuid)
         fout.write("\t")
-        fout.write(json.dumps(obj))
+        if err is not None:
+            fout.write(str(err).replace("\t", " "))
+            fout.write("\t")
+        if isinstance(obj, basestring):
+            fout.write(obj)
+        else:
+            fout.write(json.dumps(obj))
         fout.write("\n")
         fout.close()
 
@@ -58,4 +72,9 @@ class StorageLayout:
     def get_filename(self, dimensions):
         dirname = os.path.join(*self.apply_schema(dimensions))
         # TODO: get files in order, find newest non-full one
-        return os.path.join("./data", re.sub(r'[^a-zA-Z0-9_/.]', "_", dirname)) + ".000"
+        return os.path.join(self._basedir, re.sub(r'[^a-zA-Z0-9_/.]', "_", dirname)) + ".000"
+
+    def get_filename_invalid(self, dimensions):
+        dirname = os.path.join(*self.apply_schema(dimensions))
+        # TODO: get files in order, find newest non-full one
+        return os.path.join(self._basedir, "invalid", re.sub(r'[^a-zA-Z0-9_/.]', "_", dirname)) + ".000"
