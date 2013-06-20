@@ -9,7 +9,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import re
 import sys
 import getopt
-import json
+try:
+    import simplejson as json
+except ImportError:
+    import json
 import urllib2
 import gzip
 import revision_cache
@@ -185,7 +188,6 @@ def process(input_file, output_file, storage, converter):
         assert tab == '\t'
 
         jsonstr = fin.readline()
-
         json_dict, dimensions = converter.convert_json(jsonstr, date)
         storage.write(uuid, json_dict, dimensions)
         fout.write(uuid)
@@ -194,7 +196,7 @@ def process(input_file, output_file, storage, converter):
         fout.write("\n")
 
     fin.close()
-    fout.close()  
+    fout.close()
 
 class Usage(Exception):
     def __init__(self, msg):

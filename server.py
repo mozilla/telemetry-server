@@ -2,6 +2,7 @@ from datetime import date
 from flask import json
 from flask import Flask
 from flask import request
+import flask
 from revision_cache import RevisionCache
 from convert import Converter
 import persist
@@ -9,7 +10,8 @@ import persist
 app = Flask(__name__)
 cache = RevisionCache("./histogram_cache", "hg.mozilla.org")
 converter = Converter(cache)
-schema_data = open("./telemetry_schema.json")
+schema_filename = "./telemetry_schema.json"
+schema_data = open(schema_filename)
 schema = json.load(schema_data)
 storage = persist.StorageLayout(schema, "./data")
 
@@ -24,14 +26,23 @@ def get_histograms(repo, revision):
         abort(404)
     return json.dumps(histograms)
 
+@app.route('/telemetry_schema')
+def get_schema():
+    return flask.send_file(schema_filename, mimetype="application/json")
+
+def is_string(s):
+    return isinstance(s, basestring)
+
 def validate_body(json):
     return True
 
 def validate_dims(dimensions):
-    if dimensions[1] in ["idle-daily","saved-session"]:
+    # Make sure all dimensions are strings
+    if reduce(lambda x, y: x and is_string(y), dimensions, True):
         return True
     else:
-        raise ValueError("invalid reason")
+        raise ValueError("Invalid dimension")
+
 
 #http://<bagheera_host>/submit/telemetry/<id>/<reason>/<appName>/<appVersion>/<appUpdateChannel>/<appBuildID>
 @app.route('/submit/telemetry/<id>/<reason>/<appName>/<appVersion>/<appUpdateChannel>/<appBuildID>', methods=['POST'])

@@ -8,7 +8,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import os
 import sys
-import json
+try:
+    import simplejson as json
+except ImportError:
+    import json
 import re
 
 import urllib2
