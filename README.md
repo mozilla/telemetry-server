@@ -55,3 +55,34 @@ Once we have the converter and MapReduce framework available, we can easily cons
 -------------------
 
 If necessary, we will route the client (Firefox) submissions directly into the new pipeline.
+
+
+Code Overview
+=============
+
+`server.py`
+-----------
+Contains the prototype http server for receiving payloads. The `submit`
+function is where the interesting things happen.
+
+`convert.py`
+------------
+Contains the `Converter` class, which is used to convert a JSON payload from
+the raw form submitted by Firefox to the more compact
+[storage format](StorageFormat.md) for on-disk storage and processing.
+
+You can run the main method in this file to process data exported from the
+old telemetry backend (via pig, jydoop, etc), or you can use the `Converter`
+class to convert data in a more fine-grained way.
+
+`persist.py`
+------------
+Contains the `StorageLayout` class, which is used to save payloads to disk
+using the directory structure as documented in the
+[storage layout](StorageLayout.md) section above.
+
+`revision_cache.py`
+-------------------
+Contains the `RevisionCache` class, which provides a mechanism for fetching
+the `Histograms.json` spec file for a given revision URL. Histogram data is
+cached locally on disk and in-memory as revisions are requested.
