@@ -54,8 +54,9 @@ def submit(id, reason, appName, appVersion, appUpdateChannel, appBuildID):
     try:
         validate_body(json)
         validate_dims(dimensions)
-        obj, payload_dims = converter.convert_json(json, today)
-        storage.write(id, json, dimensions)
+        converted, payload_dims = converter.convert_json(json, today)
+        # TODO: check if payload_dims are the same as incoming dims?
+        storage.write(id, converted, dimensions)
         # 201 CREATED
         return "Created", 201
     except ValueError, err:
