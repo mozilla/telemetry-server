@@ -73,6 +73,9 @@ def submit(id, today, dimensions=None):
         # 201 CREATED
         return "Created", 201
     except ValueError, err:
+        if dimensions is None:
+            # At the very least, we know what day it is
+            dimensions = [today]
         storage.write_invalid(id, json, dimensions, err)
         # 400 BAD REQUEST
         return "Bad Request", 400

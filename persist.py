@@ -68,6 +68,8 @@ class StorageLayout:
     def apply_schema(self, dimensions):
         cleaned = ["OTHER"] * len(self._dimensions)
         if dimensions is not None:
+            # TODO: don't enumerate past the max number of 'allowed' dimensions
+            #       ie. if someone passed in 100 dims.
             for i, v in enumerate(dimensions):
                 cleaned[i] = self.get_allowed_value(v, self._dimensions[i]["allowed_values"])
 
