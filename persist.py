@@ -67,8 +67,9 @@ class StorageLayout:
 
     def apply_schema(self, dimensions):
         cleaned = ["OTHER"] * len(self._dimensions)
-        for i, v in enumerate(dimensions):
-            cleaned[i] = self.get_allowed_value(v, self._dimensions[i]["allowed_values"])
+        if dimensions is not None:
+            for i, v in enumerate(dimensions):
+                cleaned[i] = self.get_allowed_value(v, self._dimensions[i]["allowed_values"])
 
         return cleaned
 
