@@ -37,14 +37,26 @@ sudo -u bagheera_user $BAGHEERA_HOME/bin/consumer com.mozilla.bagheera.consumer.
  --delete false
 ```
 
-Unfortunately, a quirk of our network security is that outbound HTTP requests
-are not allowed, so we need to specify an HTTP proxy.  This can easily be done
-at the JVM level, so we can invoke the full command manually.  We end up with:
+In the case where your network security does not allow outbound HTTP requests,
+you may need to specify an HTTP proxy.  This can easily be done at the JVM
+level, so we can invoke the full command manually.  We end up with:
 
 ```bash
 export PROXY_HOST=example.proxy.mozilla.com
 export PROXY_PORT=9999
-sudo -u bagheera java -Dhttp.proxyHost=$PROXY_HOST -Dhttp.proxyPort=$PROXY_PORT ...<snip long list of JVM args copied from the 'consumer' script>... -cp <snip long classpath> com.mozilla.bagheera.consumer.KafkaReplayConsumer -t $KAFKA_TOPIC -gid $KAFKA_GID -p $BAGHEERA_HOME/conf/kafka.consumer.properties --copy-keys true --dest "http://$REPLAY_HOST/submit/telemetry/%k" --sample $SAMPLE_RATE --delete false
+sudo -u bagheera_user java \
+ -Dhttp.proxyHost=$PROXY_HOST \
+ -Dhttp.proxyPort=$PROXY_PORT \
+ ...<snip long list of JVM args copied from the 'consumer' script>... \
+ -cp <snip long classpath> \
+ com.mozilla.bagheera.consumer.KafkaReplayConsumer \
+ -t $KAFKA_TOPIC \
+ -gid $KAFKA_GID \
+ -p $BAGHEERA_HOME/conf/kafka.consumer.properties \
+ --copy-keys true \
+ --dest "http://$REPLAY_HOST/submit/telemetry/%k" \
+ --sample $SAMPLE_RATE \
+ --delete false
 ```
 
 [1]: https://github.com/mozilla-metrics/bagheera "Bagheera"
