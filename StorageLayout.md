@@ -79,7 +79,7 @@ Schema-based Storage
 --------------------
 
 We specify the schema as a list of acceptable values for each dimension, and
-any value will be replaced with "other".  The code can then create any
+any value will be replaced with "OTHER".  The code can then create any
 directories on demand.
 
 This has the advantage that the schema is defined explicitly, and is easily
@@ -89,6 +89,23 @@ One disadvantage is that you would have to signal the partitioner of any change
 to the schema so that documents could be re-routed with the updated schema.
 
 This is the approach that will be used.
+
+### `telemetry_schema.json`
+
+The schema is defined in [telemetry_schema.json](telemetry_schema.json) and
+contains an array of `dimensions` that are used to determine what is allowed
+at each level of the storage hierarchy.  Currently supported values are:
+- String value `*`: allow any value
+- Array of strings: allow any value in the array
+
+Types that may be supported in the future (if and when they are needed):
+- Min / max range: allow values in a range (or specify only an upper or lower
+  bound)
+- Regular expression: allow only values matching the specified regex
+
+Values outside of the allowed values will be replaced with "OTHER" to make sure
+that the "long tail" of dimension values does not cause a huge number of small
+files to be created.
 
 Considered, but unused approaches
 ---------------------------------
