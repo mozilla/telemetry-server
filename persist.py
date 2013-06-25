@@ -51,7 +51,8 @@ class StorageLayout:
         if isinstance(obj, basestring):
             fout.write(obj)
         else:
-            fout.write(json.dumps(obj))
+            # Use minimal json (without excess spaces)
+            fout.write(json.dumps(obj, separators=(',', ':')))
         fout.write("\n")
         fout.close()
 

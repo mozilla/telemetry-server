@@ -192,7 +192,7 @@ def process(input_file, output_file, storage, converter):
         storage.write(uuid, json_dict, dimensions)
         fout.write(uuid)
         fout.write("\t")
-        fout.write(json.dumps(json_dict))
+        fout.write(json.dumps(json_dict, separators=(',', ':')))
         fout.write("\n")
 
     fin.close()

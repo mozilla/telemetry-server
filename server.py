@@ -24,7 +24,7 @@ def get_histograms(repo, revision):
     histograms = cache.get_revision(repo, revision)
     if histograms is None:
         abort(404)
-    return json.dumps(histograms)
+    return json.dumps(histograms, separators=(',', ':'))
 
 @app.route('/telemetry_schema')
 def get_schema():
