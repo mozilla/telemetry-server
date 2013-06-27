@@ -14,6 +14,7 @@ except ImportError:
     import json
 import re
 
+from telemetry_schema import TelemetrySchema
 import urllib2
 
 
@@ -21,19 +22,18 @@ class StorageLayout:
     """A class for encapsulating the on-disk data layout for Telemetry"""
 
     def __init__(self, schema, basedir):
-        self._schema = schema
-        self._dimensions = self._schema["dimensions"]
+        self._schema = TelemetrySchema(schema)
         self._basedir = basedir
         #if !self._schema:
         #    schema = json.load(os.path.join(self._basedir, "telemetry_schema.json"))
 
     def write(self, uuid, obj, dimensions):
-        filename = self.get_filename(dimensions)
+        filename = self._schema.get_filename(self._basedir, dimensions)
         self.write_filename(uuid, obj, filename)
 
     def write_invalid(self, uuid, obj, dimensions, err):
         # TODO: put 'err' into file?
-        filename = self.get_filename_invalid(dimensions)
+        filename = self._schema.get_filename_invalid(self._basedir, dimensions)
         self.write_filename(uuid, obj, filename, err)
 
     def write_filename(self, uuid, obj, filename, err=None):
@@ -55,33 +55,3 @@ class StorageLayout:
             fout.write(json.dumps(obj, separators=(',', ':')))
         fout.write("\n")
         fout.close()
-
-    def get_allowed_value(self, value, allowed_values):
-        if allowed_values == "*":
-            return str(value)
-        elif isinstance(allowed_values, list):
-            if value in allowed_values:
-                return value
-        # elif it's a regex, apply the regex.
-        # elif it's a special case (date-in-past, uuid, etc)
-        return "OTHER"
-
-    def apply_schema(self, dimensions):
-        cleaned = ["OTHER"] * len(self._dimensions)
-        if dimensions is not None:
-            # TODO: don't enumerate past the max number of 'allowed' dimensions
-            #       ie. if someone passed in 100 dims.
-            for i, v in enumerate(dimensions):
-                cleaned[i] = self.get_allowed_value(v, self._dimensions[i]["allowed_values"])
-
-        return cleaned
-
-    def get_filename(self, dimensions):
-        dirname = os.path.join(*self.apply_schema(dimensions))
-        # TODO: get files in order, find newest non-full one
-        return os.path.join(self._basedir, re.sub(r'[^a-zA-Z0-9_/.]', "_", dirname)) + ".000"
-
-    def get_filename_invalid(self, dimensions):
-        dirname = os.path.join(*self.apply_schema(dimensions))
-        # TODO: get files in order, find newest non-full one
-        return os.path.join(self._basedir, "invalid", re.sub(r'[^a-zA-Z0-9_/.]', "_", dirname)) + ".000"
