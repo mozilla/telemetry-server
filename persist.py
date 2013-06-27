@@ -22,7 +22,7 @@ class StorageLayout:
     """A class for encapsulating the on-disk data layout for Telemetry"""
 
     def __init__(self, schema, basedir):
-        self._schema = TelemetrySchema(schema)
+        self._schema = schema
         self._basedir = basedir
         #if !self._schema:
         #    schema = json.load(os.path.join(self._basedir, "telemetry_schema.json"))
@@ -37,7 +37,8 @@ class StorageLayout:
         self.write_filename(uuid, obj, filename, err)
 
     def write_filename(self, uuid, obj, filename, err=None):
-        sys.stderr.write("Writing %s to %s\n" % (uuid, filename))
+        # TODO: logging?
+        #sys.stderr.write("Writing %s to %s\n" % (uuid, filename))
         try:
             fout = open(filename, "a")
         except IOError:

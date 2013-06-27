@@ -17,6 +17,7 @@ import urllib2
 import gzip
 import revision_cache
 from histogram_tools import Histogram
+from telemetry_schema import TelemetrySchema
 import traceback
 import persist
 
@@ -24,8 +25,9 @@ import persist
 class Converter:
     """A class for converting incoming payloads to a more compact form"""
 
-    def __init__(self, cache):
+    def __init__(self, cache, schema):
         self._cache = cache
+        self._schema = schema
         self._valid_revisions = re.compile('^(http://.*)/([^/]+)/rev/([0-9a-f]+)/?$')
 
     def map_key(self, histograms, key):
@@ -84,7 +86,7 @@ class Converter:
         # to produce a full URL like
         #    http://hg.mozilla.org/releases/mozilla-aurora/raw-file/089956e907ed/toolkit/components/telemetry/Histograms.json
         repo, revision = self.revision_url_to_parts(revision_url)
-        sys.stderr.write("Getting histograms for %s/%s\n" % (repo, revision))
+        #sys.stderr.write("Getting histograms for %s/%s\n" % (repo, revision))
         histograms = self._cache.get_revision(repo, revision)
         return histograms
 
@@ -128,13 +130,8 @@ class Converter:
         except KeyError:
             raise ValueError("Missing in payload: histograms")
 
-        reason = self.get_dimension(info, "reason")
-        appname = self.get_dimension(info, "appName")
-        channel = self.get_dimension(info, "appUpdateChannel")
-        appver = self.get_dimension(info, "appVersion")
-        buildid = self.get_dimension(info, "appBuildID")
-        # TODO: get dimensions in order from schema (field_name)
-        dimensions = [date, reason, appname, channel, appver, buildid]
+        # Get dimensions in order from schema (field_name)
+        dimensions = self._schema.dimensions_from(info, date)
         return json_dict, dimensions
 
     def get_dimension(self, info, key):
@@ -195,8 +192,13 @@ def process(input_file, output_file, storage, converter):
         fout.write(json.dumps(json_dict, separators=(',', ':')))
         fout.write("\n")
 
+        # print minimal progress indicator
+        sys.stdout.write(".")
+        sys.stdout.flush()
+
     fin.close()
     fout.close()
+    sys.stdout.write("\n")
 
 class Usage(Exception):
     def __init__(self, msg):
@@ -236,9 +238,9 @@ def main(argv=None):
             server = "hg.mozilla.org"
         cache = revision_cache.RevisionCache(cache_dir, server)
         schema_data = open("./telemetry_schema.json")
-        schema = json.load(schema_data)
+        schema = TelemetrySchema(json.load(schema_data))
         storage = persist.StorageLayout(schema, "./data")
-        converter = Converter(cache)
+        converter = Converter(cache, schema)
         process(input_file, output_file, storage, converter)
 
     except Usage, err:

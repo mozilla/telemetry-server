@@ -48,11 +48,28 @@ class TelemetrySchema:
         return TelemetrySchema.DISALLOWED_VALUE
 
     def get_filename(self, basedir, dimensions):
-        dirname = os.path.join(*self.apply_schema(dimensions))
-        # TODO: get files in order, find newest non-full one
-        return os.path.join(basedir, self.safe_filename(dirname)) + ".000"
+        clean_dims = self.apply_schema(dimensions)
+        submission_date = clean_dims.pop()
+        return self.get_current_file(basedir, clean_dims, submission_date)
 
     def get_filename_invalid(self, basedir, dimensions):
-        dirname = os.path.join(*self.apply_schema(dimensions))
+        clean_dims = self.apply_schema(dimensions)
+        submission_date = clean_dims.pop()
+        # prepend invalid dir name.
+        clean_dims.insert(0, TelemetrySchema.INVALID_DIR)
+        return self.get_current_file(basedir, clean_dims, submission_date)
+
+    def get_current_file(self, basedir, dims, submission_date):
         # TODO: get files in order, find newest non-full one
-        return os.path.join(basedir, TelemetrySchema.INVALID_DIR, self.safe_filename(dirname)) + ".000"
+        # use hex digits for seqnum
+        dirname = os.path.join(*dims)
+        return ".".join((os.path.join(basedir, self.safe_filename(dirname)), submission_date, "000", "log"))
+
+    def dimensions_from(self, info, submission_date):
+        dimensions = []
+        for dim in self._dimensions:
+            if dim["field_name"] == "submission_date":
+                dimensions.append(submission_date)
+            else:
+                dimensions.append(info.get(dim["field_name"], "UNKNOWN"))
+        return dimensions

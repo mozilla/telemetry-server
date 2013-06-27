@@ -10,15 +10,17 @@ from flask import Flask
 from flask import request
 import flask
 from revision_cache import RevisionCache
+from telemetry_schema import TelemetrySchema
 from convert import Converter
 import persist
 
 app = Flask(__name__)
 cache = RevisionCache("./histogram_cache", "hg.mozilla.org")
-converter = Converter(cache)
 schema_filename = "./telemetry_schema.json"
 schema_data = open(schema_filename)
-schema = json.load(schema_data)
+schema = TelemetrySchema(json.load(schema_data))
+
+converter = Converter(cache, schema)
 storage = persist.StorageLayout(schema, "./data")
 
 @app.route('/', methods=['GET', 'POST'])
@@ -54,8 +56,14 @@ def validate_dims(dimensions):
 @app.route('/submit/telemetry/<id>/<reason>/<appName>/<appVersion>/<appUpdateChannel>/<appBuildID>', methods=['POST'])
 def submit_with_dims(id, reason, appName, appVersion, appUpdateChannel, appBuildID):
     today = date.today().strftime("%Y%m%d")
-    # TODO: make 'storage' do this:
-    dimensions = [today, reason, appName, appUpdateChannel, appVersion, appBuildID]
+    info = {
+            "reason": reason,
+            "appName": appName,
+            "appVersion": appVersion,
+            "appUpdateChannel": appUpdateChannel,
+            "appBuildID": appBuildID
+    }
+    dimensions = schema.dimensions_from(info, today)
     return submit(id, today, dimensions)
 
 @app.route('/submit/telemetry/<id>', methods=['POST'])
