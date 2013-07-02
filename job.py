@@ -9,6 +9,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import argparse
 import sys
 import os
+import json
+from telemetry_schema import TelemetrySchema
 
 class Job:
     """A class for orchestrating a Telemetry MapReduce job"""
@@ -23,47 +25,42 @@ class Job:
 
     def __init__(self, input_dir, output_file, input_filter=None):
         self._input_dir = input_dir
-        self._input_filter = json.load(input_filter)
-        self._include_invalid = False
-        if "include_invalid" in self._input_filter:
-            self._include_invalid = self._input_filter["include_invalid"]
+        self._input_filter = TelemetrySchema(json.load(open(input_filter)))
+        self._allowed_values = self._input_filter.sanitize_allowed_values()
         self._output_file = output_file
 
     def files(self):
         out_files = self.get_filtered_files(self._input_dir)
-        if self._include_invalid:
-            out_files += self.get_filtered_files(os.path.join(self._input_dir, "invalid"))
+        if self._input_filter._include_invalid:
+            invalid_dir = os.path.join(self._input_dir, TelemetrySchema.INVALID_DIR)
+            print "Looking for invalid data in", invalid_dir
+            out_files += self.get_filtered_files(invalid_dir)
         return out_files
 
     def get_filtered_files(self, searchdir):
-        level_offset = self._input_dir.count(os.path.sep)
+        level_offset = searchdir.count(os.path.sep)
         out_files = []
-        for root, dirs, files in os.walk(self._input_dir):
+        for root, dirs, files in os.walk(searchdir):
             level = root.count(os.path.sep) - level_offset
             dirs[:] = [i for i in dirs if self.filter_includes(level, i)]
-            out_files += [os.path.join(root, f) for f in files]
+            for f in files:
+                full_filename = os.path.join(root, f)
+                dims = self._input_filter.get_dimensions(searchdir, full_filename)
+                include = True
+                for l in range(level, len(self._allowed_values)):
+                    if not self.filter_includes(l, dims[l]):
+                        include = False
+                        break
+                if include:
+                    out_files.append(full_filename)
         return out_files
 
     def filter_includes(self, level, value):
-        if self._input_filter is None:
-            # by default, filter out 'invalid' data
-            if level == 0 and value == 'invalid':
-                return False
-            return True
-
-        dims = self._input_filter.get("dimensions", [])
-        if dims and len(dims) > level:
-            allowed_values = dims[level]["allowed_values"]
-            if allowed_values == "*":
-
-        #print "Checking filter for ", level, value
-        if level == 0 and value == "20130620":
+        # Filter out 'invalid' data.  It is included explicitly if needed.
+        if level == 0 and value == TelemetrySchema.INVALID_DIR:
             return False
-        if level == 1 and value == "idle_daily":
-            return False
-        if level == 3 and value == "beta":
-            return False
-        return True
+        allowed_values = self._allowed_values[level]
+        return self._input_filter.is_allowed(value, allowed_values)
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Run a MapReduce Job.')
@@ -78,6 +75,7 @@ def main(argv=None):
     job = Job(args.data_dir, args.output, args.input_filter)
 
     files = job.files()
+    print "Found ", len(files), "files:"
     print files
 
 

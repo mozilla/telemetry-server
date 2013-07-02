@@ -16,9 +16,19 @@ class TelemetrySchema:
     def __init__(self, spec):
         self._spec = spec
         self._dimensions = self._spec["dimensions"]
+        self._include_invalid = self._spec.get("include_invalid", False)
 
     def safe_filename(self, value):
         return re.sub(r'[^a-zA-Z0-9_/.]', "_", value)
+
+    def sanitize_allowed_values(self):
+        dims = []
+        for d in self._dimensions:
+            allowed = d["allowed_values"]
+            if isinstance(allowed, list):
+                allowed = [self.safe_filename(a) for a in allowed]
+            dims.append(allowed)
+        return dims
 
     def apply_schema(self, dimensions):
         num_dims = len(self._dimensions)
@@ -38,6 +48,12 @@ class TelemetrySchema:
         elif isinstance(allowed_values, list):
             if value in allowed_values:
                 return True
+        elif isinstance(allowed_values, dict):
+            if "min" in allowed_values and value < allowed_values["min"]:
+                return False
+            if "max" in allowed_values and value > allowed_values["max"]:
+                return False
+            return True
         # elif it's a regex, apply the regex.
         # elif it's a special case (date-in-past, uuid, etc)
         return False
@@ -46,6 +62,24 @@ class TelemetrySchema:
         if self.is_allowed(value, allowed_values):
             return str(value)
         return TelemetrySchema.DISALLOWED_VALUE
+
+    def get_dimensions(self, basedir, filename):
+        canonical_base = os.path.realpath(basedir)
+        canonical_file = os.path.realpath(filename)
+
+        if not canonical_file.startswith(canonical_base):
+            raise ValueError("Error: file '%s' is not under base dir '%s'" % filename, basedir)
+
+        # Chop off the base dir and one path separator
+        dimfile = canonical_file[len(canonical_base)+1:]
+        dims = dimfile.split(os.path.sep)
+        filename = dims.pop()
+        file_dims = filename.split(".")
+
+        # Last two dimensions are in the filename, separated by dots:
+        dims.append(file_dims.pop(0))
+        dims.append(file_dims.pop(0))
+        return dims
 
     def get_filename(self, basedir, dimensions):
         clean_dims = self.apply_schema(dimensions)
