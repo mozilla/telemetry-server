@@ -23,11 +23,13 @@ class Job:
     # 7. combine map output for each file
     # 8. reduce combine output overall
 
-    def __init__(self, input_dir, output_file, input_filter=None):
+    def __init__(self, input_dir, output_file, job_script, mappers, reducers,input_filter=None):
         self._input_dir = input_dir
         self._input_filter = TelemetrySchema(json.load(open(input_filter)))
         self._allowed_values = self._input_filter.sanitize_allowed_values()
         self._output_file = output_file
+        self._num_mappers = mappers
+        self._num_reducers = reducers
 
     def files(self):
         out_files = self.get_filtered_files(self._input_dir)
@@ -36,6 +38,23 @@ class Job:
             print "Looking for invalid data in", invalid_dir
             out_files += self.get_filtered_files(invalid_dir)
         return out_files
+
+    # Split up the input files into groups of approximately-equal on-disk size.
+    def partition(self, files):
+        namesize = [ { "name": files[i], "size": os.stat(files[i]).st_size } for i in range(0, len(files)) ]
+        partitions = [[]] * self._num_mappers
+        sums = [0] * self._num_mappers
+        min_idx = 0
+
+        # Greedily assign the largest file to the smallest partition
+        while len(namesize) > 0:
+            current = namesize.pop()
+            partitions[min_idx].append(current)
+            sums[min_idx] += current["size"]
+            for m in range(0, len(sums)):
+                if sums[m] < sums[min_idx]:
+                    min_idx = m
+        return partitions
 
     def get_filtered_files(self, searchdir):
         level_offset = searchdir.count(os.path.sep)
@@ -72,11 +91,13 @@ def main(argv=None):
     parser.add_argument("-f", "--input-filter", help="File containing filter spec")
     args = parser.parse_args()
 
-    job = Job(args.data_dir, args.output, args.input_filter)
+    job = Job(args.data_dir, args.output,args.job_script, args.num_mappers, args.num_reducers, args.input_filter)
 
     files = job.files()
     print "Found ", len(files), "files:"
-    print files
+    #print files
+
+    print job.partition(files)
 
 
 if __name__ == "__main__":
