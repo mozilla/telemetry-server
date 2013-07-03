@@ -11,7 +11,9 @@ import imp
 import sys
 import os
 import json
-from multiprocessing import Process, Queue
+import marshal
+from datetime import datetime
+from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
 
 class Job:
@@ -25,7 +27,12 @@ class Job:
     # 7. combine map output for each file
     # 8. reduce combine output overall
 
-    def __init__(self, input_dir, output_file, job_script, mappers, reducers,input_filter=None):
+    def __init__(self, input_dir, output_file, job_script, mappers, reducers, input_filter=None):
+        if mappers <= 0:
+            raise ValueError("Number of mappers must be greater than zero")
+        if reducers <= 0:
+            raise ValueError("Number of reducers must be greater than zero")
+
         self._input_dir = input_dir
         self._input_filter = TelemetrySchema(json.load(open(input_filter)))
         self._allowed_values = self._input_filter.sanitize_allowed_values()
@@ -39,30 +46,44 @@ class Job:
     def mapreduce(self):
         files = self.files()
         partitions = self.partition(files)
-        map_output_files = Queue()
-        #print "Found partitions", partitions
+        # Partitions are ready. Map.
         mappers = []
         for i in range(self._num_mappers):
             p = Process(
                     target=Mapper,
-                    args=(map_output_files, "mapper_%d"%i, partitions[i], self._job_module))
+                    args=(i, partitions[i], self._job_module, self._num_reducers))
             mappers.append(p)
             p.start()
         for m in mappers:
             m.join()
 
-        # Mappers are done.  Reduce.
+        # Mappers are done. Reduce.
         reducers = []
         for i in range(self._num_reducers):
             p = Process(
                     target=Reducer,
-                    args=(map_output_files, "reducer_%d"%i, self._job_module))
+                    args=(i, self._job_module, self._num_mappers))
             reducers.append(p)
             p.start()
         for r in reducers:
             r.join()
 
         # Reducers are done.  Output results.
+        os.rename("output/reducer_0", self._output_file)
+        if self._num_reducers > 1:
+            out = open(self._output_file, "a")
+            for i in range(1, self._num_reducers):
+                # FIXME: this reads the entire reducer output into memory
+                reducer_filename = "output/reducer_" + str(i)
+                reducer_output = open(reducer_filename, "r")
+                out.write(reducer_output.read())
+                reducer_output.close()
+                os.remove(reducer_filename)
+
+        # Clean up mapper outputs
+        for m in range(self._num_mappers):
+            for r in range(self._num_reducers):
+                os.remove("output/mapper_%d_%d" % (m, r))
 
     def files(self):
         out_files = self.get_filtered_files(self._input_dir)
@@ -118,9 +139,34 @@ class Job:
         allowed_values = self._allowed_values[level]
         return self._input_filter.is_allowed(value, allowed_values)
 
+
 class Context:
+    def __init__(self, out, partition_count):
+        self._basename = out
+        self._partition_count = partition_count
+        self._sinks = {} # = open(out, "wb")
+
+    def partition(self, key):
+        return hash(key) % self._partition_count
+
+    def write(self, key, value):
+        p = self.partition(key)
+        if p not in self._sinks:
+            out = open("%s_%d" % (self._basename, p), "wb")
+            self._sinks[p] = out
+        else:
+            out = self._sinks[p]
+        marshal.dump((key, value), out)
+
+    def finish(self):
+        for s in self._sinks.itervalues():
+            s.close()
+
+
+class TextContext(Context):
     def __init__(self, out):
         self._sink = open(out, "w")
+        self._sinks = {0: self._sink}
 
     def write(self, key, value):
         self._sink.write(str(key))
@@ -128,15 +174,13 @@ class Context:
         self._sink.write(str(value))
         self._sink.write("\n")
 
-    def finish(self):
-        self._sink.close()
 
 class Mapper:
-    def __init__(self, output_files, name, inputs, module):
-        #print "I am", name, ", and I'm mapping", len(inputs), "inputs:", inputs
-        output_file = "output/" + name
+    def __init__(self, mapper_id, inputs, module, partition_count):
+        #print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
+        output_file = "output/mapper_" + str(mapper_id)
         mapfunc = getattr(module, 'map', None)
-        context = Context(output_file)
+        context = Context(output_file, partition_count)
         if mapfunc is None or not callable(mapfunc):
             print "No map function!!!"
             sys.exit(1)
@@ -146,27 +190,31 @@ class Mapper:
                 key, value = line.split("\t", 1)
                 mapfunc(key, input_file["dimensions"], value, context)
         context.finish()
-        output_files.put(output_file)
+
 
 class Reducer:
-    def __init__(self, mapper_files, name, module):
-        print "I am", name, ", and I'm reducing", mapper_files.qsize(), "mapped files"
-        output_file = "output/" + name
-        context = Context(output_file)
+    def __init__(self, reducer_id, module, mapper_count):
+        print "I am reducer", reducer_id, ", and I'm reducing", mapper_count, "mapped files"
+        output_file = "output/reducer_" + str(reducer_id)
+        context = TextContext(output_file)
         reducefunc = getattr(module, 'reduce', None)
         if reducefunc is None or not callable(reducefunc):
             print "No reduce function (that's ok)"
         else:
             collected = {}
-            while not mapper_files.empty():
-                mapper_file = mapper_files.get(False)
+            for i in range(mapper_count):
+                mapper_file = "output/mapper_%d_%d" % (i, reducer_id)
                 # read, group by key, call reducefunc, output
-                input_fd = open(mapper_file, "r")
-                for line in input_fd:
-                    key, value = line.split("\t", 1)
-                    if key not in collected:
-                        collected[key] = []
-                    collected[key].append(value)
+                input_fd = open(mapper_file, "rb")
+                while True:
+                    try:
+                        key, value = marshal.load(input_fd)
+                        if key not in collected:
+                            collected[key] = []
+                        collected[key].append(value)
+                    except EOFError:
+                        break
+
             for k,v in collected.iteritems():
                 reducefunc(k, v, context)
         context.finish()
@@ -178,18 +226,16 @@ def main(argv=None):
     parser.add_argument("-m", "--num-mappers", metavar="N", help="Start N mapper processes", type=int, default=4)
     parser.add_argument("-r", "--num-reducers", metavar="N", help="Start N reducer processes", type=int, default=1)
     parser.add_argument("-d", "--data-dir", help="Base data directory")
+    parser.add_argument("-w", "--work-dir", help="Location to put temporary work files")
     parser.add_argument("-o", "--output", help="Filename to use for final job output")
     parser.add_argument("-f", "--input-filter", help="File containing filter spec")
     args = parser.parse_args()
 
     job = Job(args.data_dir, args.output,args.job_script, args.num_mappers, args.num_reducers, args.input_filter)
-
-    files = job.files()
-    print "Processing", len(files), "input files"
-    #print files
-
+    start = datetime.now()
     job.mapreduce()
-    print "All done"
+    delta = (datetime.now() - start)
+    print "All done in %dm %ds %dms" % (delta.seconds / 60, delta.seconds % 60, delta.microseconds / 1000)
 
 if __name__ == "__main__":
     sys.exit(main())
