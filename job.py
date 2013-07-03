@@ -27,13 +27,21 @@ class Job:
     # 7. combine map output for each file
     # 8. reduce combine output overall
 
-    def __init__(self, input_dir, output_file, job_script, mappers, reducers, input_filter=None):
+    def __init__(self, input_dir, work_dir, output_file, job_script, mappers, reducers, input_filter=None):
+        # Sanity check args.
         if mappers <= 0:
             raise ValueError("Number of mappers must be greater than zero")
         if reducers <= 0:
             raise ValueError("Number of reducers must be greater than zero")
+        if not os.path.isdir(input_dir):
+            raise ValueError("Input dir must be a valid directory")
+        if not os.path.isdir(work_dir):
+            raise ValueError("Work dir must be a valid directory")
+        if not os.path.isfile(job_script):
+            raise ValueError("Job script must be a valid python file")
 
         self._input_dir = input_dir
+        self._work_dir = work_dir
         self._input_filter = TelemetrySchema(json.load(open(input_filter)))
         self._allowed_values = self._input_filter.sanitize_allowed_values()
         self._output_file = output_file
@@ -51,7 +59,7 @@ class Job:
         for i in range(self._num_mappers):
             p = Process(
                     target=Mapper,
-                    args=(i, partitions[i], self._job_module, self._num_reducers))
+                    args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
             mappers.append(p)
             p.start()
         for m in mappers:
@@ -62,19 +70,19 @@ class Job:
         for i in range(self._num_reducers):
             p = Process(
                     target=Reducer,
-                    args=(i, self._job_module, self._num_mappers))
+                    args=(i, self._work_dir, self._job_module, self._num_mappers))
             reducers.append(p)
             p.start()
         for r in reducers:
             r.join()
 
         # Reducers are done.  Output results.
-        os.rename("output/reducer_0", self._output_file)
+        os.rename(os.path.join(self._work_dir, "reducer_0"), self._output_file)
         if self._num_reducers > 1:
             out = open(self._output_file, "a")
             for i in range(1, self._num_reducers):
                 # FIXME: this reads the entire reducer output into memory
-                reducer_filename = "output/reducer_" + str(i)
+                reducer_filename = os.path.join(self._work_dir, "reducer_" + str(i))
                 reducer_output = open(reducer_filename, "r")
                 out.write(reducer_output.read())
                 reducer_output.close()
@@ -83,7 +91,7 @@ class Job:
         # Clean up mapper outputs
         for m in range(self._num_mappers):
             for r in range(self._num_reducers):
-                os.remove("output/mapper_%d_%d" % (m, r))
+                os.remove(os.path.join(self._work_dir, "mapper_%d_%d" % (m, r)))
 
     def files(self):
         out_files = self.get_filtered_files(self._input_dir)
@@ -176,9 +184,9 @@ class TextContext(Context):
 
 
 class Mapper:
-    def __init__(self, mapper_id, inputs, module, partition_count):
+    def __init__(self, mapper_id, inputs, work_dir, module, partition_count):
         #print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
-        output_file = "output/mapper_" + str(mapper_id)
+        output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
         if mapfunc is None or not callable(mapfunc):
@@ -193,9 +201,9 @@ class Mapper:
 
 
 class Reducer:
-    def __init__(self, reducer_id, module, mapper_count):
-        print "I am reducer", reducer_id, ", and I'm reducing", mapper_count, "mapped files"
-        output_file = "output/reducer_" + str(reducer_id)
+    def __init__(self, reducer_id, work_dir, module, mapper_count):
+        #print "I am reducer", reducer_id, ", and I'm reducing", mapper_count, "mapped files"
+        output_file = os.path.join(work_dir, "reducer_" + str(reducer_id))
         context = TextContext(output_file)
         reducefunc = getattr(module, 'reduce', None)
         if reducefunc is None or not callable(reducefunc):
@@ -203,7 +211,7 @@ class Reducer:
         else:
             collected = {}
             for i in range(mapper_count):
-                mapper_file = "output/mapper_%d_%d" % (i, reducer_id)
+                mapper_file = os.path.join(work_dir, "mapper_%d_%d" % (i, reducer_id))
                 # read, group by key, call reducefunc, output
                 input_fd = open(mapper_file, "rb")
                 while True:
@@ -225,13 +233,14 @@ def main(argv=None):
     parser.add_argument("job_script", help="The MapReduce script to run")
     parser.add_argument("-m", "--num-mappers", metavar="N", help="Start N mapper processes", type=int, default=4)
     parser.add_argument("-r", "--num-reducers", metavar="N", help="Start N reducer processes", type=int, default=1)
-    parser.add_argument("-d", "--data-dir", help="Base data directory")
-    parser.add_argument("-w", "--work-dir", help="Location to put temporary work files")
-    parser.add_argument("-o", "--output", help="Filename to use for final job output")
-    parser.add_argument("-f", "--input-filter", help="File containing filter spec")
+    parser.add_argument("-d", "--data-dir", help="Base data directory", required=True)
+    parser.add_argument("-w", "--work-dir", help="Location to put temporary work files", default="/tmp/telemetry_mr")
+    parser.add_argument("-o", "--output", help="Filename to use for final job output", required=True)
+    #TODO: make the input filter optional, default to "everything valid" and generate dims intelligently.
+    parser.add_argument("-f", "--input-filter", help="File containing filter spec", required=True)
     args = parser.parse_args()
 
-    job = Job(args.data_dir, args.output,args.job_script, args.num_mappers, args.num_reducers, args.input_filter)
+    job = Job(args.data_dir, args.work_dir, args.output,args.job_script, args.num_mappers, args.num_reducers, args.input_filter)
     start = datetime.now()
     job.mapreduce()
     delta = (datetime.now() - start)
