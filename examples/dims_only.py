@@ -3,4 +3,4 @@ def map(key, dims, value, context):
     context.write(submission_day, 1)
 
 def reduce(key, values, context):
-    context.write(key, sum([int(v) for v in values]))
+    context.write(key, sum(values))

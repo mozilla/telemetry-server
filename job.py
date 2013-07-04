@@ -52,8 +52,12 @@ class Job:
         self._job_module = imp.load_module("telemetry_job", modulefd, job_script, ('.py', 'U', 1))
 
     def mapreduce(self):
+        # Find files matching specified input filter
         files = self.files()
+
+        # Partition files into reasonably equal groups for use by mappers
         partitions = self.partition(files)
+
         # Partitions are ready. Map.
         mappers = []
         for i in range(self._num_mappers):
