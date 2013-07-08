@@ -7,25 +7,28 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import os
+import glob
 import sys
 try:
     import simplejson as json
 except ImportError:
     import json
 import re
-import logging
-import logging.handlers
-
 from telemetry_schema import TelemetrySchema
-import urllib2
+import gzip
 
 
 class StorageLayout:
     """A class for encapsulating the on-disk data layout for Telemetry"""
 
     def __init__(self, schema, basedir):
+        self._compressed_suffix = ".gz"
+        self._max_log_size = 2000000
+        self._max_open_handles = 20
+        self._logcache = {}
         self._schema = schema
         self._basedir = basedir
+
         #if !self._schema:
         #    schema = json.load(os.path.join(self._basedir, "telemetry_schema.json"))
 
@@ -39,21 +42,129 @@ class StorageLayout:
         self.write_filename(uuid, obj, filename, err)
 
     def write_filename(self, uuid, obj, filename, err=None):
-        # TODO: logging?
-        #sys.stderr.write("Writing %s to %s\n" % (uuid, filename))
-        # TODO: keep a cache of these loggers
-        if not os.path.isfile(filename):
-            # if this fails, I want the whole thing to fail so don't try/except.
-            dirname = os.path.dirname(filename)
-            if not os.path.isdir(dirname):
-                os.makedirs(dirname)
-        logger = logging.getLogger(filename)
-        handler = logging.handlers.RotatingFileHandler(filename, maxBytes=500000000, backupCount=1000)
-        formatter = logging.Formatter("%(message)s")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+        # Incoming filename is like
+        #   a.b.c.log
+        # We may have already written some logs and rolled over
+        # So the actual filename we want to append may be something like
+        #   a.b.c.log.3
+        # With other files called a.b.c.log.1.gz and a.b.c.log.2.gz
+        #
+        # For a fresh write request:
+        # - find a.b.c.log*
+        # - find the one with the highest number -> N
+        # - if a.b.c.log.N is already compressed, use N+1
+        # - if it's not already compressed, use N
+        # - if after writing, the file exceeds max size, close it, open the next, and asynchronously compress the previous one.
+        # Keep a cache of heavily used log files
+
+        if filename not in self._logcache:
+            self._logcache[filename] = self.load_log_info(filename)
+
+        log_info = self._logcache[filename]
+
+        fout = log_info["handle"]
+        # TODO: should we actually write "err" to file?
+        fout.write(uuid)
+        fout.write("\t")
         if isinstance(obj, basestring):
-            payload = obj
+            fout.write(obj)
         else:
-            payload = json.dumps(obj, separators=(',', ':'))
-        logger.critical("%s\t%s", uuid, payload)
+            # Use minimal json (without excess spaces)
+            fout.write(json.dumps(obj, separators=(',', ':')))
+        fout.write("\n")
+        log_info["wcount"] += 1
+
+        if fout.tell() >= self._max_log_size:
+            print "rotating", log_info["name"]
+            self.rotate(log_info)
+
+    def load_log_info(self, filename):
+        print "Loading info for", filename
+        log_info = {
+                "name": filename,
+                "wcount": 0
+        }
+        existing_logs = glob.glob(filename + "*")
+        suffixes = [ s[len(filename) + 1:] for s in existing_logs ]
+        # suffixes now contains [ 1.gz, 2.gz, ..., N.gz ], where the
+        # final one may or may not be compressed.
+        # If we didn't find anything, always start with filename.1
+        last_log = 1
+        last_log_compressed = False
+        comp_extension_len = len(self._compressed_suffix)
+        for suffix in suffixes:
+            if suffix.endswith(self._compressed_suffix):
+                curr_log = int(suffix[0:-comp_extension_len])
+                if curr_log > last_log:
+                    last_log = curr_log
+                    last_log_compressed = True
+            else:
+                curr_log = int(suffix)
+                if curr_log > last_log:
+                    last_log = curr_log
+                    last_log_compressed = False
+
+        if last_log_compressed:
+            last_log += 1
+        log_info["last_log"] = last_log
+
+        # TODO: if the cache is full, evict someone first.
+        if len(self._logcache) >= self._max_open_handles:
+            self.evict_logcache()
+        log_info["handle"] = self.open_log(log_info)
+        return log_info
+
+    def real_name(self, name, number):
+        return ".".join((name, str(number)))
+
+    def open_log(self, log_info):
+        real_filename = self.real_name(log_info["name"], log_info["last_log"])
+        try:
+            handle = open(real_filename, "a")
+        except IOError:
+            os.makedirs(os.path.dirname(real_filename))
+            handle = open(real_filename, "a")
+        return handle
+
+    def rotate(self, log_info):
+        print "Rotating", log_info["name"]
+        # close current file (N)
+        log_info["handle"].close()
+        old_log_num = log_info["last_log"]
+
+        # open next file (N+1)
+        log_info["last_log"] += 1
+        log_info["handle"] = self.open_log(log_info)
+        log_info["wcount"] = 0
+
+        # asynchronously compress file N
+        # TODO: async
+        old_log_name = self.real_name(log_info["name"], old_log_num)
+        f_raw = open(old_log_name, 'rb')
+        comp_log_name = old_log_name + self._compressed_suffix
+        f_comp = gzip.open(comp_log_name, 'wb')
+        f_comp.writelines(f_raw)
+        print "Size before compression:", f_raw.tell(), "Size after compression:", os.path.getsize(comp_log_name)
+        f_comp.close()
+        f_raw.close()
+
+    def evict_logcache(self):
+        print "Cache is full. Time to evict someone."
+        # TODO: use some better heuristic than least frequently used - least
+        #       recently used would prevent old (but frequent) files from
+        #       clogging things up.  Maybe some combo of old+infrequent.
+        lucky_winner = self._logcache.itervalues().next()
+        for log_info in self._logcache.itervalues():
+            if log_info["wcount"] < lucky_winner["wcount"]:
+                lucky_winner = log_info
+            if log_info["wcount"] == 1:
+                break
+        print "Evicting", lucky_winner["name"], "with", lucky_winner["wcount"], "writes"
+
+        del(self._logcache[lucky_winner["name"]])
+
+    def __del__(self):
+        for log_info in self._logcache.itervalues():
+            print "Closing", log_info["name"], "#", log_info["last_log"], "after writing", log_info["wcount"], "times"
+            log_info["handle"].close()
+        self._logcache.clear()
