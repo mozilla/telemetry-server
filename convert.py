@@ -239,7 +239,7 @@ def main(argv=None):
         cache = revision_cache.RevisionCache(cache_dir, server)
         schema_data = open("./telemetry_schema.json")
         schema = TelemetrySchema(json.load(schema_data))
-        storage = persist.StorageLayout(schema, "./data")
+        storage = persist.StorageLayout(schema, "./data", 1000000)
         converter = Converter(cache, schema)
         process(input_file, output_file, storage, converter)
 

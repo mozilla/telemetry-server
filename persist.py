@@ -21,11 +21,11 @@ import time
 
 class StorageLayout:
     """A class for encapsulating the on-disk data layout for Telemetry"""
+    COMPRESSED_SUFFIX = ".gz"
 
-    def __init__(self, schema, basedir):
-        self._compressed_suffix = ".gz"
-        self._max_log_size = 200000
-        self._max_open_handles = 50
+    def __init__(self, schema, basedir, max_log_size, max_open_handles=500):
+        self._max_log_size = max_log_size
+        self._max_open_handles = max_open_handles
         self._logcache = {}
         self._schema = schema
         self._basedir = basedir
@@ -92,9 +92,9 @@ class StorageLayout:
         # If we didn't find anything, always start with filename.1
         last_log = 1
         last_log_compressed = False
-        comp_extension_len = len(self._compressed_suffix)
+        comp_extension_len = len(StorageLayout.COMPRESSED_SUFFIX)
         for suffix in suffixes:
-            if suffix.endswith(self._compressed_suffix):
+            if suffix.endswith(StorageLayout.COMPRESSED_SUFFIX):
                 curr_log = int(suffix[0:-comp_extension_len])
                 if curr_log > last_log:
                     last_log = curr_log
@@ -142,7 +142,7 @@ class StorageLayout:
         # TODO: async
         old_log_name = self.real_name(log_info["name"], old_log_num)
         f_raw = open(old_log_name, 'rb')
-        comp_log_name = old_log_name + self._compressed_suffix
+        comp_log_name = old_log_name + StorageLayout.COMPRESSED_SUFFIX
         f_comp = gzip.open(comp_log_name, 'wb')
         f_comp.writelines(f_raw)
         print "Size before compression:", f_raw.tell(), "Size after compression:", os.path.getsize(comp_log_name)

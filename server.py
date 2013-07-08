@@ -12,16 +12,20 @@ import flask
 from revision_cache import RevisionCache
 from telemetry_schema import TelemetrySchema
 from convert import Converter
-import persist
+from persist import StorageLayout
 
 app = Flask(__name__)
+# TODO: read config from a file / args.
 cache = RevisionCache("./histogram_cache", "hg.mozilla.org")
 schema_filename = "./telemetry_schema.json"
 schema_data = open(schema_filename)
 schema = TelemetrySchema(json.load(schema_data))
 
+# rotate log files at 500MB.
+max_log_size = 500 * 1024 * 1024
+max_open_file_handles = 500
 converter = Converter(cache, schema)
-storage = persist.StorageLayout(schema, "./data")
+storage = StorageLayout(schema, "./data", max_log_size, max_open_file_handles)
 
 @app.route('/', methods=['GET', 'POST'])
 def licese_and_registration_please():
