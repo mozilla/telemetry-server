@@ -97,7 +97,7 @@ class TelemetrySchema:
         # TODO: get files in order, find newest non-full one
         # use hex digits for seqnum
         dirname = os.path.join(*dims)
-        return ".".join((os.path.join(basedir, self.safe_filename(dirname)), submission_date, "000", "log"))
+        return ".".join((os.path.join(basedir, self.safe_filename(dirname)), submission_date, "log"))
 
     def dimensions_from(self, info, submission_date):
         dimensions = []

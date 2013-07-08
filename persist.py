@@ -13,6 +13,8 @@ try:
 except ImportError:
     import json
 import re
+import logging
+import logging.handlers
 
 from telemetry_schema import TelemetrySchema
 import urllib2
@@ -39,20 +41,19 @@ class StorageLayout:
     def write_filename(self, uuid, obj, filename, err=None):
         # TODO: logging?
         #sys.stderr.write("Writing %s to %s\n" % (uuid, filename))
-        try:
-            fout = open(filename, "a")
-        except IOError:
-            os.makedirs(os.path.dirname(filename))
-            fout = open(filename, "a")
-        fout.write(uuid)
-        fout.write("\t")
-        if err is not None:
-            fout.write(str(err).replace("\t", " "))
-            fout.write("\t")
+        # TODO: keep a cache of these loggers
+        if not os.path.isfile(filename):
+            # if this fails, I want the whole thing to fail so don't try/except.
+            dirname = os.path.dirname(filename)
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
+        logger = logging.getLogger(filename)
+        handler = logging.handlers.RotatingFileHandler(filename, maxBytes=500000000, backupCount=1000)
+        formatter = logging.Formatter("%(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
         if isinstance(obj, basestring):
-            fout.write(obj)
+            payload = obj
         else:
-            # Use minimal json (without excess spaces)
-            fout.write(json.dumps(obj, separators=(',', ':')))
-        fout.write("\n")
-        fout.close()
+            payload = json.dumps(obj, separators=(',', ':'))
+        logger.critical("%s\t%s", uuid, payload)
