@@ -16,6 +16,7 @@ except ImportError:
 import re
 from telemetry_schema import TelemetrySchema
 import gzip
+import time
 
 
 class StorageLayout:
@@ -23,8 +24,8 @@ class StorageLayout:
 
     def __init__(self, schema, basedir):
         self._compressed_suffix = ".gz"
-        self._max_log_size = 2000000
-        self._max_open_handles = 20
+        self._max_log_size = 200000
+        self._max_open_handles = 50
         self._logcache = {}
         self._schema = schema
         self._basedir = basedir
@@ -72,7 +73,7 @@ class StorageLayout:
             # Use minimal json (without excess spaces)
             fout.write(json.dumps(obj, separators=(',', ':')))
         fout.write("\n")
-        log_info["wcount"] += 1
+        log_info["wtime"] = time.time()
 
         if fout.tell() >= self._max_log_size:
             print "rotating", log_info["name"]
@@ -82,7 +83,7 @@ class StorageLayout:
         print "Loading info for", filename
         log_info = {
                 "name": filename,
-                "wcount": 0
+                "wtime": time.time()
         }
         existing_logs = glob.glob(filename + "*")
         suffixes = [ s[len(filename) + 1:] for s in existing_logs ]
@@ -135,7 +136,7 @@ class StorageLayout:
         # open next file (N+1)
         log_info["last_log"] += 1
         log_info["handle"] = self.open_log(log_info)
-        log_info["wcount"] = 0
+        log_info["wtime"] = time.time()
 
         # asynchronously compress file N
         # TODO: async
@@ -147,24 +148,25 @@ class StorageLayout:
         print "Size before compression:", f_raw.tell(), "Size after compression:", os.path.getsize(comp_log_name)
         f_comp.close()
         f_raw.close()
+        os.remove(old_log_name)
 
     def evict_logcache(self):
         print "Cache is full. Time to evict someone."
-        # TODO: use some better heuristic than least frequently used - least
-        #       recently used would prevent old (but frequent) files from
-        #       clogging things up.  Maybe some combo of old+infrequent.
+        # Use some heuristic of least recently used. Some combination of LRU
+        # and Least Frequently Used would be better, but LRU is resistant to
+        # old files getting stuck.
         lucky_winner = self._logcache.itervalues().next()
+        # Find the oldest write time.
         for log_info in self._logcache.itervalues():
-            if log_info["wcount"] < lucky_winner["wcount"]:
+            if log_info["wtime"] < lucky_winner["wtime"]:
                 lucky_winner = log_info
-            if log_info["wcount"] == 1:
-                break
-        print "Evicting", lucky_winner["name"], "with", lucky_winner["wcount"], "writes"
+        print "Evicting", lucky_winner["name"], "last written at", lucky_winner["wtime"]
 
         del(self._logcache[lucky_winner["name"]])
 
     def __del__(self):
+        print "Closing cached log files..."
         for log_info in self._logcache.itervalues():
-            print "Closing", log_info["name"], "#", log_info["last_log"], "after writing", log_info["wcount"], "times"
+            #print "Closing", log_info["name"], "#", log_info["last_log"], "last written at", log_info["wtime"]
             log_info["handle"].close()
         self._logcache.clear()
