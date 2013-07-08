@@ -11,10 +11,12 @@ import imp
 import sys
 import os
 import json
+import gzip
 import marshal
 from datetime import datetime
 from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
+from persist import StorageLayout
 
 class Job:
     """A class for orchestrating a Telemetry MapReduce job"""
@@ -189,7 +191,7 @@ class TextContext(Context):
 
 class Mapper:
     def __init__(self, mapper_id, inputs, work_dir, module, partition_count):
-        #print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
+        print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
@@ -197,7 +199,10 @@ class Mapper:
             print "No map function!!!"
             sys.exit(1)
         for input_file in inputs:
-            input_fd = open(input_file["name"], "r")
+            if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
+                input_fd = gzip.open(input_file["name"], "rb")
+            else:
+                input_fd = open(input_file["name"], "r")
             for line in input_fd:
                 key, value = line.split("\t", 1)
                 mapfunc(key, input_file["dimensions"], value, context)
