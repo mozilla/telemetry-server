@@ -9,7 +9,7 @@ As of version 0.11, submissions are first saved to a Kafka queue, which is then
 processed by one or more Kafka consumers.
 
 As a preliminary way to integrate the prototype telemetry server with the
-existing pipeline, we use the `[KafkaReplayConsumer][2]` to replay the
+existing pipeline, we use the [KafkaReplayConsumer][2] to replay the
 production requests against the prototype server.
 
 This results in no data loss of production data, and an optionally-sampled
