@@ -68,15 +68,36 @@ def submit_with_dims(id, reason, appName, appVersion, appUpdateChannel, appBuild
             "appBuildID": appBuildID
     }
     dimensions = schema.dimensions_from(info, today)
-    return submit(id, today, dimensions)
+    return submit(id, request.data, today, dimensions)
 
 @app.route('/submit/telemetry/<id>', methods=['POST'])
 def submit_without_dims(id):
     today = date.today().strftime("%Y%m%d")
-    return submit(id, today)
+    return submit(id, request.data, today)
 
-def submit(id, today, dimensions=None):
-    json = request.data
+@app.route('/submit/telemetry/batch', methods=['POST'])
+def submit_batch():
+    return_message = "OK"
+    status = 201;
+    today = date.today().strftime("%Y%m%d")
+    parts = request.data.split("\t")
+    # incoming data is <id1>\t<json1>\t<id2>\t<json2>....
+    while len(parts) > 0:
+        # pop pairs off the end of the array
+        json = parts.pop()
+        key = parts.pop()
+        print "Key:", key, "JSON:", json[0:50]
+        try:
+            message, code = submit(key, json, today)
+            if code != 201:
+                return_message = message
+                status = code
+        except:
+            pass
+    return return_message, status
+
+
+def submit(id, json, today, dimensions=None):
     try:
         validate_body(json)
         if dimensions is not None:
