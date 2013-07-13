@@ -124,7 +124,11 @@ def submit(id, json, today, dimensions=None):
         validate_body(json)
         if dimensions is not None:
             validate_dims(dimensions)
-        converted, payload_dims = converter.convert_json(json, today)
+        if convert_payloads:
+            converted, payload_dims = converter.convert_json(json, today)
+        else:
+            converted = json
+            payload_dims = schema.dimensions_from({}, today)
         if dimensions is None:
             validate_dims(payload_dims)
             dimensions = payload_dims
@@ -136,7 +140,7 @@ def submit(id, json, today, dimensions=None):
     except ValueError, err:
         if dimensions is None:
             # At the very least, we know what day it is
-            dimensions = [today]
+            dimensions = schema.dimensions_from({}, today)
         storage.write_invalid(id, json, dimensions, err)
         # 400 BAD REQUEST
         return "Bad Request", 400
