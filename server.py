@@ -111,7 +111,7 @@ def submit_batch():
         # pop pairs off the end of the array
         json = parts.pop()
         key = parts.pop()
-        print "Key:", key, "JSON:", json[0:50]
+        #print "Key:", key, "JSON:", json[0:50]
         try:
             message, code = submit(key, json, today)
             if code != 201:

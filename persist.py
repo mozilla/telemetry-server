@@ -17,7 +17,19 @@ import re
 from telemetry_schema import TelemetrySchema
 import gzip
 import time
+from multiprocessing import Process
 
+def compress_and_delete(old_log_name):
+    print "Compressing", old_log_name
+    f_raw = open(old_log_name, 'rb')
+    comp_log_name = old_log_name + StorageLayout.COMPRESSED_SUFFIX
+    f_comp = gzip.open(comp_log_name, 'wb')
+    f_comp.writelines(f_raw)
+    print "Size before compression:", f_raw.tell(), "Size after compression:", os.path.getsize(comp_log_name)
+    f_comp.close()
+    f_raw.close()
+    os.remove(old_log_name)
+    print "Finished compressing", old_log_name
 
 class StorageLayout:
     """A class for encapsulating the on-disk data layout for Telemetry"""
@@ -27,6 +39,7 @@ class StorageLayout:
         self._max_log_size = max_log_size
         self._max_open_handles = max_open_handles
         self._logcache = {}
+        self._compressors = []
         self._schema = schema
         self._basedir = basedir
 
@@ -76,7 +89,6 @@ class StorageLayout:
         log_info["wtime"] = time.time()
 
         if fout.tell() >= self._max_log_size:
-            print "rotating", log_info["name"]
             self.rotate(log_info)
 
     def load_log_info(self, filename):
@@ -141,14 +153,11 @@ class StorageLayout:
         # asynchronously compress file N
         # TODO: async
         old_log_name = self.real_name(log_info["name"], old_log_num)
-        f_raw = open(old_log_name, 'rb')
-        comp_log_name = old_log_name + StorageLayout.COMPRESSED_SUFFIX
-        f_comp = gzip.open(comp_log_name, 'wb')
-        f_comp.writelines(f_raw)
-        print "Size before compression:", f_raw.tell(), "Size after compression:", os.path.getsize(comp_log_name)
-        f_comp.close()
-        f_raw.close()
-        os.remove(old_log_name)
+        #print "preparing to compress and delete", old_log_name
+        #compress_and_delete(old_log_name)
+        p = Process(target=compress_and_delete, args=[old_log_name])
+        self._compressors.append(p)
+        p.start()
 
     def evict_logcache(self):
         print "Cache is full. Time to evict someone."
@@ -165,8 +174,15 @@ class StorageLayout:
         del(self._logcache[lucky_winner["name"]])
 
     def __del__(self):
-        print "Closing cached log files..."
+        self.close()
+
+    def close(self):
+        # Close cached log files
         for log_info in self._logcache.itervalues():
             #print "Closing", log_info["name"], "#", log_info["last_log"], "last written at", log_info["wtime"]
             log_info["handle"].close()
         self._logcache.clear()
+
+        # Wait for any in-flight compressors to finish.
+        for c in self._compressors:
+            c.join()
