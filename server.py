@@ -15,21 +15,44 @@ from convert import Converter
 from persist import StorageLayout
 
 app = Flask(__name__)
-# TODO: read config from a file / args.
-cache = RevisionCache("./histogram_cache", "hg.mozilla.org")
-schema_filename = "./telemetry_schema.json"
+
+server_config_file = "./telemetry_server_config.json"
+try:
+    server_config = open(server_config_file, "r")
+    config = json.load(server_config)
+    server_config.close()
+except IOError:
+    config = {}
+
+## General server config
+# rotate log files at 500MB.
+max_log_size = config.get("max_log_size", 500 * 1024 * 1024)
+max_open_file_handles = config.get("max_open_file_handles", 500)
+server_motd = config.get("motd", date.today().strftime("since %Y-%m-%d"))
+server_port = config.get("port", 8080)
+server_debug = config.get("debug", True)
+convert_payloads = config.get("convert_payloads", True)
+
+## Revision Cache
+revision_cache_path = config.get("revision_cache_path", "./histogram_cache")
+revision_cache_server = config.get("revision_cache_server", "hg.mozilla.org")
+cache = RevisionCache(revision_cache_path, revision_cache_server)
+
+## Schema
+schema_filename = config.get("schema_filename", "./telemetry_schema.json")
 schema_data = open(schema_filename)
 schema = TelemetrySchema(json.load(schema_data))
+schema_data.close()
 
-# rotate log files at 500MB.
-max_log_size = 500 * 1024 * 1024
-max_open_file_handles = 500
+## Storage
+storage_path = config.get("storage_path", "./data")
+
 converter = Converter(cache, schema)
-storage = StorageLayout(schema, "./data", max_log_size, max_open_file_handles)
+storage = StorageLayout(schema, storage_path, max_log_size, max_open_file_handles)
 
 @app.route('/', methods=['GET', 'POST'])
 def licese_and_registration_please():
-    return "Telemetry HTTP Server v0.0"
+    return "Telemetry HTTP Server v0.0 " + server_motd
 
 @app.route('/histograms/<repo>/<revision>')
 def get_histograms(repo, revision):
@@ -54,7 +77,6 @@ def validate_dims(dimensions):
         return True
     else:
         raise ValueError("Invalid dimension")
-
 
 #http://<bagheera_host>/submit/telemetry/<id>/<reason>/<appName>/<appVersion>/<appUpdateChannel>/<appBuildID>
 @app.route('/submit/telemetry/<id>/<reason>/<appName>/<appVersion>/<appUpdateChannel>/<appBuildID>', methods=['POST'])
@@ -124,5 +146,5 @@ def submit(id, json, today, dimensions=None):
     return "wtf...", 500
 
 if __name__ == '__main__':
-    app.debug = True
-    app.run(host='0.0.0.0', port=8080)
+    app.debug = server_debug
+    app.run(host='0.0.0.0', port=server_port)
