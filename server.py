@@ -5,7 +5,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 from datetime import date
-from flask import json
+try:
+    import simplejson as json
+except ImportError:
+    import json
 from flask import Flask
 from flask import request
 import flask
