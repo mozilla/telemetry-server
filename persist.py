@@ -19,13 +19,16 @@ import gzip
 import time
 from multiprocessing import Process
 
+# Compress the specified temp file (which is an iteration of 'basename')
+# and remove it when done.  This is expected to be done in a separate process
+# so we don't block while compressing.
 def compress_and_delete(tmp_name, basename):
-    print "Compressing", basename, "==", tmp_name
+    #print "Compressing", basename, "==", tmp_name
     f_raw = open(tmp_name, 'rb')
     comp_log_name = tmp_name + ".compressing"
     f_comp = gzip.open(comp_log_name, 'wb')
     f_comp.writelines(f_raw)
-    print "Size before compression:", f_raw.tell(), "Size after compression:", os.path.getsize(comp_log_name)
+    #print "Size before compression:", f_raw.tell(), "Size after compression:", os.path.getsize(comp_log_name)
     f_comp.close()
     f_raw.close()
     os.remove(tmp_name)
@@ -39,20 +42,20 @@ def compress_and_delete(tmp_name, basename):
     else:
         next_log_num = sorted(suffixes)[-1] + 1
 
-    print "Next suffix for", basename, "is", next_log_num
+    #print "Next suffix for", basename, "is", next_log_num
 
     # TODO: handle race condition?
     #   http://stackoverflow.com/questions/82831/how-do-i-check-if-a-file-exists-using-python
     while os.path.exists(basename + "." + str(next_log_num) + StorageLayout.COMPRESSED_SUFFIX):
         # get the first unused one (in case some have been created since we checked)
-        print "Had to skip one more:", next_log_num
+        #print "Had to skip one more:", next_log_num
         next_log_num += 1
 
     comp_name = basename + "." + str(next_log_num) + StorageLayout.COMPRESSED_SUFFIX
     # rename comp_log_name to basename.{X+1}.gz
     os.rename(comp_log_name, comp_name)
+    #print "Finished compressing", basename, "as", comp_name
 
-    print "Finished compressing", basename, "as", comp_name
 
 class StorageLayout:
     """A class for encapsulating the on-disk data layout for Telemetry"""
@@ -66,9 +69,6 @@ class StorageLayout:
         self._schema = schema
         self._basedir = basedir
 
-        #if !self._schema:
-        #    schema = json.load(os.path.join(self._basedir, "telemetry_schema.json"))
-
     def write(self, uuid, obj, dimensions):
         filename = self._schema.get_filename(self._basedir, dimensions)
         self.write_filename(uuid, obj, filename)
@@ -79,22 +79,13 @@ class StorageLayout:
         self.write_filename(uuid, obj, filename, err)
 
     def write_filename(self, uuid, obj, filename, err=None):
-        # Incoming filename is like
+        # Working filename is like
         #   a.b.c.log
-        # We may have already written some logs and rolled over
-        # So the actual filename we want to append may be something like
-        #   a.b.c.log.3
-        # With other files called a.b.c.log.1.gz and a.b.c.log.2.gz
-        #
-        # For a fresh write request:
-        # - find a.b.c.log*
-        # - find the one with the highest number -> N
-        # - if a.b.c.log.N is already compressed, use N+1
-        # - if it's not already compressed, use N
-        # - if after writing, the file exceeds max size, close it, open the next, and asynchronously compress the previous one.
-        # Keep a cache of heavily used log files
-
+        # We want to roll this over (and compress) when it reaches a size limit
+        # The compressed log filenames will be something like
+        #   a.b.c.log.3.gz
         fout = open(filename, "a")
+
         # TODO: should we actually write "err" to file?
         fout.write(uuid)
         fout.write("\t")
@@ -111,54 +102,6 @@ class StorageLayout:
         if filesize >= self._max_log_size:
             self.rotate(filename)
 
-    #def load_log_info(self, filename):
-    #    print "Loading info for", filename
-    #    log_info = {
-    #            "name": filename,
-    #            "wtime": time.time()
-    #    }
-    #    existing_logs = glob.glob(filename + "*")
-    #    suffixes = [ s[len(filename) + 1:] for s in existing_logs ]
-    #    # suffixes now contains [ 1.gz, 2.gz, ..., N.gz ], where the
-    #    # final one may or may not be compressed.
-    #    # If we didn't find anything, always start with filename.1
-    #    last_log = 1
-    #    last_log_compressed = False
-    #    comp_extension_len = len(StorageLayout.COMPRESSED_SUFFIX)
-    #    for suffix in suffixes:
-    #        if suffix.endswith(StorageLayout.COMPRESSED_SUFFIX):
-    #            curr_log = int(suffix[0:-comp_extension_len])
-    #            if curr_log > last_log:
-    #                last_log = curr_log
-    #                last_log_compressed = True
-    #        else:
-    #            curr_log = int(suffix)
-    #            if curr_log > last_log:
-    #                last_log = curr_log
-    #                last_log_compressed = False
-
-    #    if last_log_compressed:
-    #        last_log += 1
-    #    log_info["last_log"] = last_log
-
-    #    # TODO: if the cache is full, evict someone first.
-    #    if len(self._logcache) >= self._max_open_handles:
-    #        self.evict_logcache()
-    #    log_info["handle"] = self.open_log(log_info)
-    #    return log_info
-
-    #def real_name(self, name, number):
-    #    return ".".join((name, str(number)))
-
-    #def open_log(self, log_info):
-    #    real_filename = self.real_name(log_info["name"], log_info["last_log"])
-    #    try:
-    #        handle = open(real_filename, "a")
-    #    except IOError:
-    #        os.makedirs(os.path.dirname(real_filename))
-    #        handle = open(real_filename, "a")
-    #    return handle
-
     def rotate(self, filename):
         print "Rotating", filename
 
@@ -171,30 +114,10 @@ class StorageLayout:
         self._compressors.append(p)
         p.start()
 
-    #def evict_logcache(self):
-    #    print "Cache is full. Time to evict someone."
-    #    # Use some heuristic of least recently used. Some combination of LRU
-    #    # and Least Frequently Used would be better, but LRU is resistant to
-    #    # old files getting stuck.
-    #    lucky_winner = self._logcache.itervalues().next()
-    #    # Find the oldest write time.
-    #    for log_info in self._logcache.itervalues():
-    #        if log_info["wtime"] < lucky_winner["wtime"]:
-    #            lucky_winner = log_info
-    #    print "Evicting", lucky_winner["name"], "last written at", lucky_winner["wtime"]
-
-    #    del(self._logcache[lucky_winner["name"]])
-
     def __del__(self):
         self.close()
 
     def close(self):
-        ## Close cached log files
-        #for log_info in self._logcache.itervalues():
-        #    #print "Closing", log_info["name"], "#", log_info["last_log"], "last written at", log_info["wtime"]
-        #    log_info["handle"].close()
-        #self._logcache.clear()
-
         # Wait for any in-flight compressors to finish.
         for c in self._compressors:
             c.join()
