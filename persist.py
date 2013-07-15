@@ -60,6 +60,7 @@ def compress_and_delete(tmp_name, basename):
 class StorageLayout:
     """A class for encapsulating the on-disk data layout for Telemetry"""
     COMPRESSED_SUFFIX = ".gz"
+    PENDING_COMPRESSION_SUFFIX = ".compressme"
 
     def __init__(self, schema, basedir, max_log_size, max_open_handles=500):
         self._max_log_size = max_log_size
@@ -98,7 +99,6 @@ class StorageLayout:
 
         filesize = fout.tell()
         fout.close()
-
         if filesize >= self._max_log_size:
             self.rotate(filename)
 
@@ -106,13 +106,13 @@ class StorageLayout:
         print "Rotating", filename
 
         # rename current file
-        tmp_name = os.tempnam(self._basedir)
+        tmp_name = "%s.%d.%f%s" % (filename, os.getpid(), time.time(), self.PENDING_COMPRESSION_SUFFIX)
         os.rename(filename, tmp_name)
 
         # Asynchronously compress file
-        p = Process(target=compress_and_delete, args=[tmp_name, filename])
-        self._compressors.append(p)
-        p.start()
+        #p = Process(target=compress_and_delete, args=[tmp_name, filename])
+        #self._compressors.append(p)
+        #p.start()
 
     def __del__(self):
         self.close()
