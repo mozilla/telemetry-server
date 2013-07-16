@@ -49,28 +49,9 @@ for path in paths.iterkeys():
         f_comp = gzip.open(comp_name, "wb")
         print "    compressing %s to %s" % (filename, comp_name)
 
-        #last_num = 0
-        #if len(compressed) > 0:
-        #    print "   Calculating next compressed name"
-        #    for c in compressed:
-        #        m = compressed_log.match(c)
-        #        if m:
-        #            num = int(m.group(1))
-        #            if num > last_num:
-        #                print "     found a new winner!", num
-        #                last_num = num
-        #        else:
-        #            print "Found a bad compressed filename:", c
-        #    next_num = last_num + 1
-
-        #comp_name = "%s.%d%s" % (basename, next_num, acs)
-        ## reserve this name
-        #f_comp = gzip.open(comp_name, 'wb')
-
         # Rename uncompressed file to a temp name
         tmp_name = comp_name + ".compressing"
         print "    moving %s to %s" % (os.path.join(path, filename), tmp_name)
-
         os.rename(os.path.join(path, filename), tmp_name)
 
         start = datetime.now()
