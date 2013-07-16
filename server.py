@@ -121,6 +121,43 @@ def submit_batch():
             pass
     return return_message, status
 
+@app.route('/submit/telemetry/batch_dims', methods=['POST'])
+def submit_batch_dims():
+    return_message = "OK"
+    status = 201;
+    today = date.today().strftime("%Y%m%d")
+    parts = request.data.split("\t")
+    # incoming data is <id1>\t<json1>\t<id2>\t<json2>....
+    while len(parts) > 0:
+        # pop records off the end of the array
+        json = parts.pop()
+        buildid = parts.pop()
+        channel = parts.pop()
+        version = parts.pop()
+        name = parts.pop()
+        reason = parts.pop()
+        key = parts.pop()
+
+        info = {
+                "reason": reason,
+                "appName": name,
+                "appVersion": version,
+                "appUpdateChannel": channel,
+                "appBuildID": buildid
+        }
+
+        dimensions = schema.dimensions_from(info, today)
+        #print "Key:", key, "JSON:", json[0:50]
+        try:
+            message, code = submit(key, json, today, dimensions)
+            if code != 201:
+                return_message = message
+                status = code
+        except:
+            pass
+    return return_message, status
+
+
 
 def submit(id, json, today, dimensions=None):
     try:
