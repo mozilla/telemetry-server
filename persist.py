@@ -85,7 +85,11 @@ class StorageLayout:
         # We want to roll this over (and compress) when it reaches a size limit
         # The compressed log filenames will be something like
         #   a.b.c.log.3.gz
-        fout = open(filename, "a")
+        try:
+            fout = open(filename, "a")
+        except IOError:
+            os.makedirs(os.path.dirname(filename))
+            fout = open(filename, "a")
 
         # TODO: should we actually write "err" to file?
         fout.write(uuid)
@@ -98,6 +102,7 @@ class StorageLayout:
         fout.write("\n")
 
         filesize = fout.tell()
+        print "Wrote to", filename, "new size is", filesize
         fout.close()
         if filesize >= self._max_log_size:
             self.rotate(filename)

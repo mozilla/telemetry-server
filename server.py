@@ -127,7 +127,7 @@ def submit_batch_dims():
     status = 201;
     today = date.today().strftime("%Y%m%d")
     parts = request.data.split("\t")
-    # incoming data is <id1>\t<json1>\t<id2>\t<json2>....
+    # incoming data is <id1>\t<reason1>\t<appName1>\t<appVersion1>\t<appUpdateChannel1>\t<appBuildID1>\t<json1>\t<id2>...
     while len(parts) > 0:
         # pop records off the end of the array
         json = parts.pop()
@@ -137,7 +137,6 @@ def submit_batch_dims():
         name = parts.pop()
         reason = parts.pop()
         key = parts.pop()
-
         info = {
                 "reason": reason,
                 "appName": name,
@@ -147,7 +146,7 @@ def submit_batch_dims():
         }
 
         dimensions = schema.dimensions_from(info, today)
-        #print "Key:", key, "JSON:", json[0:50]
+        print "Key:", key, "Reason:", reason, "JSON:", json[0:50]
         try:
             message, code = submit(key, json, today, dimensions)
             if code != 201:
