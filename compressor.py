@@ -1,5 +1,6 @@
 import sys, os, re, gzip, glob
 from persist import StorageLayout
+from datetime import datetime
 
 searchdir = sys.argv[1]
 
@@ -72,13 +73,18 @@ for path in paths.iterkeys():
 
         os.rename(os.path.join(path, filename), tmp_name)
 
+        start = datetime.now()
         f_raw = open(tmp_name, "rb")
         f_comp.writelines(f_raw)
-        print "Size before compression:", f_raw.tell(), "Size after compression:", f_comp.tell()
+        raw_mb = float(f_raw.tell()) / 1024.0 / 1024.0
         f_raw.close()
         f_comp.close()
+        comp_mb = float(os.path.getsize(comp_name)) / 1024.0 / 1024.0
+        print "    Size before compression: %.2f MB, after: %.2f MB" % (raw_mb, comp_mb)
 
         # Remove raw file
         os.remove(tmp_name)
-        print "Finished compressing", filename, "as", comp_name
+        delta = (datetime.now() - start)
+        sec = float(delta.seconds) + float(delta.microseconds) / 1000000.0
+        print    "  Finished compressing %s as #%d in %.2fs (r: %.2fMB/s, w: %.2fMB/s)" % (filename, next_log_num, sec, (raw_mb/sec), (comp_mb/sec))
 
