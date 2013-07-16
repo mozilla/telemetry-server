@@ -30,7 +30,6 @@ except IOError:
 ## General server config
 # rotate log files at 500MB.
 max_log_size = config.get("max_log_size", 500 * 1024 * 1024)
-max_open_file_handles = config.get("max_open_file_handles", 500)
 server_motd = config.get("motd", date.today().strftime("since %Y-%m-%d"))
 server_port = config.get("port", 8080)
 server_debug = config.get("debug", True)
@@ -51,7 +50,7 @@ schema_data.close()
 storage_path = config.get("storage_path", "./data")
 
 converter = Converter(cache, schema)
-storage = StorageLayout(schema, storage_path, max_log_size, max_open_file_handles)
+storage = StorageLayout(schema, storage_path, max_log_size)
 
 @app.route('/', methods=['GET', 'POST'])
 def licese_and_registration_please():

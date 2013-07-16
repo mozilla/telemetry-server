@@ -62,10 +62,9 @@ class StorageLayout:
     COMPRESSED_SUFFIX = ".gz"
     PENDING_COMPRESSION_SUFFIX = ".compressme"
 
-    def __init__(self, schema, basedir, max_log_size, max_open_handles=500):
+    def __init__(self, schema, basedir, max_log_size):
         self._max_log_size = max_log_size
         # FIXME: don't need this anymore:
-        self._max_open_handles = max_open_handles
         self._compressors = []
         self._schema = schema
         self._basedir = basedir
