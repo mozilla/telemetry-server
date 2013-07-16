@@ -117,8 +117,9 @@ def submit_batch():
             if code != 201:
                 return_message = message
                 status = code
-        except:
-            pass
+        except IOError, e:
+            print "Exception storing data: %s" % e
+            status = 500
     return return_message, status
 
 @app.route('/submit/telemetry/batch_dims', methods=['POST'])
