@@ -97,15 +97,18 @@ contains an array of `dimensions` that are used to determine what is allowed
 at each level of the storage hierarchy.  Currently supported values are:
 - String value `*`: allow any value
 - Array of strings: allow any value in the array
-
-Types that may be supported in the future (if and when they are needed):
 - Min / max range: allow values in a range (or specify only an upper or lower
   bound)
+
+Types that may be supported in the future (if and when they are needed):
 - Regular expression: allow only values matching the specified regex
 
 Values outside of the allowed values will be replaced with "OTHER" to make sure
 that the "long tail" of dimension values does not cause a huge number of small
 files to be created.
+
+Code for handling a schema is found in the `TelemetrySchema` class
+in [telemetry_schema.py](telemetry_schema.py)
 
 Considered, but unused approaches
 ---------------------------------
