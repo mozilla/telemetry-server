@@ -1,7 +1,11 @@
 TODO
 ====
 
-- Write data to [Amazon S3][4]
+- Write data to [Amazon S3][4] (and delete locally on success)
+- Setup data replay on bagheera nodes 2,3,4
+- investigate large telemetry payloads
+- Switch compression to LZMA (and see if we can still keep up)
+- Check into receiving via SSL with nginx (and gzip-encoded, and load-balancing)
 - Add many tests
 - Add runtime performance metrics using [scales][1] and on-demand perf tests
   using [cProfile][3]
