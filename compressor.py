@@ -7,27 +7,42 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys, os, re, gzip, glob
 from persist import StorageLayout
 from datetime import datetime
+from datetime import date
 
 searchdir = sys.argv[1]
+
+dry_run = False
+
+if len(sys.argv) > 2 and sys.argv[2] == "--dry-run":
+    dry_run = True
 
 paths = {}
 pcs = StorageLayout.PENDING_COMPRESSION_SUFFIX
 acs = StorageLayout.COMPRESSED_SUFFIX
 
-compressed_log = re.compile("^.*[.]log[.]([0-9]+)" + acs)
+today = date.today().strftime("%Y%m%d")
 
 for root, dirs, files in os.walk(searchdir):
     for f in files:
+        if root not in paths:
+            paths[root] = []
+
         if f.endswith(pcs):
-            if root not in paths:
-                paths[root] = {"compressed": [], "pending": []}
-            paths[root]["pending"].append(f)
+            paths[root].append(f)
+        elif f.endswith(".log") and f[-12:-4] < today:
+            # it's a regular .log file, but it's older than today, so it will
+            # not be written to anymore.
+            paths[root].append(f)
 
 for path in paths.iterkeys():
-    pending = paths[path]["pending"]
+    pending = paths[path]
     print "Found a path %s with %d pending files" % (path, len(pending))
     for filename in pending:
         print "  Compressing", filename
+
+        # Don't actually do anything.
+        if dry_run:
+            continue
 
         base_ends = filename.find(".log") + 4
         if base_ends < 4:
