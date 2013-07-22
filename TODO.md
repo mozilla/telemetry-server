@@ -2,7 +2,6 @@ TODO
 ====
 
 - [P0] Change writes to use f.fileno and os.write()
-- [P0] Add a check to the writer that we are not getting newlines in incoming data.
 - [P1] Make MapReduce robust against cases where ".compressme" files disappear before we get to them.  Preopen the files at the start of the mapper (with a warning on fail, which should happen rarely)
 - [P4] Preopen the mapper input files in the parent process, pass fd's to child process to avoid race condition with the compressor.
 - [P1] Teach the compressor to compress previous days' log files, even if they aren't ".compressme" (since they won't be written to anymore).

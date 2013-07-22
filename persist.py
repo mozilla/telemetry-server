@@ -78,6 +78,14 @@ class StorageLayout:
         filename = self._schema.get_filename_invalid(self._basedir, dimensions)
         self.write_filename(uuid, obj, filename, err)
 
+    def clean_newlines(self, value, tag="value"):
+        # Clean any newlines (replace with spaces)
+        for eol in ["\r", "\n"]:
+            if eol in value:
+                print "Warning: found an EOL in", tag
+                value = value.replace(eol, " ")
+        return value
+
     def write_filename(self, uuid, obj, filename, err=None):
         # Working filename is like
         #   a.b.c.log
@@ -94,7 +102,7 @@ class StorageLayout:
         fout.write(uuid)
         fout.write("\t")
         if isinstance(obj, basestring):
-            fout.write(obj)
+            fout.write(self.clean_newlines(obj, uuid))
         else:
             # Use minimal json (without excess spaces)
             fout.write(json.dumps(obj, separators=(',', ':')))
