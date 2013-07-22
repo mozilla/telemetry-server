@@ -7,54 +7,13 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import os
-import glob
 import sys
 try:
     import simplejson as json
 except ImportError:
     import json
-import re
 from telemetry_schema import TelemetrySchema
-import gzip
 import time
-from multiprocessing import Process
-
-# Compress the specified temp file (which is an iteration of 'basename')
-# and remove it when done.  This is expected to be done in a separate process
-# so we don't block while compressing.
-def compress_and_delete(tmp_name, basename):
-    #print "Compressing", basename, "==", tmp_name
-    f_raw = open(tmp_name, 'rb')
-    comp_log_name = tmp_name + ".compressing"
-    f_comp = gzip.open(comp_log_name, 'wb')
-    f_comp.writelines(f_raw)
-    #print "Size before compression:", f_raw.tell(), "Size after compression:", os.path.getsize(comp_log_name)
-    f_comp.close()
-    f_raw.close()
-    os.remove(tmp_name)
-    # find the last existing basename.X.gz (or close to last, if we're creating
-    # lots of them)
-    existing_logs = glob.glob(basename + "*.[0-9]*.gz")
-    suffixes = [ int(s[len(basename) + 1:-3]) for s in existing_logs ]
-
-    if len(suffixes) == 0:
-        next_log_num = 1
-    else:
-        next_log_num = sorted(suffixes)[-1] + 1
-
-    #print "Next suffix for", basename, "is", next_log_num
-
-    # TODO: handle race condition?
-    #   http://stackoverflow.com/questions/82831/how-do-i-check-if-a-file-exists-using-python
-    while os.path.exists(basename + "." + str(next_log_num) + StorageLayout.COMPRESSED_SUFFIX):
-        # get the first unused one (in case some have been created since we checked)
-        #print "Had to skip one more:", next_log_num
-        next_log_num += 1
-
-    comp_name = basename + "." + str(next_log_num) + StorageLayout.COMPRESSED_SUFFIX
-    # rename comp_log_name to basename.{X+1}.gz
-    os.rename(comp_log_name, comp_name)
-    #print "Finished compressing", basename, "as", comp_name
 
 
 class StorageLayout:
@@ -64,8 +23,6 @@ class StorageLayout:
 
     def __init__(self, schema, basedir, max_log_size):
         self._max_log_size = max_log_size
-        # FIXME: don't need this anymore:
-        self._compressors = []
         self._schema = schema
         self._basedir = basedir
 
@@ -120,16 +77,4 @@ class StorageLayout:
         # rename current file
         tmp_name = "%s.%d.%f%s" % (filename, os.getpid(), time.time(), self.PENDING_COMPRESSION_SUFFIX)
         os.rename(filename, tmp_name)
-
-        # Asynchronously compress file
-        #p = Process(target=compress_and_delete, args=[tmp_name, filename])
-        #self._compressors.append(p)
-        #p.start()
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        # Wait for any in-flight compressors to finish.
-        for c in self._compressors:
-            c.join()
+        # Note that files are expected to be compressed elsewhere (see compressor.py)
