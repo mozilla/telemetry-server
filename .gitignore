@@ -1,5 +1,6 @@
 *.pyc
 *.gz
+*.bz2
 *.swp
 *.swo
 .idea/
