@@ -212,9 +212,15 @@ class Mapper:
 
         # now do another pass to actually process the files.
         for input_file in inputs:
+            line_num = 0
             for line in input_file["handle"]:
-                key, value = line.split("\t", 1)
-                mapfunc(key, input_file["dimensions"], value, context)
+                line_num += 1
+                try:
+                    key, value = line.split("\t", 1)
+                    mapfunc(key, input_file["dimensions"], value, context)
+                except ValueError:
+                    # TODO: increment "bad line" metrics.
+                    print "Bad line:", input_file["name"], ":", line_num
             input_file["handle"].close()
         context.finish()
 
