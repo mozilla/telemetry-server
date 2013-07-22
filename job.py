@@ -198,14 +198,24 @@ class Mapper:
         if mapfunc is None or not callable(mapfunc):
             print "No map function!!!"
             sys.exit(1)
+
+        # Pre-open all the files.  This should protect against the case where a
+        # ".compressme" file disappears during processing.
         for input_file in inputs:
-            if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
-                input_fd = gzip.open(input_file["name"], "rb")
-            else:
-                input_fd = open(input_file["name"], "r")
-            for line in input_fd:
+            try:
+                if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
+                    input_file["handle"] = gzip.open(input_file["name"], "rb")
+                else:
+                    input_file["handle"] = open(input_file["name"], "r")
+            except:
+                print "Error opening", input_file["name"], "(skipping)"
+
+        # now do another pass to actually process the files.
+        for input_file in inputs:
+            for line in input_file["handle"]:
                 key, value = line.split("\t", 1)
                 mapfunc(key, input_file["dimensions"], value, context)
+            input_file["handle"].close()
         context.finish()
 
 
