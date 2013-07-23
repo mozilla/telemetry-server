@@ -23,13 +23,13 @@ import traceback
 import persist
 from datetime import date
 import time
-import cProfile
 
 
 class Converter:
     """A class for converting incoming payloads to a more compact form"""
 
     def __init__(self, cache, schema):
+        self._histocache = {}
         self._cache = cache
         self._schema = schema
         self._valid_revisions = re.compile('^(http://.*)/([^/]+)/rev/([0-9a-f]+)/?$')
@@ -45,11 +45,21 @@ class Converter:
             rewritten = [0] * bucket_count
             value_map = val["values"]
             try:
-                # TODO: this is horribly inefficient
-                allowed_ranges = histogram.ranges()
-                range_map = dict()
-                for index, allowed_range in enumerate(allowed_ranges):
-                    range_map[allowed_range] = index
+                try:
+                    # Materialize the ranges (since we're caching Histograms)
+                    allowed_ranges = histogram.allowed_ranges
+                except AttributeError:
+                    histogram.allowed_ranges = histogram.ranges()
+                    allowed_ranges = histogram.allowed_ranges
+
+                try:
+                    # Materialize the range_map too.
+                    range_map = histogram.range_map
+                except AttributeError:
+                    range_map = {}
+                    for index, allowed_range in enumerate(allowed_ranges):
+                        range_map[allowed_range] = index
+                    histogram.range_map = range_map
 
                 for bucket in value_map.keys():
                     ib = int(bucket)
@@ -70,6 +80,14 @@ class Converter:
         for k in ("sum", "log_sum", "log_sum_squares"):
             rewritten.append(val.get(k, -1))
         return rewritten
+
+    # Memoize building the Histogram object from the histogram definition.
+    def histocache(self, revision_url, name, definition):
+        key = "%s.%s" % (name, revision_url)
+        if key not in HC:
+            hist = Histogram(name, definition)
+            self._histocache[key] = hist
+        return self._histocache[key]
 
     # Returns (repository name, revision)
     def revision_url_to_parts(self, revision_url):
@@ -110,7 +128,7 @@ class Converter:
                 continue
 
             histogram_def = histogram_defs[real_histogram_name]
-            histogram = Histogram(key, histogram_def)
+            histogram = self.histocache(revision_url, key, histogram_def)
             new_key = self.map_key(histogram_defs, key)
             new_value = self.map_value(histogram, val)
             rewritten[new_key] = new_value
