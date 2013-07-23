@@ -6,6 +6,7 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
+import argparse
 import re
 import sys
 import getopt
@@ -20,6 +21,9 @@ from histogram_tools import Histogram
 from telemetry_schema import TelemetrySchema
 import traceback
 import persist
+from datetime import date
+import time
+import cProfile
 
 
 class Converter:
@@ -140,113 +144,61 @@ class Converter:
             result = info.get(key)
         return result
 
-help_message = '''
-    Takes a list of raw telemetry pings and writes them back out in a more
-    compact form
-    Required:
-        -i, --input <input_file>
-        -o, --output <output_file>
-    Optional:
-        -h, --help
-'''
+def process(converter, target_date=None):
+    line_num = 0
+    bytes_read = 0;
+    if target_date is None:
+        target_date = date.today().strftime("%Y%m%d")
 
-def process(input_file, output_file, storage, converter):
-    line = 0
-    if input_file == '-':
-        fin = sys.stdin
-    else:
-        fin = open(input_file, "rb")
-
-    if output_file == '-':
-       fout = sys.stdout
-    else:
-       fout = gzip.open(output_file, "wb")
-
-
+    start = time.clock()
     while True:
-        line += 1
-        first_byte = fin.read(1)
-        if len(first_byte) == 0:
-            break;
-        assert len(first_byte) == 1
+        line_num += 1
+        line = sys.stdin.readline()
+        if line == '':
+            break
+        bytes_read += len(line)
 
-        date = fin.read(8)
-        assert len(date) == 8
+        if "\t" not in line:
+            sys.stderr.write("Error on line %d: no tab found\n" % (line_num))
+            continue
 
-        uuid = fin.read(36)
-        assert len(uuid) == 36
+        uuid, jsonstr = line.split("\t", 1)
+        try:
+            json_dict, dimensions = converter.convert_json(jsonstr, target_date)
+            sys.stdout.write(uuid)
+            sys.stdout.write("\t")
+            sys.stdout.write(json.dumps(json_dict, separators=(',', ':')))
+            sys.stdout.write("\n")
+        except Exception, e:
+            sys.stderr.write("Error converting line %d: %s\n" % (line_num, e))
 
-        first_uuid_byte = int(uuid[0:2], 16) - 128
-        if first_uuid_byte < 0:
-            first_uuid_byte += 256
-        assert first_uuid_byte == ord(first_byte)
-
-        tab = fin.read(1)
-        assert tab == '\t'
-
-        jsonstr = fin.readline()
-        json_dict, dimensions = converter.convert_json(jsonstr, date)
-        storage.write(uuid, json_dict, dimensions)
-        fout.write(uuid)
-        fout.write("\t")
-        fout.write(json.dumps(json_dict, separators=(',', ':')))
-        fout.write("\n")
-
-        # print minimal progress indicator
-        sys.stdout.write(".")
-        sys.stdout.flush()
-
-    fin.close()
-    fout.close()
-    sys.stdout.write("\n")
-
-class Usage(Exception):
-    def __init__(self, msg):
-        self.msg = msg
+    duration = time.clock() - start
+    mb_read = float(bytes_read) / 1024.0 / 1024.0
+    sys.stderr.write("Elapsed time: %.02fs (%.02fMB/s)\n" % (duration, mb_read / duration))
 
 def main(argv=None):
-    if argv is None:
-        argv = sys.argv
+    parser = argparse.ArgumentParser(description="Convert Telemetry data")
+    parser.add_argument("-c", "--config-file", help="Read configuration from this file", default="./telemetry_server_config.json")
+    parser.add_argument("-d", "--date", help="Use specified date for dimensions")
+    args = parser.parse_args()
+
     try:
-        try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:v", ["help", "input=", "output="])
-        except getopt.error, msg:
-            raise Usage(msg)
-        
-        input_file = None
-        output_file = None
-        cache_dir = None
-        server = None
-        # option processing
-        for option, value in opts:
-            if option == "-v":
-                verbose = True
-            elif option in ("-h", "--help"):
-                raise Usage(help_message)
-            elif option in ("-i", "--input"):
-                input_file = value
-            elif option in ("-o", "--output"):
-                output_file = value
-            elif option in ("-c", "--cache"):
-                cache_dir = value
-            elif option in ("-s", "--server"):
-                server = value
-        if cache_dir is None:
-            cache_dir = "./histogram_cache"
+        server_config = open(args.config_file, "r")
+        config = json.load(server_config)
+        server_config.close()
+    except IOError:
+        config = {}
 
-        if server is None:
-            server = "hg.mozilla.org"
-        cache = revision_cache.RevisionCache(cache_dir, server)
-        schema_data = open("./telemetry_schema.json")
-        schema = TelemetrySchema(json.load(schema_data))
-        storage = persist.StorageLayout(schema, "./data", 1000000)
-        converter = Converter(cache, schema)
-        process(input_file, output_file, storage, converter)
+    cache_dir = config.get("revision_cache_path", "./histogram_cache")
+    server = config.get("revision_cache_server", "hg.mozilla.org")
+    schema_filename = config.get("schema_filename", "./telemetry_schema.json")
+    schema_data = open(schema_filename)
+    schema = TelemetrySchema(json.load(schema_data))
+    schema_data.close()
 
-    except Usage, err:
-        print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
-        print >> sys.stderr, " for help use --help"
-        return 2
+    cache = revision_cache.RevisionCache(cache_dir, server)
+    converter = Converter(cache, schema)
+    process(converter, args.date)
 
 if __name__ == "__main__":
     sys.exit(main())
