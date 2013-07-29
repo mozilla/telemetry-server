@@ -85,7 +85,7 @@ class Converter:
     # Memoize building the Histogram object from the histogram definition.
     def histocache(self, revision_url, name, definition):
         key = "%s.%s" % (name, revision_url)
-        if key not in HC:
+        if key not in self._histocache:
             hist = Histogram(name, definition)
             self._histocache[key] = hist
         return self._histocache[key]
