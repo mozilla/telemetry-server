@@ -66,6 +66,7 @@ class Converter:
                     try:
                         #sys.stderr.write("Writing %s.values[%s] to buckets[%d] (size %d)\n" % (histogram.name(), bucket, range_map[ib], bucket_count))
                         rewritten[range_map[ib]] = value_map[bucket]
+                        # TODO: make sure it's an int
                     except KeyError:
                         sys.stderr.write("Found bogus bucket %s.values[%s]\n" % (histogram.name(), str(bucket)))
             except:
