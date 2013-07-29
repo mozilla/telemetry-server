@@ -4,89 +4,105 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
-import sys, os, re, gzip, glob
+import sys, os, re, glob
 from persist import StorageLayout
 from datetime import datetime
-from datetime import date
-
-searchdir = sys.argv[1]
+from subprocess import Popen, PIPE
 
 dry_run = False
 
-if len(sys.argv) > 2 and sys.argv[2] == "--dry-run":
+python_path = "/usr/bin/python"
+convert_script = "convert.py"
+convert_dir = ""
+try:
+    convert_dir = os.path.dirname(__file__)
+except NameError:
+    # __file__ is not availble
+    pass
+convert_path = os.path.join(convert_dir, convert_script)
+
+compress_path = "/bin/gzip"
+
+if len(sys.argv) > 1 and sys.argv[1] == "--dry-run":
     dry_run = True
 
-paths = {}
-pcs = StorageLayout.PENDING_COMPRESSION_SUFFIX
+# TODO: dedupe these with get_compressables.py
 acs = StorageLayout.COMPRESSED_SUFFIX
+log_date_pattern = re.compile("^.*\.([0-9]{8})\.log$")
 
-today = date.today().strftime("%Y%m%d")
+while True:
+    filename = sys.stdin.readline()
+    if filename == '':
+        break
+    else:
+        filename = filename.rstrip()
+    print "Compressing", filename
 
-for root, dirs, files in os.walk(searchdir):
-    for f in files:
-        if root not in paths:
-            paths[root] = []
+    # Don't actually do anything.
+    if dry_run:
+        continue
 
-        if f.endswith(pcs):
-            paths[root].append(f)
-        elif f.endswith(".log") and f[-12:-4] < today:
-            # it's a regular .log file, but it's older than today, so it will
-            # not be written to anymore.
-            paths[root].append(f)
+    base_ends = filename.find(".log") + 4
+    if base_ends < 4:
+        print " Bad filename encountered, skipping:", filename
+        continue
+    basename = filename[0:base_ends]
 
-for path in paths.iterkeys():
-    pending = paths[path]
-    print "Found a path %s with %d pending files" % (path, len(pending))
-    for filename in pending:
-        print "  Compressing", filename
+    conversion_args = []
+    m = log_date_pattern.match(basename)
+    if m:
+        conversion_args = ["--date", m.group(1)]
 
-        # Don't actually do anything.
-        if dry_run:
-            continue
+    existing_logs = glob.glob(basename + ".[0-9]*" + acs)
+    suffixes = [ int(s[len(basename) + 1:-3]) for s in existing_logs ]
 
-        base_ends = filename.find(".log") + 4
-        if base_ends < 4:
-            print "   Bad filename encountered, skipping:", filename
-            continue
-        basename = filename[0:base_ends]
-        full_basename = os.path.join(path, basename)
+    if len(suffixes) == 0:
+        next_log_num = 1
+    else:
+        next_log_num = sorted(suffixes)[-1] + 1
 
-        existing_logs = glob.glob(full_basename + ".[0-9]*" + acs)
-        suffixes = [ int(s[len(full_basename) + 1:-3]) for s in existing_logs ]
+    # TODO: handle race condition?
+    #   http://stackoverflow.com/questions/82831/how-do-i-check-if-a-file-exists-using-python
+    while os.path.exists(basename + "." + str(next_log_num) + acs):
+        print "Another challenger appears!"
+        next_log_num += 1
 
-        if len(suffixes) == 0:
-            next_log_num = 1
-        else:
-            next_log_num = sorted(suffixes)[-1] + 1
+    comp_name = basename + "." + str(next_log_num) + acs
+    # reserve it!
+    f_comp = open(comp_name, "wb")
+    # TODO: open f_comp with same buffer size as below?
 
-        # TODO: handle race condition?
-        #   http://stackoverflow.com/questions/82831/how-do-i-check-if-a-file-exists-using-python
-        while os.path.exists(full_basename + "." + str(next_log_num) + acs):
-            print "Another challenger appears!"
-            next_log_num += 1
+    # Rename uncompressed file to a temp name
+    tmp_name = comp_name + ".compressing"
+    print "    moving %s to %s" % (filename, tmp_name)
+    os.rename(filename, tmp_name)
 
-        comp_name = full_basename + "." + str(next_log_num) + acs
-        # claim it!
-        f_comp = gzip.open(comp_name, "wb")
-        print "    compressing %s to %s" % (filename, comp_name)
+    # Read input file as text (line-buffered)
+    f_raw = open(tmp_name, "r", 1)
 
-        # Rename uncompressed file to a temp name
-        tmp_name = comp_name + ".compressing"
-        print "    moving %s to %s" % (os.path.join(path, filename), tmp_name)
-        os.rename(os.path.join(path, filename), tmp_name)
+    print "    compressing %s to %s" % (filename, comp_name)
+    start = datetime.now()
 
-        start = datetime.now()
-        f_raw = open(tmp_name, "rb")
-        f_comp.writelines(f_raw)
-        raw_mb = float(f_raw.tell()) / 1024.0 / 1024.0
-        f_raw.close()
-        f_comp.close()
-        comp_mb = float(os.path.getsize(comp_name)) / 1024.0 / 1024.0
-        print "    Size before compression: %.2f MB, after: %.2f MB" % (raw_mb, comp_mb)
+    # Now set up our processing pipeline:
+    # - read from filename (line-buffered, convert, write to pipe
+    # - read from pipe, compress, write to comp_name
+    p_convert = Popen([python_path, convert_path] + conversion_args, bufsize=1, stdin=f_raw, stdout=PIPE, stderr=sys.stderr)
+    p_compress = Popen([compress_path], bufsize=65536, stdin=p_convert.stdout, stdout=f_comp, stderr=sys.stderr)
+    p_convert.stdout.close()
 
-        # Remove raw file
-        os.remove(tmp_name)
-        delta = (datetime.now() - start)
-        sec = float(delta.seconds) + float(delta.microseconds) / 1000000.0
-        print    "  Finished compressing %s as #%d in %.2fs (r: %.2fMB/s, w: %.2fMB/s)" % (filename, next_log_num, sec, (raw_mb/sec), (comp_mb/sec))
+    # Note: it looks like p_compress.wait() is what we want, but the docs
+    #       warn of a deadlock, so we use communicate() instead.
+    p_compress.communicate()
+
+    raw_mb = float(f_raw.tell()) / 1024.0 / 1024.0
+    comp_mb = float(f_comp.tell()) / 1024.0 / 1024.0
+    f_raw.close()
+    f_comp.close()
+    print "    Size before compression: %.2f MB, after: %.2f MB" % (raw_mb, comp_mb)
+
+    # Remove raw file
+    os.remove(tmp_name)
+    delta = (datetime.now() - start)
+    sec = float(delta.seconds) + float(delta.microseconds) / 1000000.0
+    print    "  Finished compressing %s as #%d in %.2fs (r: %.2fMB/s, w: %.2fMB/s)" % (filename, next_log_num, sec, (raw_mb/sec), (comp_mb/sec))
 

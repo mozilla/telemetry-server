@@ -4,7 +4,7 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
-import sys, os, re, gzip, glob
+import sys, os, re
 from persist import StorageLayout
 from datetime import datetime
 from datetime import date
@@ -12,7 +12,6 @@ from datetime import date
 searchdir = sys.argv[1]
 
 pcs = StorageLayout.PENDING_COMPRESSION_SUFFIX
-acs = StorageLayout.COMPRESSED_SUFFIX
 
 today = date.today().strftime("%Y%m%d")
 log_date_pattern = re.compile("^.*\.([0-9]{8})\.log$")
@@ -41,5 +40,5 @@ for root, dirs, files in os.walk(searchdir):
 
 delta = (datetime.now() - start)
 sec = float(delta.seconds) + float(delta.microseconds) / 1000000.0
-sys.stderr.write("#  Found %d of %d files to compress in %.2fs (%.2f per sec)\n" % (matches, total_files, sec, (total_files/sec)))
+#sys.stderr.write("Found %d of %d files to compress in %.2fs (%.2f per sec)\n" % (matches, total_files, sec, (total_files/sec)))
 
