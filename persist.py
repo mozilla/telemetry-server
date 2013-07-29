@@ -59,7 +59,7 @@ class StorageLayout:
         fout.write(uuid)
         fout.write("\t")
         if isinstance(obj, basestring):
-            fout.write(self.clean_newlines(obj, uuid))
+            fout.write(self.clean_newlines(obj, obj))
         else:
             # Use minimal json (without excess spaces)
             fout.write(json.dumps(obj, separators=(',', ':')))
