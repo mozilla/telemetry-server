@@ -17,12 +17,17 @@ except ImportError:
 import urllib2
 import gzip
 import revision_cache
-from histogram_tools import Histogram
+from histogram_tools import Histogram, DefinitionException
 from telemetry_schema import TelemetrySchema
 import traceback
 import persist
 from datetime import date
 import time
+
+
+class BadPayloadError(Exception):
+    def __init__(self, msg):
+        self.msg = msg
 
 
 class Converter:
@@ -65,13 +70,16 @@ class Converter:
                     ib = int(bucket)
                     try:
                         #sys.stderr.write("Writing %s.values[%s] to buckets[%d] (size %d)\n" % (histogram.name(), bucket, range_map[ib], bucket_count))
-                        rewritten[range_map[ib]] = value_map[bucket]
-                        # TODO: make sure it's an int
+                        bucket_val = value_map[bucket]
+                        # Make sure it's a number:
+                        if isinstance(bucket_val, (int, long)):
+                            rewritten[range_map[ib]] = bucket_val
+                        else:
+                            raise BadPayloadError("Found non-integer bucket value: %s.values[%s] = '%s'" % (histogram.name(), str(bucket), str(bucket_val)))
                     except KeyError:
-                        sys.stderr.write("Found bogus bucket %s.values[%s]\n" % (histogram.name(), str(bucket)))
-            except:
+                        raise BadPayloadError("Found invalid bucket %s.values[%s]" % (histogram.name(), str(bucket)))
+            except DefinitionException:
                 sys.stderr.write("Could not find ranges for histogram: %s: %s\n" % (histogram.name(), sys.exc_info()))
-                traceback.print_exc(file=sys.stderr)
         except ValueError:
             # TODO: what should we do for non-numeric bucket counts?
             #   - output buckets based on observed keys?
@@ -188,12 +196,17 @@ def process(converter, target_date=None):
             sys.stdout.write("\t")
             sys.stdout.write(json.dumps(json_dict, separators=(',', ':')))
             sys.stdout.write("\n")
+        except BadPayloadError, e:
+            sys.stderr.write("Payload Error on line %d: %s\n%s\n" % (line_num, e.msg, jsonstr))
         except Exception, e:
             sys.stderr.write("Error converting line %d: %s\n" % (line_num, e))
 
     duration = time.clock() - start
     mb_read = float(bytes_read) / 1024.0 / 1024.0
-    sys.stderr.write("Elapsed time: %.02fs (%.02fMB/s)\n" % (duration, mb_read / duration))
+    if duration > 0:
+        sys.stderr.write("Elapsed time: %.02fs (%.02fMB/s)\n" % (duration, mb_read / duration))
+    else:
+        sys.stderr.write("Elapsed time: %.02fs (??? MB/s)\n" % (duration))
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Convert Telemetry data")
