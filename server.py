@@ -16,6 +16,8 @@ from revision_cache import RevisionCache
 from telemetry_schema import TelemetrySchema
 from convert import Converter
 from persist import StorageLayout
+from greplin import scales
+from greplin.scales import graphite
 
 app = Flask(__name__)
 
@@ -34,6 +36,19 @@ server_motd = config.get("motd", date.today().strftime("since %Y-%m-%d"))
 server_port = config.get("port", 8080)
 server_debug = config.get("debug", True)
 convert_payloads = config.get("convert_payloads", True)
+graphite_server = config.get("graphite_server", None)
+graphite_port = config.get("graphite_port", 2003)
+
+STATS = scales.collection("server.",
+        scales.IntStat("submit_batch"),
+        scales.IntStat("submit_batch_dims"),
+        scales.IntStat("submit_single"),
+        scales.IntStat("submit_single_dims"),
+        scales.IntStat("submit_all"),
+        scales.PmfStat("time_single"))
+
+if graphite_server is not None:
+    graphite.GraphitePeriodicPusher(graphite_server, graphite_port, 'telemetry.').start()
 
 ## Revision Cache
 revision_cache_path = config.get("revision_cache_path", "./histogram_cache")
@@ -53,7 +68,7 @@ converter = Converter(cache, schema)
 storage = StorageLayout(schema, storage_path, max_log_size)
 
 @app.route('/', methods=['GET', 'POST'])
-def licese_and_registration_please():
+def license_and_registration_please():
     return "Telemetry HTTP Server v0.0 " + server_motd
 
 @app.route('/histograms/<repo>/<revision>')
@@ -83,6 +98,7 @@ def validate_dims(dimensions):
 #http://<bagheera_host>/submit/telemetry/<id>/<reason>/<appName>/<appVersion>/<appUpdateChannel>/<appBuildID>
 @app.route('/submit/telemetry/<id>/<reason>/<appName>/<appVersion>/<appUpdateChannel>/<appBuildID>', methods=['POST'])
 def submit_with_dims(id, reason, appName, appVersion, appUpdateChannel, appBuildID):
+    STATS.submit_single_dims += 1
     today = date.today().strftime("%Y%m%d")
     info = {
             "reason": reason,
@@ -96,11 +112,13 @@ def submit_with_dims(id, reason, appName, appVersion, appUpdateChannel, appBuild
 
 @app.route('/submit/telemetry/<id>', methods=['POST'])
 def submit_without_dims(id):
+    STATS.submit_single += 1
     today = date.today().strftime("%Y%m%d")
     return submit(id, request.data, today)
 
 @app.route('/submit/telemetry/batch', methods=['POST'])
 def submit_batch():
+    STATS.submit_batch += 1
     return_message = "OK"
     status = 201;
     today = date.today().strftime("%Y%m%d")
@@ -123,6 +141,7 @@ def submit_batch():
 
 @app.route('/submit/telemetry/batch_dims', methods=['POST'])
 def submit_batch_dims():
+    STATS.submit_batch_dims += 1
     return_message = "OK"
     status = 201;
     today = date.today().strftime("%Y%m%d")
@@ -159,34 +178,36 @@ def submit_batch_dims():
 
 
 def submit(id, json, today, dimensions=None):
-    try:
-        validate_body(json)
-        if dimensions is not None:
-            validate_dims(dimensions)
-        if convert_payloads:
-            converted, payload_dims = converter.convert_json(json, today)
-        else:
-            converted = json
-            payload_dims = schema.dimensions_from({}, today)
-        if dimensions is None:
-            validate_dims(payload_dims)
-            dimensions = payload_dims
+    STATS.submit_all += 1
+    with STATS.time_single.time():
+        try:
+            validate_body(json)
+            if dimensions is not None:
+                validate_dims(dimensions)
+            if convert_payloads:
+                converted, payload_dims = converter.convert_json(json, today)
+            else:
+                converted = json
+                payload_dims = schema.dimensions_from({}, today)
+            if dimensions is None:
+                validate_dims(payload_dims)
+                dimensions = payload_dims
 
-        # TODO: check if payload_dims are the same as incoming dims?
-        storage.write(id, converted, dimensions)
-        # 201 CREATED
-        return "Created", 201
-    except ValueError, err:
-        if dimensions is None:
-            # At the very least, we know what day it is
-            dimensions = schema.dimensions_from({}, today)
-        storage.write_invalid(id, json, dimensions, err)
-        # 400 BAD REQUEST
-        return "Bad Request", 400
-    except KeyError, err:
-        storage.write_invalid(id, json, dimensions, err)
-        return "Bad Request JSON", 400
-    return "wtf...", 500
+            # TODO: check if payload_dims are the same as incoming dims?
+            storage.write(id, converted, dimensions)
+            # 201 CREATED
+            return "Created", 201
+        except ValueError, err:
+            if dimensions is None:
+                # At the very least, we know what day it is
+                dimensions = schema.dimensions_from({}, today)
+            storage.write_invalid(id, json, dimensions, err)
+            # 400 BAD REQUEST
+            return "Bad Request", 400
+        except KeyError, err:
+            storage.write_invalid(id, json, dimensions, err)
+            return "Bad Request JSON", 400
+        return "wtf...", 500
 
 if __name__ == '__main__':
     app.debug = server_debug
