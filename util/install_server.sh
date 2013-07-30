@@ -29,7 +29,7 @@ fi
 rsync -av \
     compressor.py \
     convert.py \
-    get_compressables.py \
+    get_compressibles.py \
     histogram_tools.py \
     persist.py \
     revision_cache.py \

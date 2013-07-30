@@ -11,7 +11,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 # A list of files to be compressed is read from stdin.
 #
 # Example:
-#  python get_compressables.py /path/to/telemetry | python compressor.py
+#  python get_compressibles.py /path/to/telemetry | python compressor.py
 #
 ###########################################################################
 
@@ -37,7 +37,7 @@ compress_path = "/bin/gzip"
 if len(sys.argv) > 1 and sys.argv[1] == "--dry-run":
     dry_run = True
 
-# TODO: dedupe these with get_compressables.py
+# TODO: dedupe these with get_compressibles.py
 acs = StorageLayout.COMPRESSED_SUFFIX
 log_date_pattern = re.compile("^.*\.([0-9]{8})\.log$")
 
