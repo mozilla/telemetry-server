@@ -4,6 +4,17 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
+###########################################################################
+# Use this script to validate, convert, and compress raw telemetry
+# log files.
+#
+# A list of files to be compressed is read from stdin.
+#
+# Example:
+#  python get_compressables.py /path/to/telemetry | python compressor.py
+#
+###########################################################################
+
 import sys, os, re, glob
 from persist import StorageLayout
 from datetime import datetime
