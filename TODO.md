@@ -3,6 +3,7 @@ TODO
 
 - [P0] Change writes to use f.fileno and os.write()
 - [P4] Preopen the mapper input files in the parent process, pass fd's to child process to avoid race condition with the compressor.
+- [P1] Error handling in pipe-based compressor
 - [P1] Write data to [Amazon S3][4] (and delete locally on success)
 - [P1] Switch compression to LZMA (and see if we can still keep up)
 - [P2] nginx: Check into load-balancing
