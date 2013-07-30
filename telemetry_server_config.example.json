@@ -7,5 +7,6 @@
   "revision_cache_path": "./histogram_cache",
   "revision_cache_server": "hg.mozilla.org",
   "schema_filename": "./telemetry_schema.json",
-  "storage_path": "./data"
+  "storage_path": "./data",
+  "graphite_server": "stats.example.com"
 }
