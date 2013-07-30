@@ -48,6 +48,7 @@ STATS = scales.collection("server.",
         scales.PmfStat("time_single"))
 
 if graphite_server is not None:
+    print "Setting up Graphite pusher"
     graphite.GraphitePeriodicPusher(graphite_server, graphite_port, 'telemetry.').start()
 
 ## Revision Cache
