@@ -47,7 +47,7 @@ STATS = scales.collection("server",
         scales.IntStat("submit_batch_dims"),
         scales.IntStat("submit_single"),
         scales.IntStat("submit_single_dims"),
-        scales.IntStat("submit_all"),
+        scales.meter.MeterStat("submit_all"),
         scales.PmfStat("time_single"))
 
 if graphite_server is not None:
@@ -171,7 +171,7 @@ def submit_batch_dims():
         }
 
         dimensions = schema.dimensions_from(info, today)
-        print "Key:", key, "Reason:", reason, "JSON:", json[0:50]
+        logging.debug("Key: %s, Reason: %s, JSON: %s..." % (key, reason, json[0:50]))
         try:
             message, code = submit(key, json, today, dimensions)
             if code != 201:
@@ -184,7 +184,7 @@ def submit_batch_dims():
 
 
 def submit(id, json, today, dimensions=None):
-    STATS.submit_all += 1
+    STATS.submit_all.mark()
     with STATS.time_single.time():
         try:
             validate_body(json)
