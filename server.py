@@ -18,6 +18,7 @@ from telemetry_schema import TelemetrySchema
 from convert import Converter
 from persist import StorageLayout
 from greplin import scales
+from greplin.scales.meter import MeterStat
 from greplin.scales import graphite
 
 app = Flask(__name__)
