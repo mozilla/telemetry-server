@@ -12,6 +12,7 @@ except ImportError:
 from flask import Flask
 from flask import request
 import flask
+import logging
 from revision_cache import RevisionCache
 from telemetry_schema import TelemetrySchema
 from convert import Converter
@@ -21,6 +22,8 @@ from greplin.scales import graphite
 
 app = Flask(__name__)
 
+#logger = logging.getLogger()
+#logger.setLevel(logging.DEBUG)
 server_config_file = "./telemetry_server_config.json"
 try:
     server_config = open(server_config_file, "r")
@@ -39,7 +42,7 @@ convert_payloads = config.get("convert_payloads", True)
 graphite_server = config.get("graphite_server", None)
 graphite_port = config.get("graphite_port", 2003)
 
-STATS = scales.collection("server.",
+STATS = scales.collection("server",
         scales.IntStat("submit_batch"),
         scales.IntStat("submit_batch_dims"),
         scales.IntStat("submit_single"),
@@ -48,8 +51,10 @@ STATS = scales.collection("server.",
         scales.PmfStat("time_single"))
 
 if graphite_server is not None:
-    print "Setting up Graphite pusher"
-    graphite.GraphitePeriodicPusher(graphite_server, graphite_port, 'telemetry.').start()
+    print "Setting up Graphite pusher:", graphite_server
+    pusher = graphite.GraphitePeriodicPusher(graphite_server, graphite_port, 'telemetry.', 10)
+    pusher.allow("*")
+    pusher.start()
 
 ## Revision Cache
 revision_cache_path = config.get("revision_cache_path", "./histogram_cache")
