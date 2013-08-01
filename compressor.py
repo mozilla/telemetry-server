@@ -41,6 +41,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "--dry-run":
 
 # TODO: dedupe these with get_compressibles.py
 acs = StorageLayout.COMPRESSED_SUFFIX
+acs_len = len(acs)
 log_date_pattern = re.compile("^.*\.([0-9]{8})\.log$")
 
 while True:
@@ -67,7 +68,7 @@ while True:
         conversion_args = ["--date", m.group(1)]
 
     existing_logs = glob.glob(basename + ".[0-9]*" + acs)
-    suffixes = [ int(s[len(basename) + 1:-3]) for s in existing_logs ]
+    suffixes = [ int(s[len(basename) + 1:-acs_len]) for s in existing_logs ]
 
     if len(suffixes) == 0:
         next_log_num = 1
