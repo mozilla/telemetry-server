@@ -57,17 +57,25 @@ class Job:
         # Find files matching specified input filter
         files = self.files()
 
+        # Not useful to have more mappers than files.
+        if len(files) < self._num_mappers:
+            print "There are only", len(files), "input files. Reducing number of mappers accordingly."
+            self._num_mappers = len(files)
+
         # Partition files into reasonably equal groups for use by mappers
         partitions = self.partition(files)
 
         # Partitions are ready. Map.
         mappers = []
         for i in range(self._num_mappers):
-            p = Process(
-                    target=Mapper,
-                    args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
-            mappers.append(p)
-            p.start()
+            if len(partitions[i]) > 0:
+                p = Process(
+                        target=Mapper,
+                        args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
+                mappers.append(p)
+                p.start()
+            else:
+                print "Skipping mapper", i, "- no input files to process"
         for m in mappers:
             m.join()
 
