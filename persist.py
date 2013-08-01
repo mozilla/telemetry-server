@@ -7,6 +7,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import os
+import io
 import sys
 try:
     import simplejson as json
@@ -51,27 +52,27 @@ class StorageLayout:
         # Working filename is like
         #   a.b.c.log
         # We want to roll this over (and compress) when it reaches a size limit
-        # The compressed log filenames will be something like
-        #   a.b.c.log.3.COMPRESSED_SUFFIX
-        try:
-            fout = open(filename, "a")
-        except IOError:
-            os.makedirs(os.path.dirname(filename))
-            fout = open(filename, "a")
 
         # TODO: should we actually write "err" to file?
-        fout.write(uuid)
-        fout.write("\t")
         if isinstance(obj, basestring):
-            fout.write(self.clean_newlines(obj, obj))
+            jsonstr = self.clean_newlines(obj, obj)
         else:
             # Use minimal json (without excess spaces)
-            fout.write(json.dumps(obj, separators=(',', ':')))
-        fout.write("\n")
+            jsonstr = json.dumps(obj, separators=(',', ':'))
 
-        filesize = fout.tell()
+        output_line = u"%s\t%s\n" % (uuid, jsonstr)
+
+        dirname = os.path.dirname(filename)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+
+        # According to SO, this should be atomic on a well-behaved OS:
+        # http://stackoverflow.com/questions/7561663/appending-to-the-end-of-a-file-in-a-concurrent-environment
+        with io.open(filename, "a") as fout:
+            fout.write(output_line)
+            filesize = fout.tell()
+
         print "Wrote to", filename, "new size is", filesize
-        fout.close()
         if filesize >= self._max_log_size:
             self.rotate(filename)
 
@@ -82,3 +83,5 @@ class StorageLayout:
         tmp_name = "%s.%d.%f%s" % (filename, os.getpid(), time.time(), self.PENDING_COMPRESSION_SUFFIX)
         os.rename(filename, tmp_name)
         # Note that files are expected to be compressed elsewhere (see compressor.py)
+        # The compressed log filenames will be something like
+        #   a.b.c.log.3.COMPRESSED_SUFFIX
