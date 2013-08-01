@@ -32,7 +32,9 @@ except NameError:
     pass
 convert_path = os.path.join(convert_dir, convert_script)
 
-compress_path = "/bin/gzip"
+compress_path = StorageLayout.COMPRESS_PATH
+compression_args = StorageLayout.COMPRESSION_ARGS
+compress_cmd = [compress_path] + compression_args
 
 if len(sys.argv) > 1 and sys.argv[1] == "--dry-run":
     dry_run = True
@@ -98,7 +100,7 @@ while True:
     # - read from filename (line-buffered, convert, write to pipe
     # - read from pipe, compress, write to comp_name
     p_convert = Popen([python_path, convert_path] + conversion_args, bufsize=1, stdin=f_raw, stdout=PIPE, stderr=sys.stderr)
-    p_compress = Popen([compress_path], bufsize=65536, stdin=p_convert.stdout, stdout=f_comp, stderr=sys.stderr)
+    p_compress = Popen(compress_cmd, bufsize=65536, stdin=p_convert.stdout, stdout=f_comp, stderr=sys.stderr)
     p_convert.stdout.close()
 
     # Note: it looks like p_compress.wait() is what we want, but the docs

@@ -18,7 +18,11 @@ import time
 
 class StorageLayout:
     """A class for encapsulating the on-disk data layout for Telemetry"""
-    COMPRESSED_SUFFIX = ".gz"
+    COMPRESSED_SUFFIX = ".lzma"
+    COMPRESS_PATH = "/usr/bin/lzma"
+    COMPRESSION_ARGS = ["-0"]
+    DECOMPRESSION_ARGS = ["--decompress", "--stdout"]
+
     PENDING_COMPRESSION_SUFFIX = ".compressme"
 
     def __init__(self, schema, basedir, max_log_size):
@@ -48,7 +52,7 @@ class StorageLayout:
         #   a.b.c.log
         # We want to roll this over (and compress) when it reaches a size limit
         # The compressed log filenames will be something like
-        #   a.b.c.log.3.gz
+        #   a.b.c.log.3.COMPRESSED_SUFFIX
         try:
             fout = open(filename, "a")
         except IOError:
