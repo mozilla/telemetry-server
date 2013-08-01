@@ -148,6 +148,8 @@ class Converter:
             raise ValueError("Missing in payload: info")
         if "histograms" not in json_dict:
             raise ValueError("Missing in payload: histograms")
+        # TODO: check if histograms is already converted, and if so, return jsonstr directly.
+        # TODO: consider changing the payload version to make this detection trivial.
 
         info = json_dict.get("info")
         if "revision" not in info:

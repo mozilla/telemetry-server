@@ -6,6 +6,10 @@ TODO
 - [P1] Error handling in pipe-based compressor
 - [P1] Write data to [Amazon S3][4] (and delete locally on success)
 - [P1] Switch compression to LZMA (and see if we can still keep up)
+- [P2] Conversion: check if histograms is already converted, and if so,
+       return input record directly.
+- [P2] consider changing the payload version to make format/conversion
+       detection trivial.
 - [P2] nginx: Check into load-balancing
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
