@@ -11,12 +11,12 @@ import imp
 import sys
 import os
 import json
-import gzip
 import marshal
 from datetime import datetime
 from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
 from persist import StorageLayout
+from subprocess import Popen, PIPE
 
 class Job:
     """A class for orchestrating a Telemetry MapReduce job"""
@@ -195,6 +195,7 @@ class Mapper:
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
+        decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
         if mapfunc is None or not callable(mapfunc):
             print "No map function!!!"
             sys.exit(1)
@@ -204,7 +205,10 @@ class Mapper:
         for input_file in inputs:
             try:
                 if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
-                    input_file["handle"] = gzip.open(input_file["name"], "rb")
+                    # TODO: Popen the decompress version of StorageLayout.COMPRESS_PATH
+                    raw_handle = open(input_file["name"], "rb")
+                    p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=raw_handle, stdout=PIPE, stderr=sys.stderr)
+                    input_file["handle"] = p_decompress.stdout
                 else:
                     input_file["handle"] = open(input_file["name"], "r")
             except:
@@ -222,6 +226,7 @@ class Mapper:
                     # TODO: increment "bad line" metrics.
                     print "Bad line:", input_file["name"], ":", line_num
             input_file["handle"].close()
+            # TODO: close raw_handle too?
         context.finish()
 
 
