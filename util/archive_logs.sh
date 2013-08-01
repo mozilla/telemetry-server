@@ -20,3 +20,5 @@ cd $CODE_DIR
 # for compression will work relative to $CODE_DIR (histogram_cache location,
 # server config, etc)
 $PYTHON ./get_compressibles.py $DATA_DIR | $PYTHON ./compressor.py
+
+exit $?

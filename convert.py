@@ -15,7 +15,6 @@ try:
 except ImportError:
     import json
 import urllib2
-import gzip
 import revision_cache
 from histogram_tools import Histogram, DefinitionException
 from telemetry_schema import TelemetrySchema

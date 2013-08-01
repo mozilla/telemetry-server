@@ -11,7 +11,6 @@ except ImportError:
 import sys
 import os
 import urllib2
-import gzip
 
 # TODO:
 # [ ] Pre-fetch (and cache) all revisions of Histograms.json using something like:
