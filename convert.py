@@ -31,6 +31,8 @@ class BadPayloadError(Exception):
 
 class Converter:
     """A class for converting incoming payloads to a more compact form"""
+    VERSION_UNCONVERTED = 1
+    VERSION_CONVERTED = 2
 
     def __init__(self, cache, schema):
         self._histocache = {}
@@ -148,19 +150,26 @@ class Converter:
             raise ValueError("Missing in payload: info")
         if "histograms" not in json_dict:
             raise ValueError("Missing in payload: histograms")
-        # TODO: check if histograms is already converted, and if so, return jsonstr directly.
-        # TODO: consider changing the payload version to make this detection trivial.
 
         info = json_dict.get("info")
-        if "revision" not in info:
-            raise ValueError("Missing in payload: info.revision")
 
-        revision = info.get("revision")
-
-        try:
-            json_dict["histograms"] = self.rewrite_hists(revision, json_dict["histograms"])
-        except KeyError:
-            raise ValueError("Missing in payload: histograms")
+        # Check if the payload is already converted:
+        if "ver" in json_dict:
+            if json_dict["ver"] == Converter.VERSION_UNCONVERTED:
+                # Convert it and update the version
+                if "revision" not in info:
+                    raise ValueError("Missing in payload: info.revision")
+                revision = info.get("revision")
+                try:
+                    json_dict["histograms"] = self.rewrite_hists(revision, json_dict["histograms"])
+                    json_dict["ver"] = Converter.VERSION_CONVERTED
+                except KeyError:
+                    raise ValueError("Missing in payload: histograms")
+            elif json_dict["ver"] != Converter.VERSION_CONVERTED:
+                raise ValueError("Unknown payload version: " + str(json_dict["ver"]))
+            # else it's already converted.
+        else:
+            raise ValueError("Missing payload version")
 
         # Get dimensions in order from schema (field_name)
         dimensions = self._schema.dimensions_from(info, date)
