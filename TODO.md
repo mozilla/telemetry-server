@@ -14,6 +14,7 @@ TODO
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
 - [P2] Supply the correct Histograms.json spec for each record to the Mapper
+- [P3] Check if the compressor cron job is already running, and if so don't start another instance.
 - [P3] Add timeout/retry around fetching Histograms.json from hg.mozilla.org
 - [P3] Add many tests
 - [P3] Add runtime performance metrics using [scales][1] and on-demand perf tests
