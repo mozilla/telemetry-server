@@ -46,7 +46,6 @@ CURRENT_COUNT=0
 
 upload () {
     MY_FILES=$@
-    echo $1
     if [ $DEBUG -ne 0 ]; then
         echo "$S3F $BUCKET put -a \"$AWS_KEY\" -s \"$AWS_SECRET_KEY\" -t $BATCH_SIZE $VERBOSE --put-only-new --del-prefix=\"./\" --put-full-path ${MY_FILES[*]}"
         S3F_RETURN=$?
