@@ -69,7 +69,7 @@ upload () {
 }
 
 cd $DATA_DIR
-for f in $(find . -name "*.lzma" -size +${MIN_SIZE} | head -n 100); do
+for f in $(find . -name "*.lzma" -size +${MIN_SIZE}); do
     CURRENT_COUNT=$(( $CURRENT_COUNT + 1 ))
     FILES[$CURRENT_COUNT]=$f
     if [ $CURRENT_COUNT -ge $BATCH_SIZE ]; then
