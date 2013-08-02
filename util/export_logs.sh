@@ -1,10 +1,12 @@
 #!/bin/bash
 
 DATA_DIR=$1
-USAGE="Usage: $0 data_dir [ s3_bucket_name ]"
+USAGE="Usage: $0 data_dir aws_key aws_secret_key [ s3_bucket_name ]"
 S3F=/usr/local/bin/s3funnel
-VERBOSE="-v"
+VERBOSE=" "
 MIN_SIZE="50c"
+AWS_KEY=$2
+AWS_SECRET_KEY=$3
 
 if [ -z "$DEBUG" ]; then
     DEBUG=0
@@ -16,7 +18,7 @@ if [ ! -f "$S3F" ] && [ $DEBUG -eq 0 ]; then
     exit -1
 fi
 
-BUCKET=$2
+BUCKET=$4
 if [ -z "$BUCKET" ]; then
     BUCKET="mreid-telemetry-dev"
 fi
@@ -32,6 +34,12 @@ if [ ! -d "$DATA_DIR" ]; then
     exit 2
 fi
 
+if [ -z "$AWS_KEY" ] || [ -z "$AWS_SECRET_KEY" ]; then
+    echo "ERROR: you must specify aws_key and aws_secret key"
+    echo "$USAGE"
+    exit 3
+fi
+
 BATCH_SIZE=8
 FILES=()
 CURRENT_COUNT=0
@@ -39,24 +47,19 @@ CURRENT_COUNT=0
 upload () {
     MY_FILES=$@
     echo $1
-    #echo "Sending files: ${MY_FILES[*]}"
     if [ $DEBUG -ne 0 ]; then
-        echo "$S3F $BUCKET put -t $BATCH_SIZE $VERBOSE --put-only-new --del-prefix=\"./\" --put-full-path ${MY_FILES[*]}"
+        echo "$S3F $BUCKET put -a \"$AWS_KEY\" -s \"$AWS_SECRET_KEY\" -t $BATCH_SIZE $VERBOSE --put-only-new --del-prefix=\"./\" --put-full-path ${MY_FILES[*]}"
+        S3F_RETURN=$?
     else
-        $S3F $BUCKET put -t $BATCH_SIZE $VERBOSE --put-only-new --del-prefix="./" --put-full-path ${MY_FILES[*]}
+        $S3F $BUCKET put -a "$AWS_KEY" -s "$AWS_SECRET_KEY" -t $BATCH_SIZE $VERBOSE --put-only-new --del-prefix="./" --put-full-path ${MY_FILES[*]}
+        S3F_RETURN=$?
     fi
-    S3F_RETURN=$?
     if [ $S3F_RETURN -eq 0 ]; then
         # Success! truncate each file.
         for uploaded in $MY_FILES; do
             echo "Successfully uploaded $uploaded, time to truncate."
-            if [ $DEBUG -ne 0 ]; then
-                echo "mv $uploaded ${uploaded}.uploaded"
-            else
-                mv $uploaded ${uploaded}.uploaded
-            fi
-            # TODO:
-            # > $uploaded
+            mv "$uploaded" "${uploaded}.uploaded"
+            > "$uploaded"
         done
     else
         # Error :(
@@ -67,7 +70,7 @@ upload () {
 }
 
 cd $DATA_DIR
-for f in $(find . -name "*.lzma" -size +${MIN_SIZE}); do
+for f in $(find . -name "*.lzma" -size +${MIN_SIZE} | head -n 100); do
     CURRENT_COUNT=$(( $CURRENT_COUNT + 1 ))
     FILES[$CURRENT_COUNT]=$f
     if [ $CURRENT_COUNT -ge $BATCH_SIZE ]; then
