@@ -16,6 +16,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ###########################################################################
 
 import sys, os, re, glob
+import logging
 from persist import StorageLayout
 from datetime import datetime
 from subprocess import Popen, PIPE
@@ -50,7 +51,7 @@ while True:
         break
     else:
         filename = filename.rstrip()
-    print "Compressing", filename
+    logging.info("Compressing " + filename)
 
     # Don't actually do anything.
     if dry_run:
@@ -58,7 +59,7 @@ while True:
 
     base_ends = filename.find(".log") + 4
     if base_ends < 4:
-        print " Bad filename encountered, skipping:", filename
+        logging.warn("Bad filename encountered, skipping: " + filename)
         continue
     basename = filename[0:base_ends]
 
@@ -78,7 +79,7 @@ while True:
     # TODO: handle race condition?
     #   http://stackoverflow.com/questions/82831/how-do-i-check-if-a-file-exists-using-python
     while os.path.exists(basename + "." + str(next_log_num) + acs):
-        print "Another challenger appears!"
+        logging.warn("Another challenger appears!")
         next_log_num += 1
 
     comp_name = basename + "." + str(next_log_num) + acs
@@ -88,13 +89,13 @@ while True:
 
     # Rename uncompressed file to a temp name
     tmp_name = comp_name + ".compressing"
-    print "    moving %s to %s" % (filename, tmp_name)
+    logging.debug("Moving %s to %s" % (filename, tmp_name))
     os.rename(filename, tmp_name)
 
     # Read input file as text (line-buffered)
     f_raw = open(tmp_name, "r", 1)
 
-    print "    compressing %s to %s" % (filename, comp_name)
+    logging.debug("compressing %s to %s" % (filename, comp_name))
     start = datetime.now()
 
     # Now set up our processing pipeline:
@@ -112,11 +113,10 @@ while True:
     comp_mb = float(f_comp.tell()) / 1024.0 / 1024.0
     f_raw.close()
     f_comp.close()
-    print "    Size before compression: %.2f MB, after: %.2f MB" % (raw_mb, comp_mb)
 
     # Remove raw file
     os.remove(tmp_name)
     delta = (datetime.now() - start)
     sec = float(delta.seconds) + float(delta.microseconds) / 1000000.0
-    print    "  Finished compressing %s as #%d in %.2fs (r: %.2fMB/s, w: %.2fMB/s)" % (filename, next_log_num, sec, (raw_mb/sec), (comp_mb/sec))
+    logging.info("Compressed %s as #%d in %.2fs. Size before: %.2fMB, after: %.2fMB (r: %.2fMB/s, w: %.2fMB/s)" % (filename, next_log_num, sec, raw_mb, comp_mb, (raw_mb/sec), (comp_mb/sec)))
 

@@ -15,6 +15,7 @@ except ImportError:
     import json
 from telemetry_schema import TelemetrySchema
 import time
+import logging
 
 
 class StorageLayout:
@@ -44,7 +45,7 @@ class StorageLayout:
         # Clean any newlines (replace with spaces)
         for eol in ["\r", "\n"]:
             if eol in value:
-                print "Warning: found an EOL in", tag
+                logging.warn("Found an unexpected EOL in %s" % (tag))
                 value = value.replace(eol, " ")
         return value
 
@@ -72,12 +73,12 @@ class StorageLayout:
             fout.write(output_line)
             filesize = fout.tell()
 
-        print "Wrote to", filename, "new size is", filesize
+        logging.debug("Wrote to %s: new size is %d" % (filename, filesize))
         if filesize >= self._max_log_size:
             self.rotate(filename)
 
     def rotate(self, filename):
-        print "Rotating", filename
+        logging.debug("Rotating %s" % (filename))
 
         # rename current file
         tmp_name = "%s.%d.%f%s" % (filename, os.getpid(), time.time(), self.PENDING_COMPRESSION_SUFFIX)
