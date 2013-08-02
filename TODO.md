@@ -1,11 +1,8 @@
 TODO
 ====
 
-- [P0] Change writes to use f.fileno and os.write() in an attempt to [write atomically][6]
 - [P4] Preopen the mapper input files in the parent process, pass fd's to child process to avoid race condition with the compressor.
 - [P1] Error handling in pipe-based compressor
-- [P1] Write data to [Amazon S3][4] (and delete locally on success)
-- [P1] Switch compression to LZMA (and see if we can still keep up)
 - [P2] Conversion: check if histograms is already converted, and if so,
        return input record directly.
 - [P2] consider changing the payload version to make format/conversion
@@ -14,7 +11,7 @@ TODO
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
 - [P2] Supply the correct Histograms.json spec for each record to the Mapper
-- [P3] Check if the compressor cron job is already running, and if so don't start another instance.
+- [P3] Check if the compressor (and exporter) cron job is already running, and if so don't start another instance.
 - [P3] Add timeout/retry around fetching Histograms.json from hg.mozilla.org
 - [P3] Add many tests
 - [P3] Add runtime performance metrics using [scales][1] and on-demand perf tests
