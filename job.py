@@ -12,6 +12,7 @@ import sys
 import os
 import json
 import marshal
+import traceback
 from datetime import datetime
 from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
@@ -19,8 +20,17 @@ from persist import StorageLayout
 from subprocess import Popen, PIPE
 from boto.s3.connection import S3Connection
 
+def find_min_idx(stuff):
+    min_idx = 0
+    for m in range(1, len(stuff)):
+        if stuff[m] < stuff[min_idx]:
+            min_idx = m
+    return min_idx
+
+
 class Job:
     """A class for orchestrating a Telemetry MapReduce job"""
+    DOWNLOAD_BATCH_SIZE = 100
     # 1. read input filter
     # 2. generate filtered list of local input files
     # 2a. generate filtered list of remote input files
@@ -47,6 +57,8 @@ class Job:
             raise ValueError("Input filter must be a valid json file")
 
         self._input_dir = config.data_dir
+        if self._input_dir[-1] == os.path.sep:
+            self._input_dir = self._input_dir[0:-1]
         self._work_dir = config.work_dir
         self._input_filter = TelemetrySchema(json.load(open(config.input_filter)))
         self._allowed_values = self._input_filter.sanitize_allowed_values()
@@ -61,13 +73,39 @@ class Job:
         ## Lifted from FileDriver.py in jydoop.
         self._job_module = imp.load_module("telemetry_job", modulefd, config.job_script, ('.py', 'U', 1))
 
+    def dump_stats(self, partitions):
+        total = sum(partitions)
+        avg = total / len(partitions)
+        for i in range(len(partitions)):
+            print "Partition %d contained %d (%+d)" % (i, partitions[i], float(partitions[i]) - avg)
+
+    def fetch_remotes(self, remotes):
+        # TODO: download remotes in groups of size DOWNLOAD_BATCH_SIZE
+        remote_names = [ r["name"] for r in remotes if r["type"] == "remote" ]
+
+        # TODO: check cache first.
+        result = 0
+
+        if len(remote_names) > 0:
+            fetch_cmd = ["/usr/local/bin/s3funnel"]
+            fetch_cmd.append(self._bucket_name)
+            fetch_cmd.append("get")
+            fetch_cmd.append("-a")
+            fetch_cmd.append(self._aws_key)
+            fetch_cmd.append("-s")
+            fetch_cmd.append(self._aws_secret_key)
+            fetch_cmd.append("-t")
+            fetch_cmd.append("8")
+            result = subprocess.call(fetch_cmd + remote_names, cwd=os.path.join(self._work_dir, "cache"))
+        return result
+
     def mapreduce(self):
         # Find files matching specified input filter
         files = self.local_files()
         remote_files = self.get_filtered_files_s3()
 
         file_count = len(files) + len(remote_files)
-        # Not useful to have more mappers than files.
+        # Not useful to have more mappers than input files.
         if file_count < self._num_mappers:
             print "There are only", file_count, "input files. Reducing number of mappers accordingly."
             self._num_mappers = file_count
@@ -79,9 +117,11 @@ class Job:
         mappers = []
         for i in range(self._num_mappers):
             if len(partitions[i]) > 0:
+                # Fetch the files we need for each mapper
+                self.fetch_remotes(partitions[i])
                 p = Process(
                         target=Mapper,
-                        args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
+                        args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers, self._bucket_name, self._aws_key, self._aws_secret_key))
                 mappers.append(p)
                 p.start()
             else:
@@ -131,7 +171,7 @@ class Job:
 
     # Split up the input files into groups of approximately-equal on-disk size.
     def partition(self, files, remote_files):
-        namesize = [ { "name": files[i], "size": os.stat(files[i]).st_size, "dimensions": self._input_filter.get_dimensions(self._input_dir, files[i]) } for i in range(0, len(files)) ]
+        namesize = [ { "type": "local", "name": files[i], "size": os.stat(files[i]).st_size, "dimensions": self._input_filter.get_dimensions(self._input_dir, files[i]) } for i in range(0, len(files)) ]
         partitions = []
         sums = []
         for p in range(self._num_mappers):
@@ -145,9 +185,25 @@ class Job:
             #print "putting", current, "into partition", min_idx
             partitions[min_idx].append(current)
             sums[min_idx] += current["size"]
-            for m in range(0, len(sums)):
-                if sums[m] < sums[min_idx]:
-                    min_idx = m
+            min_idx = find_min_idx(sums)
+
+        # And now do the same with the remote files.
+        # TODO: if this is too slow, just distribute remote files round-robin.
+        if len(remote_files) > 0:
+            conn = S3Connection(self._aws_key, self._aws_secret_key)
+            bucket = conn.get_bucket(self._bucket_name)
+            for r in remote_files:
+                key = bucket.lookup(r)
+                size = key.size
+                dims = self._input_filter.get_dimensions(".", r)
+                remote = {"type": "remote", "name": r, "size": size, "dimensions": dims}
+                print "putting", remote, "into partition", min_idx
+                partitions[min_idx].append(remote)
+                sums[min_idx] += size
+                min_idx = find_min_idx(sums)
+
+        self.dump_stats(sums)
+
         return partitions
 
     def get_filtered_files(self, searchdir):
@@ -169,18 +225,19 @@ class Job:
         return out_files
 
     def get_filtered_files_s3(self):
-        # Plain boto should be fast enough to list bucket contents.
-        conn = S3Connection(self._aws_key, self._aws_secret_key)
-        bucket = conn.get_bucket(self._bucket_name)
-
         out_files = []
         if not self._local_only:
+            print "Fetching file list from S3..."
+            # Plain boto should be fast enough to list bucket contents.
+            conn = S3Connection(self._aws_key, self._aws_secret_key)
+            bucket = conn.get_bucket(self._bucket_name)
+
             # TODO: potential optimization - if our input filter is reasonably
             #       restrictive an/or our list of keys is very long, it may be
             #       a win to use the "prefix" and "delimiter" params.
             for f in bucket.list():
                 dims = self._input_filter.get_dimensions(".", f.name)
-                print f.name, "->", ",".join(dims)
+                #print f.name, "->", ",".join(dims)
                 include = True
                 for i in range(len(self._allowed_values)):
                     if not self.filter_includes(i, dims[i]):
@@ -188,6 +245,8 @@ class Job:
                         break
                 if include:
                     out_files.append(f.name)
+            conn.close()
+            print "Done!"
         return out_files
 
     def filter_includes(self, level, value):
@@ -235,14 +294,17 @@ class TextContext(Context):
 
 
 class Mapper:
-    def __init__(self, mapper_id, inputs, work_dir, module, partition_count):
+    def __init__(self, mapper_id, inputs, work_dir, module, partition_count, bucket=None, aws_key=None, aws_secret_key=None):
+        self._bucket_name = bucket
+        self._aws_key = aws_key
+        self._aws_secret_key = aws_secret_key
+
         print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         # TODO: pre-create all the files to avoid the situation where we don't
         #       get a key value hashing to each bucket.
         context = Context(output_file, partition_count)
-        decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
         if mapfunc is None or not callable(mapfunc):
             print "No map function!!!"
             sys.exit(1)
@@ -251,15 +313,10 @@ class Mapper:
         # ".compressme" file disappears during processing.
         for input_file in inputs:
             try:
-                if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
-                    # TODO: Popen the decompress version of StorageLayout.COMPRESS_PATH
-                    raw_handle = open(input_file["name"], "rb")
-                    p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=raw_handle, stdout=PIPE, stderr=sys.stderr)
-                    input_file["handle"] = p_decompress.stdout
-                else:
-                    input_file["handle"] = open(input_file["name"], "r")
+                self.open_input_file(input_file)
             except:
                 print "Error opening", input_file["name"], "(skipping)"
+                traceback.print_exc(file=sys.stderr)
 
         # now do another pass to actually process the files.
         for input_file in inputs:
@@ -273,8 +330,42 @@ class Mapper:
                     # TODO: increment "bad line" metrics.
                     print "Bad line:", input_file["name"], ":", line_num
             input_file["handle"].close()
+            if "raw_handle" in input_file:
+                input_file["raw_handle"].close()
             # TODO: close raw_handle too?
         context.finish()
+
+    def open_input_file(self, input_file):
+        decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
+        if self._bucket_name and self._aws_key and self._aws_secret_key:
+            conn = S3Connection(self._aws_key, self._aws_secret_key)
+            bucket = conn.get_bucket(self._bucket_name)
+
+        if input_file["type"] == "local":
+            if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
+                # Popen the decompress version of StorageLayout.COMPRESS_PATH
+                raw_handle = open(input_file["name"], "rb")
+                input_file["raw_handle"] = raw_handle
+                p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=raw_handle, stdout=PIPE, stderr=sys.stderr)
+                input_file["handle"] = p_decompress.stdout
+            else:
+                input_file["handle"] = open(input_file["name"], "r")
+        elif input_file["type"] == "remote":
+            print "Opening remote file:", input_file["name"]
+            key = bucket.get_key(input_file["name"])
+            key.open_read()
+            if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
+                # TODO: Popen the decompress version of StorageLayout.COMPRESS_PATH
+                input_file["raw_handle"] = key
+                p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=PIPE, stdout=PIPE, stderr=sys.stderr)
+                for data in key:
+                    p_decompress.stdin.write(data)
+                input_file["handle"] = p_decompress.stdout
+            else:
+                input_file["handle"] = key
+
+        else:
+            print "Unknown file type:", input_file["type"], ":", input_file["name"]
 
 
 class Reducer:
