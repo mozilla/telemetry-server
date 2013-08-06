@@ -8,6 +8,8 @@ TODO
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
 - [P2] Supply the correct Histograms.json spec for each record to the Mapper
+- [P2] MapReduce: make sure to create all the mapper_x_y files (since we might end up with a file whose keys don't
+       hash to all possible reducer buckets).
 - [P3] Check if the compressor (and exporter) cron job is already running, and if so don't start another instance.
 - [P3] Add timeout/retry around fetching Histograms.json from hg.mozilla.org
 - [P3] Add many tests

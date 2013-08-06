@@ -17,11 +17,13 @@ from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
 from persist import StorageLayout
 from subprocess import Popen, PIPE
+from boto.s3.connection import S3Connection
 
 class Job:
     """A class for orchestrating a Telemetry MapReduce job"""
     # 1. read input filter
-    # 2. generate filtered list of input files
+    # 2. generate filtered list of local input files
+    # 2a. generate filtered list of remote input files
     # 3. load mapper
     # 4. spawn N processes
     # 5. distribute files among processes
@@ -29,41 +31,49 @@ class Job:
     # 7. combine map output for each file
     # 8. reduce combine output overall
 
-    def __init__(self, input_dir, work_dir, output_file, job_script, mappers, reducers, input_filter=None):
+    def __init__(self, config):
         # Sanity check args.
-        if mappers <= 0:
+        if config.num_mappers <= 0:
             raise ValueError("Number of mappers must be greater than zero")
-        if reducers <= 0:
+        if config.num_reducers <= 0:
             raise ValueError("Number of reducers must be greater than zero")
-        if not os.path.isdir(input_dir):
-            raise ValueError("Input dir must be a valid directory")
-        if not os.path.isdir(work_dir):
+        if not os.path.isdir(config.data_dir):
+            raise ValueError("Data dir must be a valid directory")
+        if not os.path.isdir(config.work_dir):
             raise ValueError("Work dir must be a valid directory")
-        if not os.path.isfile(job_script):
+        if not os.path.isfile(config.job_script):
             raise ValueError("Job script must be a valid python file")
+        if not os.path.isfile(config.input_filter):
+            raise ValueError("Input filter must be a valid json file")
 
-        self._input_dir = input_dir
-        self._work_dir = work_dir
-        self._input_filter = TelemetrySchema(json.load(open(input_filter)))
+        self._input_dir = config.data_dir
+        self._work_dir = config.work_dir
+        self._input_filter = TelemetrySchema(json.load(open(config.input_filter)))
         self._allowed_values = self._input_filter.sanitize_allowed_values()
-        self._output_file = output_file
-        self._num_mappers = mappers
-        self._num_reducers = reducers
-        modulefd = open(job_script)
+        self._output_file = config.output
+        self._num_mappers = config.num_mappers
+        self._num_reducers = config.num_reducers
+        self._local_only = config.local_only
+        self._bucket_name = config.bucket
+        self._aws_key = config.aws_key
+        self._aws_secret_key = config.aws_secret_key
+        modulefd = open(config.job_script)
         ## Lifted from FileDriver.py in jydoop.
-        self._job_module = imp.load_module("telemetry_job", modulefd, job_script, ('.py', 'U', 1))
+        self._job_module = imp.load_module("telemetry_job", modulefd, config.job_script, ('.py', 'U', 1))
 
     def mapreduce(self):
         # Find files matching specified input filter
-        files = self.files()
+        files = self.local_files()
+        remote_files = self.get_filtered_files_s3()
 
+        file_count = len(files) + len(remote_files)
         # Not useful to have more mappers than files.
-        if len(files) < self._num_mappers:
-            print "There are only", len(files), "input files. Reducing number of mappers accordingly."
-            self._num_mappers = len(files)
+        if file_count < self._num_mappers:
+            print "There are only", file_count, "input files. Reducing number of mappers accordingly."
+            self._num_mappers = file_count
 
         # Partition files into reasonably equal groups for use by mappers
-        partitions = self.partition(files)
+        partitions = self.partition(files, remote_files)
 
         # Partitions are ready. Map.
         mappers = []
@@ -105,9 +115,13 @@ class Job:
         # Clean up mapper outputs
         for m in range(self._num_mappers):
             for r in range(self._num_reducers):
-                os.remove(os.path.join(self._work_dir, "mapper_%d_%d" % (m, r)))
+                mfile = os.path.join(self._work_dir, "mapper_%d_%d" % (m, r))
+                if os.path.exists(mfile):
+                    os.remove(mfile)
+                else:
+                    print "Warning: Could not find", mfile
 
-    def files(self):
+    def local_files(self):
         out_files = self.get_filtered_files(self._input_dir)
         if self._input_filter._include_invalid:
             invalid_dir = os.path.join(self._input_dir, TelemetrySchema.INVALID_DIR)
@@ -116,7 +130,7 @@ class Job:
         return out_files
 
     # Split up the input files into groups of approximately-equal on-disk size.
-    def partition(self, files):
+    def partition(self, files, remote_files):
         namesize = [ { "name": files[i], "size": os.stat(files[i]).st_size, "dimensions": self._input_filter.get_dimensions(self._input_dir, files[i]) } for i in range(0, len(files)) ]
         partitions = []
         sums = []
@@ -154,6 +168,28 @@ class Job:
                     out_files.append(full_filename)
         return out_files
 
+    def get_filtered_files_s3(self):
+        # Plain boto should be fast enough to list bucket contents.
+        conn = S3Connection(self._aws_key, self._aws_secret_key)
+        bucket = conn.get_bucket(self._bucket_name)
+
+        out_files = []
+        if not self._local_only:
+            # TODO: potential optimization - if our input filter is reasonably
+            #       restrictive an/or our list of keys is very long, it may be
+            #       a win to use the "prefix" and "delimiter" params.
+            for f in bucket.list():
+                dims = self._input_filter.get_dimensions(".", f.name)
+                print f.name, "->", ",".join(dims)
+                include = True
+                for i in range(len(self._allowed_values)):
+                    if not self.filter_includes(i, dims[i]):
+                        include = False
+                        break
+                if include:
+                    out_files.append(f.name)
+        return out_files
+
     def filter_includes(self, level, value):
         # Filter out 'invalid' data.  It is included explicitly if needed.
         if level == 0 and value == TelemetrySchema.INVALID_DIR:
@@ -169,6 +205,7 @@ class Context:
         self._sinks = {} # = open(out, "wb")
 
     def partition(self, key):
+        #print "hash of", key, "is", hash(key) % self._partition_count
         return hash(key) % self._partition_count
 
     def write(self, key, value):
@@ -202,6 +239,8 @@ class Mapper:
         print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
+        # TODO: pre-create all the files to avoid the situation where we don't
+        #       get a key value hashing to each bucket.
         context = Context(output_file, partition_count)
         decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
         if mapfunc is None or not callable(mapfunc):
@@ -267,18 +306,30 @@ class Reducer:
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Run a MapReduce Job.')
+    parser = argparse.ArgumentParser(description='Run a MapReduce Job.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("job_script", help="The MapReduce script to run")
+    parser.add_argument("-l", "--local-only", help="Only process local files (exclude S3 data)", action="store_true")
     parser.add_argument("-m", "--num-mappers", metavar="N", help="Start N mapper processes", type=int, default=4)
     parser.add_argument("-r", "--num-reducers", metavar="N", help="Start N reducer processes", type=int, default=1)
     parser.add_argument("-d", "--data-dir", help="Base data directory", required=True)
+    parser.add_argument("-b", "--bucket", help="S3 Bucket name")
+    parser.add_argument("-k", "--aws-key", help="AWS Key")
+    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key")
     parser.add_argument("-w", "--work-dir", help="Location to put temporary work files", default="/tmp/telemetry_mr")
     parser.add_argument("-o", "--output", help="Filename to use for final job output", required=True)
     #TODO: make the input filter optional, default to "everything valid" and generate dims intelligently.
     parser.add_argument("-f", "--input-filter", help="File containing filter spec", required=True)
     args = parser.parse_args()
 
-    job = Job(args.data_dir, args.work_dir, args.output,args.job_script, args.num_mappers, args.num_reducers, args.input_filter)
+    if not args.local_only:
+        # if we want to process remote data, 3 arguments are required.
+        for remote_req in ["bucket", "aws_key", "aws_secret_key"]:
+            if not hasattr(args, remote_req) or getattr(args, remote_req) is None:
+                print "ERROR:", remote_req, "is a required option"
+                parser.print_help()
+                sys.exit(-1)
+
+    job = Job(args)
     start = datetime.now()
     job.mapreduce()
     delta = (datetime.now() - start)
