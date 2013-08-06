@@ -17,6 +17,7 @@ from datetime import datetime
 from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
 from persist import StorageLayout
+import subprocess
 from subprocess import Popen, PIPE
 from boto.s3.connection import S3Connection
 
@@ -86,7 +87,10 @@ class Job:
         # TODO: check cache first.
         result = 0
 
+        fetch_cwd = os.path.join(self._work_dir, "cache")
         if len(remote_names) > 0:
+            if not os.path.isdir(fetch_cwd):
+                os.makedirs(fetch_cwd)
             fetch_cmd = ["/usr/local/bin/s3funnel"]
             fetch_cmd.append(self._bucket_name)
             fetch_cmd.append("get")
@@ -96,7 +100,13 @@ class Job:
             fetch_cmd.append(self._aws_secret_key)
             fetch_cmd.append("-t")
             fetch_cmd.append("8")
-            result = subprocess.call(fetch_cmd + remote_names, cwd=os.path.join(self._work_dir, "cache"))
+            start = datetime.now()
+            result = subprocess.call(fetch_cmd + remote_names, cwd=fetch_cwd)
+            delta = (datetime.now() - start)
+            duration_sec = float(delta.seconds) + float(delta.microseconds) / 1000000
+            downloaded_bytes = sum([ r["size"] for r in remotes if r["type"] == "remote" ])
+            downloaded_mb = float(downloaded_bytes) / 1024.0 / 1024.0
+            print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
         return result
 
     def mapreduce(self):
@@ -121,7 +131,7 @@ class Job:
                 self.fetch_remotes(partitions[i])
                 p = Process(
                         target=Mapper,
-                        args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers, self._bucket_name, self._aws_key, self._aws_secret_key))
+                        args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
                 mappers.append(p)
                 p.start()
             else:
@@ -151,6 +161,8 @@ class Job:
                 out.write(reducer_output.read())
                 reducer_output.close()
                 os.remove(reducer_filename)
+
+        # TODO: clean up downloaded files?
 
         # Clean up mapper outputs
         for m in range(self._num_mappers):
@@ -294,10 +306,8 @@ class TextContext(Context):
 
 
 class Mapper:
-    def __init__(self, mapper_id, inputs, work_dir, module, partition_count, bucket=None, aws_key=None, aws_secret_key=None):
-        self._bucket_name = bucket
-        self._aws_key = aws_key
-        self._aws_secret_key = aws_secret_key
+    def __init__(self, mapper_id, inputs, work_dir, module, partition_count):
+        self.work_dir = work_dir
 
         print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
@@ -311,6 +321,7 @@ class Mapper:
 
         # Pre-open all the files.  This should protect against the case where a
         # ".compressme" file disappears during processing.
+        # TODO: Stream/decompress them directly.
         for input_file in inputs:
             try:
                 self.open_input_file(input_file)
@@ -341,32 +352,20 @@ class Mapper:
             conn = S3Connection(self._aws_key, self._aws_secret_key)
             bucket = conn.get_bucket(self._bucket_name)
 
-        if input_file["type"] == "local":
-            if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
-                # Popen the decompress version of StorageLayout.COMPRESS_PATH
-                raw_handle = open(input_file["name"], "rb")
-                input_file["raw_handle"] = raw_handle
-                p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=raw_handle, stdout=PIPE, stderr=sys.stderr)
-                input_file["handle"] = p_decompress.stdout
-            else:
-                input_file["handle"] = open(input_file["name"], "r")
-        elif input_file["type"] == "remote":
-            print "Opening remote file:", input_file["name"]
-            key = bucket.get_key(input_file["name"])
-            key.open_read()
-            if input_file["name"].endswith(StorageLayout.COMPRESSED_SUFFIX):
-                # TODO: Popen the decompress version of StorageLayout.COMPRESS_PATH
-                input_file["raw_handle"] = key
-                p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=PIPE, stdout=PIPE, stderr=sys.stderr)
-                for data in key:
-                    p_decompress.stdin.write(data)
-                input_file["handle"] = p_decompress.stdout
-            else:
-                input_file["handle"] = key
+        filename = input_file["name"]
+        if input_file["type"] == "remote":
+            # Read so-called remote files from the local cache. Go on the
+            # assumption that they have already been downloaded.
+            filename = os.path.join(self.work_dir, "cache", input_file["name"])
 
+        if filename.endswith(StorageLayout.COMPRESSED_SUFFIX):
+            # Popen the decompress version of StorageLayout.COMPRESS_PATH
+            raw_handle = open(filename, "rb")
+            input_file["raw_handle"] = raw_handle
+            p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=raw_handle, stdout=PIPE, stderr=sys.stderr)
+            input_file["handle"] = p_decompress.stdout
         else:
-            print "Unknown file type:", input_file["type"], ":", input_file["name"]
-
+            input_file["handle"] = open(filename, "r")
 
 class Reducer:
     def __init__(self, reducer_id, work_dir, module, mapper_count):
