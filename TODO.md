@@ -13,6 +13,7 @@ TODO
 - [P3] Add many tests
 - [P3] Add runtime performance metrics using [scales][1] and on-demand perf tests
   using [cProfile][3]
+- [P3] Add stats for throughput to/from S3
 - [P3] Add proper [logging][2]
 - [P3] Ensure things are in order to accept Addon Histograms, ie from [pdf.js][5]
 - [P2] Improve speed of the conversion process
