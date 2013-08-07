@@ -146,8 +146,6 @@ class Exporter:
                         #       partial compressed files.  Note that the md5
                         #       verification should take care of this, but it
                         #       would save on transfer time/cost to check here.
-                    else:
-                        print full_file, "is too small to upload:", file_size, "bytes"
 
         if len(uploadables) == 0:
             print "Nothing to do!"
