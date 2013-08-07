@@ -10,15 +10,8 @@ import argparse
 import re
 import os
 import sys
-import getopt
-import revision_cache
-from telemetry_schema import TelemetrySchema
 from persist import StorageLayout
-import traceback
-import persist
-from datetime import date
 from datetime import datetime
-import time
 import hashlib
 import subprocess
 from boto.s3.connection import S3Connection
@@ -40,12 +33,7 @@ class Exporter:
         self.batch_size = batch_size
         self.s3f_cmd = [Exporter.S3F_PATH, bucket, "put", "-a", aws_key,
                 "-s", aws_secret_key, "-t", str(Exporter.S3F_THREADS),
-                "--put-only-new", "--del-prefix", "./", "--put-full-path"]
-
-    def clean_filename(self, filename):
-        if filename[0:2] == "./":
-            return filename[2:]
-        return filename
+                "--put-only-new", "--put-full-path"]
 
     # might as well return the size too...
     def md5file(self, filename):
@@ -76,9 +64,17 @@ class Exporter:
                 # Verify checksum and track cumulative size so we can figure out MB/s
                 full_filename = os.path.join(self.data_dir, f)
                 md5, size = self.md5file(full_filename)
-                total_size += size
-                key = bucket.get_key(self.clean_filename(f))
+                if size < Exporter.MIN_UPLOADABLE_SIZE:
+                    # Check file size again when uploading in case it has been
+                    # concurrently uploaded / truncated elsewhere.
+                    print "Skipping upload for tiny file:", f
+                    continue
 
+                total_size += size
+
+                # f is the key name - it does not include the full path to the
+                # data dir.
+                key = bucket.get_key(f)
                 # Strip quotes from md5
                 remote_md5 = key.etag[1:-1]
                 if md5 != remote_md5:
