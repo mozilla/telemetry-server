@@ -54,6 +54,9 @@ class TelemetrySchema:
             if "max" in allowed_values and value > allowed_values["max"]:
                 return False
             return True
+        # Treat a string the same as a single-element array:
+        elif isinstance(allowed_values, basestring):
+            return value == allowed_values
         # elif it's a regex, apply the regex.
         # elif it's a special case (date-in-past, uuid, etc)
         return False

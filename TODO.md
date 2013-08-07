@@ -3,11 +3,12 @@ TODO
 
 - [P4] Preopen the mapper input files in the parent process, pass fd's to child process to avoid race condition with the compressor.
 - [P1] Error handling in pipe-based compressor
-- [P1] Update mapreduce framework to read input data from both S3 and locally
 - [P2] nginx: Check into load-balancing
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
 - [P2] Supply the correct Histograms.json spec for each record to the Mapper
+- [P2] MapReduce: make sure to create all the mapper_x_y files (since we might end up with a file whose keys don't
+       hash to all possible reducer buckets).
 - [P3] Check if the compressor (and exporter) cron job is already running, and if so don't start another instance.
 - [P3] Add timeout/retry around fetching Histograms.json from hg.mozilla.org
 - [P3] Add many tests
