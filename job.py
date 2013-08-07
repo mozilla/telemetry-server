@@ -121,14 +121,18 @@ class Job:
             self._num_mappers = file_count
 
         # Partition files into reasonably equal groups for use by mappers
+        print "Partitioning input data..."
         partitions = self.partition(files, remote_files)
+        print "Done"
 
         # Partitions are ready. Map.
         mappers = []
         for i in range(self._num_mappers):
             if len(partitions[i]) > 0:
                 # Fetch the files we need for each mapper
+                print "Fetching remotes for partition", i
                 self.fetch_remotes(partitions[i])
+                print "Done"
                 p = Process(
                         target=Mapper,
                         args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
@@ -209,11 +213,12 @@ class Job:
                 size = key.size
                 dims = self._input_filter.get_dimensions(".", r)
                 remote = {"type": "remote", "name": r, "size": size, "dimensions": dims}
-                print "putting", remote, "into partition", min_idx
+                #print "putting", remote, "into partition", min_idx
                 partitions[min_idx].append(remote)
                 sums[min_idx] += size
                 min_idx = find_min_idx(sums)
 
+        # Print out some info to see how balanced the partitions were:
         self.dump_stats(sums)
 
         return partitions
@@ -347,11 +352,6 @@ class Mapper:
         context.finish()
 
     def open_input_file(self, input_file):
-        decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
-        if self._bucket_name and self._aws_key and self._aws_secret_key:
-            conn = S3Connection(self._aws_key, self._aws_secret_key)
-            bucket = conn.get_bucket(self._bucket_name)
-
         filename = input_file["name"]
         if input_file["type"] == "remote":
             # Read so-called remote files from the local cache. Go on the
@@ -359,9 +359,10 @@ class Mapper:
             filename = os.path.join(self.work_dir, "cache", input_file["name"])
 
         if filename.endswith(StorageLayout.COMPRESSED_SUFFIX):
-            # Popen the decompress version of StorageLayout.COMPRESS_PATH
+            decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
             raw_handle = open(filename, "rb")
             input_file["raw_handle"] = raw_handle
+            # Popen the decompressing version of StorageLayout.COMPRESS_PATH
             p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=raw_handle, stdout=PIPE, stderr=sys.stderr)
             input_file["handle"] = p_decompress.stdout
         else:
