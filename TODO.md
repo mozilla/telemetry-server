@@ -10,6 +10,8 @@ TODO
 - [P2] MapReduce: make sure to create all the mapper_x_y files (since we might end up with a file whose keys don't
        hash to all possible reducer buckets).
 - [P3] Check if the compressor (and exporter) cron job is already running, and if so don't start another instance.
+- [P3] Stream data from S3 for MapReduce instead of downloading first
+- [P3] Investigate using Amazon ElasticMapReduce for MR jobs (instead of fetching and running locally)
 - [P3] Add timeout/retry around fetching Histograms.json from hg.mozilla.org
 - [P3] Add many tests
 - [P3] Add runtime performance metrics using [scales][1] and on-demand perf tests
