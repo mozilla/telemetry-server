@@ -3,7 +3,6 @@ TODO
 
 - [P4] Preopen the mapper input files in the parent process, pass fd's to child process to avoid race condition with the compressor.
 - [P1] Error handling in pipe-based compressor
-- [P1] Update mapreduce framework to read input data from both S3 and locally
 - [P2] nginx: Check into load-balancing
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
