@@ -11,6 +11,7 @@ import time
 import os
 import simplejson as json
 from fabric.api import *
+from fabric.exceptions import NetworkError
 import sys
 
 def connect_aws(config):
@@ -80,9 +81,16 @@ def bootstrap_instance(config, instance):
 
     # Now configure the instance:
     print "Installing dependencies"
-    sudo("apt-get update")
+    with settings(warn_only=True):
+        for i in range(1,20):
+            sudo("apt-get update")
+            result = sudo('apt-get --yes install git python-pip build-essential python-dev lzma')
+            if result.succeeded:
+                break
+            print "apt-get attempt", i, "failed, retrying in 2s"
+            time.sleep(2)
+
     #sudo("apt-get --yes dist-upgrade")
-    sudo('apt-get --yes install git python-pip build-essential python-dev lzma')
     sudo('pip install simplejson scales boto')
 
     mr_cfg = config["mapreduce"]
