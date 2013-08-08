@@ -13,16 +13,10 @@ import simplejson as json
 from fabric.api import *
 from fabric.exceptions import NetworkError
 import sys
-
-def connect_aws(config):
-    # Use AWS keys from config
-    conn = boto.ec2.connect_to_region(config["region"],
-            aws_access_key_id=config["mapreduce"]["aws_key"],
-            aws_secret_access_key=config["mapreduce"]["aws_secret_key"])
-    return conn
+import aws_util
 
 def create_instance(config):
-    conn = connect_aws(config)
+    conn = aws_util.connect_cfg(config)
     # Known images:
     # ami-bf1d8a8f == Ubuntu 13.04
     reservation = conn.run_instances(
@@ -54,7 +48,7 @@ def create_instance(config):
     return conn, instance
 
 def get_running_instance(config):
-    conn = connect_aws(config)
+    conn = aws_util.connect_cfg(config)
     reservations = conn.get_all_instances(instance_ids=[config["instance_id"]])
     instance = reservations[0].instances[0]
     print "Instance", instance.id, "is", instance.state
@@ -116,7 +110,7 @@ def run_mapreduce(config, instance):
         put(input_filter, "job")
         job_script_base = os.path.basename(job_script)
         input_filter_base = os.path.basename(input_filter)
-        job_args = (job_script_base, input_filter_base, mr_cfg["aws_key"], mr_cfg["aws_secret_key"], mr_cfg["data_bucket"])
+        job_args = (job_script_base, input_filter_base, config["aws_key"], config["aws_secret_key"], mr_cfg["data_bucket"])
         run('python job.py job/%s --input-filter job/%s --data-dir ./data --work-dir ./work --aws-key "%s" --aws-secret-key "%s" --bucket "%s" --output job/output.txt' % job_args)
         # TODO: consult "output_compression"
         run("lzma job/output.txt")
