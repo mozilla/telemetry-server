@@ -60,28 +60,9 @@ def bootstrap_instance(config, instance):
     print "To connect to it:"
     print "ssh -i", ssl_key_path, ssl_host
 
-    # TODO: add server's key fingerprint to known_hosts
-
-    # Use ssh config to specify the correct key and username
-    #env.key_filename = config["ssl_key_path"]
-    #env.host_string = ssl_host
-
-    # can't connect when using known hosts :(
-    #env.disable_known_hosts = True
-
-    #run("whoami")
-    #run("hostname")
-
     # Now configure the instance:
     print "Installing dependencies"
-    with settings(warn_only=True):
-        for i in range(1,20):
-            sudo("apt-get update")
-            result = sudo('apt-get --yes install git python-pip build-essential python-dev lzma')
-            if result.succeeded:
-                break
-            print "apt-get attempt", i, "failed, retrying in 2s"
-            time.sleep(2)
+    aws_util.install_packages("git python-pip build-essential python-dev lzma")
 
     #sudo("apt-get --yes dist-upgrade")
     sudo('pip install simplejson scales boto')
@@ -145,14 +126,11 @@ try:
     # Can't connect when using known hosts :(
     env.disable_known_hosts = True
 
-    retries = config.get("ssl_retries", 3)
-    for i in range(1, retries + 1):
-        try:
-            run("hostname")
-            break
-        except NetworkError:
-            print "SSH connection attempt", i, "of", retries, "failed. Trying again in 10s"
-            time.sleep(10)
+    if aws_util.wait_for_ssh(config.get("ssl_retries", 3)):
+        print "SSH Connection is ready."
+    else:
+        print "Failed to establish SSH Connection to", instance.id
+        sys.exit(2)
 
     bootstrap_instance(config, instance)
     run_mapreduce(config, instance)
