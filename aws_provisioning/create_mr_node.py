@@ -49,8 +49,7 @@ def create_instance(config):
 
 def get_running_instance(config):
     conn = aws_util.connect_cfg(config)
-    reservations = conn.get_all_instances(instance_ids=[config["instance_id"]])
-    instance = reservations[0].instances[0]
+    instance = aws_util.get_instance(conn, config["instance_id"])
     print "Instance", instance.id, "is", instance.state
     return conn, instance
 
