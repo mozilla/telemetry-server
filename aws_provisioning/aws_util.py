@@ -6,6 +6,7 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
+import time, os
 import boto.ec2
 from fabric.api import *
 from fabric.exceptions import NetworkError
@@ -45,9 +46,15 @@ def install_packages(packages):
     with settings(warn_only=True):
         for i in range(1,20):
             sudo("apt-get update")
-            result = sudo(" ".join('apt-get --yes install', packages))
+            result = sudo(" ".join(('apt-get --yes install', packages)))
             if result.succeeded:
                 break
             print "apt-get attempt", i, "failed, retrying in 2s"
             time.sleep(2)
 
+def install_file(local_file, dest_file, dest_mode="644"):
+    basename = os.path.basename(dest_file)
+    tmp_location = "/tmp/" + basename
+    put(local_file, tmp_location)
+    sudo("mv %s %s" % (tmp_location, dest_file))
+    sudo("chmod %s %s" % (str(dest_mode), dest_file))
