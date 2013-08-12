@@ -88,7 +88,7 @@ def main():
     record_count, request_count, size_bytes = run_benchmark(args)
     duration = delta_sec(start)
     size_mb = size_bytes/1024.0/1024.0
-    print "Overall, sent %d requests (%.2fMB) in %.2f seconds: %.2fMB/s or %.2f reqs/s" % (count, size_mb, duration, size_mb / duration, count / duration)
+    print "Overall, sent %d requests (%.2fMB) in %.2f seconds: %.2fMB/s, %.2f reqs/s, %.2f records/s" % (request_count, size_mb, duration, size_mb / duration, request_count / duration, record_count / duration)
 
 if __name__ == "__main__":
     sys.exit(main())
