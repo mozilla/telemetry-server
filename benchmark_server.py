@@ -46,7 +46,10 @@ def run_benchmark(args):
         line = line.strip()
         start = datetime.now()
         if args.batch_size == 0:
-            resp = send(conn, o, line)
+            if args.dry_run:
+                resp = "created"
+            else:
+                resp = send(conn, o, line)
         else:
             resp = ""
             # TODO: generate a UUID?
@@ -54,16 +57,19 @@ def run_benchmark(args):
             batch.append(line.replace("\t", ' '))
             if record_count % args.batch_size == 0:
                 # send batch
-                resp = send(conn, o, "\t".join(batch))
+                if args.dry_run:
+                    resp = "OK"
+                else:
+                    resp = send(conn, o, "\t".join(batch))
                 request_count += 1
                 batch = []
         ms = delta_ms(start)
         total_ms += ms
         record_count += 1
-        if record_count % 100 == 0:
+        if not args.verbose and record_count % 100 == 0:
             print "Processed", record_count, "records /", request_count, "requests so far"
         total_size += len(line)
-        if len(resp):
+        if args.verbose and len(resp):
             print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
     # Send the last (partial) batch
     if len(batch):
@@ -74,7 +80,8 @@ def run_benchmark(args):
         request_count += 1
         record_count += 1
         total_size += len(line)
-        print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+        if args.verbose:
+            print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
     return record_count, request_count, total_size
 
 def main():
@@ -83,6 +90,8 @@ def main():
     parser.add_argument("-p", "--num-processes", metavar="N", help="Start N client processes", type=int, default=4)
     parser.add_argument("-b", "--batch-size", metavar="N", help="Send N records per batch (use 0 to send individual requests)", type=int, default=20)
     parser.add_argument("-z", "--gzip-compress", action="store_true")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-d", "--dry-run", action="store_true")
     args = parser.parse_args()
     start = datetime.now()
     record_count, request_count, size_bytes = run_benchmark(args)
