@@ -21,7 +21,7 @@ def delta_ms(start, end=None):
     if end is None:
         end = datetime.now()
     delta = end - start
-    ms = float(delta.seconds) + float(delta.microseconds) / 1000.0
+    ms = delta.seconds * 1000.0 + float(delta.microseconds) / 1000.0
     return ms
 
 def delta_sec(start, end=None):
