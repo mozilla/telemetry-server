@@ -396,7 +396,7 @@ class Reducer:
         context.finish()
 
 
-def main(argv=None):
+def main():
     parser = argparse.ArgumentParser(description='Run a MapReduce Job.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("job_script", help="The MapReduce script to run")
     parser.add_argument("-l", "--local-only", help="Only process local files (exclude S3 data)", action="store_true")
