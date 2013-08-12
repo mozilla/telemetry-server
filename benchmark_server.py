@@ -23,7 +23,7 @@ def delta_ms(start, end=None):
     delta = end - start
     ms = delta.seconds * 1000.0 + float(delta.microseconds) / 1000.0
     # prevent division-by-zero errors by cheating:
-    if ms == 0.0
+    if ms == 0.0:
         return 0.0001
     return ms
 
@@ -32,6 +32,7 @@ def delta_sec(start, end=None):
 
 def run_benchmark(args):
     o = urlparse(args.server_url)
+    worst_time = -1.0
     #headers = {"Content-type": "application/x-www-form-urlencoded",
     #           "Accept": "text/plain"}
     total_ms = 0.0
@@ -41,6 +42,7 @@ def run_benchmark(args):
     conn = httplib.HTTPConnection(o.netloc)
     #conn.set_debuglevel(1)
     batch = []
+    latencies = []
 
     while True:
         line = sys.stdin.readline()
@@ -68,25 +70,43 @@ def run_benchmark(args):
                 request_count += 1
                 batch = []
         ms = delta_ms(start)
+        latencies.append(ms)
+        if worst_time < ms:
+            worst_time = ms
         total_ms += ms
         record_count += 1
         if not args.verbose and record_count % 100 == 0:
             print "Processed", record_count, "records in", request_count, "requests so far"
         total_size += len(line)
         if args.verbose and len(resp):
-            print "%s %.2fms, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+            print "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
         resp = send(conn, o, "\t".join(batch))
         ms = delta_ms(start)
+        latencies.append(ms)
+        if worst_time < ms:
+            worst_time = ms
         total_ms += ms
         request_count += 1
         record_count += 1
         total_size += len(line)
         if args.verbose:
-            print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
-    return record_count, request_count, total_size
+            print "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+
+    latencies.sort()
+    print len(latencies), "==", request_count
+    assert(len(latencies) == request_count)
+    print "Min:",   latencies[0]
+    print "Max:",   latencies[-1]
+    print "Med:",   latencies[int(0.5 * request_count)]
+    print "Avg:",   sum(latencies) / request_count
+    print "75%:",   latencies[int(0.75 * request_count)]
+    print "95%:",   latencies[int(0.95 * request_count)]
+    print "99%:",   latencies[int(0.99 * request_count)]
+    print "99.9%:", latencies[int(0.999 * request_count)]
+    return record_count, request_count, total_size, worst_time
 
 def main():
     parser = argparse.ArgumentParser(description='Run benchmark on a Telemetry Server', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -98,10 +118,11 @@ def main():
     parser.add_argument("-d", "--dry-run", action="store_true")
     args = parser.parse_args()
     start = datetime.now()
-    record_count, request_count, size_bytes = run_benchmark(args)
+    record_count, request_count, size_bytes, worst_time = run_benchmark(args)
     duration = delta_sec(start)
     size_mb = size_bytes / 1024.0 / 1024.0
     print "Overall, sent %.2fMB: %d records in %d requests in %.2f seconds: %.2fMB/s, %.2f reqs/s, %.2f records/s" % (size_mb, record_count, request_count, duration, size_mb / duration, request_count / duration, record_count / duration)
+    print "Worst time was %.2fms" % worst_time
 
 if __name__ == "__main__":
     sys.exit(main())
