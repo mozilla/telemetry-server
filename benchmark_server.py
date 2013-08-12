@@ -17,6 +17,13 @@ def send(conn, o, data):
     response = conn.getresponse()
     return response.read()
 
+def delta_sec(start, end=None):
+    if end is None:
+        end = datetime.now()
+    delta = end - start
+    seconds = float(delta.seconds) + float(delta.microseconds) / 1000000.0
+    return seconds
+
 def run_benchmark(args):
     o = urlparse(args.server_url)
     #headers = {"Content-type": "application/x-www-form-urlencoded",
@@ -49,9 +56,11 @@ def run_benchmark(args):
         ms = delta.seconds * 1000 + delta.microseconds / 1000
         total_ms += ms
         count += 1
+        if count % 100 == 0:
+            print "Processed", count, "so far"
         total_size += len(line)
         if len(resp):
-            print "%s %s, average %s, %sMB/s" % (resp, ms, total_ms/count, str(total_size/1000.0/total_ms))
+            print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s" % (resp, ms, total_ms/count, (total_size/1000.0/total_ms), (1000.0 * count / total_ms))
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
@@ -62,7 +71,8 @@ def run_benchmark(args):
         count += 1
         total_size += len(line)
         if len(resp):
-            print "%s %s, average %s, %sMB/s" % (resp, ms, total_ms/count, str(total_size/1000.0/total_ms))
+            print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s" % (resp, ms, total_ms/count, (total_size/1000.0/total_ms), (1000.0 * count / total_ms))
+    return count, total_size
 
 def main():
     parser = argparse.ArgumentParser(description='Run benchmark on a Telemetry Server', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -71,7 +81,11 @@ def main():
     parser.add_argument("-b", "--batch-size", metavar="N", help="Send N records per batch (use 0 to send individual requests)", type=int, default=20)
     parser.add_argument("-z", "--gzip-compress", action="store_true")
     args = parser.parse_args()
-    run_benchmark(args)
+    start = datetime.now()
+    count, size_bytes = run_benchmark(args)
+    duration = delta_sec(start)
+    size_mb = size_bytes/1024.0/1024.0
+    print "Overall, sent %d requests (%.2fMB) in %.2f: %.2fMB/s or %.2f reqs/s" % (count, size_mb, duration, size_mb / duration, count / duration)
 
 if __name__ == "__main__":
     sys.exit(main())
