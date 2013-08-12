@@ -16,6 +16,7 @@ TODO
   -  retention period
   -  investigate [S3's Lifecycle policy][7] (send to glacier, eventually
      expire)
+- [P3] Have the "archive" job write bad input records to the invalid_data dir
 - [P3] Check if the compressor (and exporter) cron job is already running, and
        if so don't start another instance.
 - [P3] Stream data from S3 for MapReduce instead of downloading first
