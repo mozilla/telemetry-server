@@ -18,6 +18,10 @@ def send(conn, o, data):
     return response.read()
 
 def delta_ms(start, end=None):
+    # prevent division-by-zero errors by cheating:
+    if start == end:
+        return 0.0001
+
     if end is None:
         end = datetime.now()
     delta = end - start
@@ -31,7 +35,7 @@ def run_benchmark(args):
     o = urlparse(args.server_url)
     #headers = {"Content-type": "application/x-www-form-urlencoded",
     #           "Accept": "text/plain"}
-    total_ms = 0
+    total_ms = 0.0
     record_count = 0
     request_count = 0
     total_size = 0
