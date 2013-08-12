@@ -53,7 +53,7 @@ def run_benchmark(args):
                 resp = send(conn, o, "\t".join(batch))
                 batch = []
         delta = (datetime.now() - start)
-        ms = delta.seconds * 1000 + delta.microseconds / 1000
+        ms = delta.seconds * 1000.0 + delta.microseconds / 1000.0
         total_ms += ms
         count += 1
         if count % 100 == 0:
@@ -66,7 +66,7 @@ def run_benchmark(args):
         start = datetime.now()
         resp = send(conn, o, "\t".join(batch))
         delta = (datetime.now() - start)
-        ms = delta.seconds * 1000 + delta.microseconds / 1000
+        ms = delta.seconds * 1000.0 + delta.microseconds / 1000.0
         total_ms += ms
         count += 1
         total_size += len(line)
