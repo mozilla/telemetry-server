@@ -17,19 +17,23 @@ def send(conn, o, data):
     response = conn.getresponse()
     return response.read()
 
-def delta_sec(start, end=None):
+def delta_ms(start, end=None):
     if end is None:
         end = datetime.now()
     delta = end - start
-    seconds = float(delta.seconds) + float(delta.microseconds) / 1000000.0
-    return seconds
+    ms = float(delta.seconds) + float(delta.microseconds) / 1000.0
+    return ms
+
+def delta_sec(start, end=None):
+    return delta_ms(start, end) / 1000.0
 
 def run_benchmark(args):
     o = urlparse(args.server_url)
     #headers = {"Content-type": "application/x-www-form-urlencoded",
     #           "Accept": "text/plain"}
     total_ms = 0
-    count = 0
+    record_count = 0
+    request_count = 0
     total_size = 0
     conn = httplib.HTTPConnection(o.netloc)
     #conn.set_debuglevel(1)
@@ -48,31 +52,30 @@ def run_benchmark(args):
             # TODO: generate a UUID?
             batch.append("bogusid")
             batch.append(line.replace("\t", ' '))
-            if count % args.batch_size == 0:
+            if record_count % args.batch_size == 0:
                 # send batch
                 resp = send(conn, o, "\t".join(batch))
+                request_count += 1
                 batch = []
-        delta = (datetime.now() - start)
-        ms = delta.seconds * 1000.0 + delta.microseconds / 1000.0
+        ms = delta_ms(start)
         total_ms += ms
-        count += 1
-        if count % 100 == 0:
-            print "Processed", count, "so far"
+        record_count += 1
+        if record_count % 100 == 0:
+            print "Processed", record_count, "records /", request_count, "requests so far"
         total_size += len(line)
         if len(resp):
-            print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s" % (resp, ms, total_ms/count, (total_size/1000.0/total_ms), (1000.0 * count / total_ms))
+            print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
         resp = send(conn, o, "\t".join(batch))
-        delta = (datetime.now() - start)
-        ms = delta.seconds * 1000.0 + delta.microseconds / 1000.0
+        ms = delta_ms(start)
         total_ms += ms
-        count += 1
+        request_count += 1
+        record_count += 1
         total_size += len(line)
-        if len(resp):
-            print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s" % (resp, ms, total_ms/count, (total_size/1000.0/total_ms), (1000.0 * count / total_ms))
-    return count, total_size
+        print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+    return record_count, request_count, total_size
 
 def main():
     parser = argparse.ArgumentParser(description='Run benchmark on a Telemetry Server', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -82,10 +85,10 @@ def main():
     parser.add_argument("-z", "--gzip-compress", action="store_true")
     args = parser.parse_args()
     start = datetime.now()
-    count, size_bytes = run_benchmark(args)
+    record_count, request_count, size_bytes = run_benchmark(args)
     duration = delta_sec(start)
     size_mb = size_bytes/1024.0/1024.0
-    print "Overall, sent %d requests (%.2fMB) in %.2f: %.2fMB/s or %.2f reqs/s" % (count, size_mb, duration, size_mb / duration, count / duration)
+    print "Overall, sent %d requests (%.2fMB) in %.2f seconds: %.2fMB/s or %.2f reqs/s" % (count, size_mb, duration, size_mb / duration, count / duration)
 
 if __name__ == "__main__":
     sys.exit(main())
