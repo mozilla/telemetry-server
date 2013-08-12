@@ -18,14 +18,13 @@ def send(conn, o, data):
     return response.read()
 
 def delta_ms(start, end=None):
-    # prevent division-by-zero errors by cheating:
-    if start == end:
-        return 0.0001
-
     if end is None:
         end = datetime.now()
     delta = end - start
     ms = delta.seconds * 1000.0 + float(delta.microseconds) / 1000.0
+    # prevent division-by-zero errors by cheating:
+    if ms == 0.0
+        return 0.0001
     return ms
 
 def delta_sec(start, end=None):
@@ -54,6 +53,7 @@ def run_benchmark(args):
                 resp = "created"
             else:
                 resp = send(conn, o, line)
+                request_count += 1
         else:
             resp = ""
             # TODO: generate a UUID?
@@ -71,7 +71,7 @@ def run_benchmark(args):
         total_ms += ms
         record_count += 1
         if not args.verbose and record_count % 100 == 0:
-            print "Processed", record_count, "records /", request_count, "requests so far"
+            print "Processed", record_count, "records in", request_count, "requests so far"
         total_size += len(line)
         if args.verbose and len(resp):
             print "%s %.2fms, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
