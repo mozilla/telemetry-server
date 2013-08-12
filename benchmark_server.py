@@ -70,7 +70,7 @@ def run_benchmark(args):
             print "Processed", record_count, "records /", request_count, "requests so far"
         total_size += len(line)
         if args.verbose and len(resp):
-            print "%s %s, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+            print "%s %.2fms, average %.2f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
@@ -96,8 +96,8 @@ def main():
     start = datetime.now()
     record_count, request_count, size_bytes = run_benchmark(args)
     duration = delta_sec(start)
-    size_mb = size_bytes/1024.0/1024.0
-    print "Overall, sent %d requests (%.2fMB) in %.2f seconds: %.2fMB/s, %.2f reqs/s, %.2f records/s" % (request_count, size_mb, duration, size_mb / duration, request_count / duration, record_count / duration)
+    size_mb = size_bytes / 1024.0 / 1024.0
+    print "Overall, sent %.2fMB: %d records in %d requests in %.2f seconds: %.2fMB/s, %.2f reqs/s, %.2f records/s" % (size_mb, record_count, request_count, duration, size_mb / duration, request_count / duration, record_count / duration)
 
 if __name__ == "__main__":
     sys.exit(main())
