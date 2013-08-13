@@ -49,37 +49,37 @@ def run_benchmark(args):
         if line == '':
             break
         line = line.strip()
-        start = datetime.now()
+        data = ""
         if args.batch_size == 0:
-            if args.dry_run:
-                resp = "created"
-            else:
-                resp = send(conn, o, line)
-                request_count += 1
+            data = line
         else:
-            resp = ""
             # TODO: generate a UUID?
             batch.append("bogusid")
             batch.append(line.replace("\t", ' '))
             if record_count % args.batch_size == 0:
-                # send batch
-                if args.dry_run:
-                    resp = "OK"
-                else:
-                    resp = send(conn, o, "\t".join(batch))
-                request_count += 1
+                data = "\t".join(batch)
                 batch = []
-        ms = delta_ms(start)
-        latencies.append(ms)
-        if worst_time < ms:
-            worst_time = ms
-        total_ms += ms
+
         record_count += 1
         if not args.verbose and record_count % 100 == 0:
             print "Processed", record_count, "records in", request_count, "requests so far"
-        total_size += len(line)
-        if args.verbose and len(resp):
-            print "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+
+        if data:
+            start = datetime.now()
+            if args.dry_run:
+                resp = "created"
+            else:
+                resp = send(conn, o, data)
+            ms = delta_ms(start)
+            latencies.append(ms)
+            if worst_time < ms:
+                worst_time = ms
+            total_ms += ms
+            request_count += 1
+            total_size += len(data)
+
+            if args.verbose:
+                print "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
@@ -90,13 +90,11 @@ def run_benchmark(args):
             worst_time = ms
         total_ms += ms
         request_count += 1
-        record_count += 1
         total_size += len(line)
         if args.verbose:
             print "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
 
     latencies.sort()
-    print len(latencies), "==", request_count
     assert(len(latencies) == request_count)
     print "Min:",   latencies[0]
     print "Max:",   latencies[-1]
