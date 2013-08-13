@@ -62,7 +62,7 @@ def bootstrap_instance(config, instance):
 
     # Now configure the instance:
     print "Installing dependencies"
-    aws_util.install_packages("git python-pip build-essential python-dev lzma")
+    aws_util.install_packages("git python-pip build-essential python-dev xz-utils")
 
     #sudo("apt-get --yes dist-upgrade")
     sudo('pip install simplejson scales boto')

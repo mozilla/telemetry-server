@@ -52,7 +52,7 @@ def bootstrap_instance(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     ssl_key_path = config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
     ssl_host = "@".join((ssl_user, instance.public_dns_name))
-    aws_util.install_packages("git python-pip build-essential python-dev nginx lzma")
+    aws_util.install_packages("git python-pip build-essential python-dev nginx xz-utils")
     sudo("apt-get --yes dist-upgrade")
 
     sudo('pip install flask simplejson uwsgi virtualenv scales')
