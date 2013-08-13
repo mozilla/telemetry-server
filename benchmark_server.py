@@ -30,6 +30,9 @@ def delta_ms(start, end=None):
 def delta_sec(start, end=None):
     return delta_ms(start, end) / 1000.0
 
+def print_stats(label, total_mb, record_count, request_count, total_sec):
+    print "%s, sent %.2fMB: %d records in %d requests in %.2f seconds: %.2fMB/s, %.2f reqs/s, %.2f records/s" % (label, total_mb, record_count, request_count, total_sec, total_mb / total_sec, request_count / total_sec, record_count / total_sec)
+
 def run_benchmark(args):
     o = urlparse(args.server_url)
     worst_time = -1.0
@@ -83,7 +86,10 @@ def run_benchmark(args):
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
-        resp = send(conn, o, "\t".join(batch))
+        if args.dry_run:
+            resp = "created"
+        else:
+            resp = send(conn, o, "\t".join(batch))
         ms = delta_ms(start)
         latencies.append(ms)
         if worst_time < ms:
@@ -96,6 +102,8 @@ def run_benchmark(args):
 
     latencies.sort()
     assert(len(latencies) == request_count)
+    total_mb = total_size / 1024.0 / 1024.0
+    total_sec = total_ms / 1000.0
     print "Min:",   latencies[0]
     print "Max:",   latencies[-1]
     print "Med:",   latencies[int(0.5 * request_count)]
@@ -104,7 +112,8 @@ def run_benchmark(args):
     print "95%:",   latencies[int(0.95 * request_count)]
     print "99%:",   latencies[int(0.99 * request_count)]
     print "99.9%:", latencies[int(0.999 * request_count)]
-    return record_count, request_count, total_size, worst_time
+    print_stats("Including only request latency", total_mb, record_count, request_count, total_sec)
+    return record_count, request_count, total_size
 
 def main():
     parser = argparse.ArgumentParser(description='Run benchmark on a Telemetry Server', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -116,11 +125,10 @@ def main():
     parser.add_argument("-d", "--dry-run", action="store_true")
     args = parser.parse_args()
     start = datetime.now()
-    record_count, request_count, size_bytes, worst_time = run_benchmark(args)
+    record_count, request_count, size_bytes = run_benchmark(args)
     duration = delta_sec(start)
     size_mb = size_bytes / 1024.0 / 1024.0
-    print "Overall, sent %.2fMB: %d records in %d requests in %.2f seconds: %.2fMB/s, %.2f reqs/s, %.2f records/s" % (size_mb, record_count, request_count, duration, size_mb / duration, request_count / duration, record_count / duration)
-    print "Worst time was %.2fms" % worst_time
+    print_stats("Overall", size_mb, record_count, request_count, duration)
 
 if __name__ == "__main__":
     sys.exit(main())
