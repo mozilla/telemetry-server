@@ -13,8 +13,8 @@ from urlparse import urlparse
 from datetime import datetime
 from multiprocessing import Process
 
-def send(conn, o, data):
-    conn.request("POST", o.path, data)
+def send(conn, path, data):
+    conn.request("POST", path, data)
     response = conn.getresponse()
     return response.read()
 
@@ -62,10 +62,11 @@ def run_benchmark(args):
         h.join()
     duration = delta_sec(start)
     size_mb = size_bytes / 1024.0 / 1024.0
-    print_stats("Overall", size_mb, len(lines), len(lines), duration)
+    print_stats("Overall", size_mb, len(lines), 0, duration)
 
 def send_records(worker_id, lines, args):
-    o = urlparse(args.server_url)
+    conn = httplib.HTTPConnection(args.server_name)
+    urltemplate = "/submit/telemetry/%s"
     worst_time = -1.0
     #headers = {"Content-type": "application/x-www-form-urlencoded",
     #           "Accept": "text/plain"}
@@ -73,30 +74,48 @@ def send_records(worker_id, lines, args):
     record_count = 0
     request_count = 0
     total_size = 0
-    conn = httplib.HTTPConnection(o.netloc)
     #conn.set_debuglevel(1)
     batch = []
     latencies = []
 
+    path = urltemplate % ("batch")
+    if args.noop:
+        path = urltemplate % ("noop")
+    elif args.batch_size > 0 and args.parse_dims:
+        path = urltemplate % ("batch_dims")
+    # else we make a custom path for each request
+
     for line in lines:
+        record_count += 1
         data = ""
-        if args.batch_size == 0:
+        dims = None
+        if args.parse_dims:
+            dims = line.split("\t")
+            data = dims.pop()
+
+        if dims is None:
+            dims = ["bogusid"]
             data = line
+        #print "Record", record_count, "dims:", dims
+
+        if args.batch_size == 0:
+            if not args.noop:
+                path = urltemplate % ("/".join(dims))
         else:
-            # TODO: generate a UUID?
-            batch.append("bogusid")
-            batch.append(line.replace("\t", ' '))
+            batch = batch + dims
+            batch.append(data)
+            data = ""
             if record_count % args.batch_size == 0:
                 data = "\t".join(batch)
                 batch = []
 
-        record_count += 1
         if data:
             start = datetime.now()
+            #print "Sending to path:", path
             if args.dry_run:
                 resp = "created"
             else:
-                resp = send(conn, o, data)
+                resp = send(conn, path, data)
             ms = delta_ms(start)
             latencies.append(ms)
             if worst_time < ms:
@@ -116,7 +135,7 @@ def send_records(worker_id, lines, args):
         if args.dry_run:
             resp = "created"
         else:
-            resp = send(conn, o, "\t".join(batch))
+            resp = send(conn, path, "\t".join(batch))
         ms = delta_ms(start)
         latencies.append(ms)
         if worst_time < ms:
@@ -146,10 +165,12 @@ def send_records(worker_id, lines, args):
 
 def main():
     parser = argparse.ArgumentParser(description='Run benchmark on a Telemetry Server', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("server_url", help="The URL of the target server to benchmark")
+    parser.add_argument("server_name", help="The hostname[:port] of the target server to benchmark")
     parser.add_argument("-p", "--num-processes", metavar="N", help="Start N client processes", type=int, default=4)
     parser.add_argument("-b", "--batch-size", metavar="N", help="Send N records per batch (use 0 to send individual requests)", type=int, default=20)
     parser.add_argument("-z", "--gzip-compress", action="store_true")
+    parser.add_argument("-m", "--parse-dims", action="store_true")
+    parser.add_argument("-N", "--noop", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-d", "--dry-run", action="store_true")
     args = parser.parse_args()
