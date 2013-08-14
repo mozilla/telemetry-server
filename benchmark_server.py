@@ -11,6 +11,7 @@ import sys
 import httplib, urllib
 from urlparse import urlparse
 from datetime import datetime
+from multiprocessing import Process
 
 def send(conn, o, data):
     conn.request("POST", o.path, data)
@@ -34,6 +35,36 @@ def print_stats(label, total_mb, record_count, request_count, total_sec):
     print "%s, sent %.2fMB: %d records in %d requests in %.2f seconds: %.2fMB/s, %.2f reqs/s, %.2f records/s" % (label, total_mb, record_count, request_count, total_sec, total_mb / total_sec, request_count / total_sec, record_count / total_sec)
 
 def run_benchmark(args):
+    lines = []
+    size_bytes = 0
+    print "Reading input data..."
+    while True:
+        line = sys.stdin.readline()
+        if line == '':
+            break
+        lines.append(line.strip())
+        size_bytes += len(lines[-1])
+    print "Done."
+
+    print "Starting up", args.num_processes, "helpers"
+    num_per_process = len(lines) / args.num_processes
+
+    helpers = []
+    start = datetime.now()
+    for i in range(args.num_processes):
+        startline = i * num_per_process
+        endline = (i + 1) * num_per_process
+        p = Process(target=send_records,
+                args=(i + 1, lines[startline:endline], args))
+        helpers.append(p)
+        p.start()
+    for h in helpers:
+        h.join()
+    duration = delta_sec(start)
+    size_mb = size_bytes / 1024.0 / 1024.0
+    print_stats("Overall", size_mb, len(lines), len(lines), duration)
+
+def send_records(worker_id, lines, args):
     o = urlparse(args.server_url)
     worst_time = -1.0
     #headers = {"Content-type": "application/x-www-form-urlencoded",
@@ -47,11 +78,7 @@ def run_benchmark(args):
     batch = []
     latencies = []
 
-    while True:
-        line = sys.stdin.readline()
-        if line == '':
-            break
-        line = line.strip()
+    for line in lines:
         data = ""
         if args.batch_size == 0:
             data = line
@@ -64,9 +91,6 @@ def run_benchmark(args):
                 batch = []
 
         record_count += 1
-        if not args.verbose and record_count % 100 == 0:
-            print "Processed", record_count, "records in", request_count, "requests so far"
-
         if data:
             start = datetime.now()
             if args.dry_run:
@@ -82,7 +106,10 @@ def run_benchmark(args):
             total_size += len(data)
 
             if args.verbose:
-                print "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+                print worker_id, "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+        if not args.verbose and record_count % 100 == 0:
+            print worker_id, "Processed", record_count, "records in", request_count, "requests so far"
+
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
@@ -98,21 +125,31 @@ def run_benchmark(args):
         request_count += 1
         total_size += len(line)
         if args.verbose:
-            print "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
+            print worker_id, "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
 
     latencies.sort()
     assert(len(latencies) == request_count)
     total_mb = total_size / 1024.0 / 1024.0
     total_sec = total_ms / 1000.0
-    print "Min:",   latencies[0]
-    print "Max:",   latencies[-1]
-    print "Med:",   latencies[int(0.5 * request_count)]
-    print "Avg:",   sum(latencies) / request_count
-    print "75%:",   latencies[int(0.75 * request_count)]
-    print "95%:",   latencies[int(0.95 * request_count)]
-    print "99%:",   latencies[int(0.99 * request_count)]
-    print "99.9%:", latencies[int(0.999 * request_count)]
-    print_stats("Including only request latency", total_mb, record_count, request_count, total_sec)
+    print worker_id, " %8s %8s %8s %8s %8s %8s %8s %8s" % ("Min", "Max", "Med", "Avg", "75%", "95%", "99%", "99.9%")
+    print worker_id, " %8.2f %8.2f %8.2f %8.2f %8.2f %8.2f %8.2f %8.2f" % (
+            latencies[0],
+            latencies[-1],
+            latencies[int(0.5 * request_count)],
+            sum(latencies) / request_count,
+            latencies[int(0.75 * request_count)],
+            latencies[int(0.95 * request_count)],
+            latencies[int(0.99 * request_count)],
+            latencies[int(0.999 * request_count)])
+    #print worker_id, "Min:",   latencies[0]
+    #print worker_id, "Max:",   latencies[-1]
+    #print worker_id, "Med:",   latencies[int(0.5 * request_count)]
+    #print worker_id, "Avg:",   sum(latencies) / request_count
+    #print worker_id, "75%:",   latencies[int(0.75 * request_count)]
+    #print worker_id, "95%:",   latencies[int(0.95 * request_count)]
+    #print worker_id, "99%:",   latencies[int(0.99 * request_count)]
+    #print worker_id, "99.9%:", latencies[int(0.999 * request_count)]
+    print_stats(str(worker_id) + ": Including only request latency", total_mb, record_count, request_count, total_sec)
     return record_count, request_count, total_size
 
 def main():
@@ -124,11 +161,7 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("-d", "--dry-run", action="store_true")
     args = parser.parse_args()
-    start = datetime.now()
-    record_count, request_count, size_bytes = run_benchmark(args)
-    duration = delta_sec(start)
-    size_mb = size_bytes / 1024.0 / 1024.0
-    print_stats("Overall", size_mb, record_count, request_count, duration)
+    run_benchmark(args)
 
 if __name__ == "__main__":
     sys.exit(main())
