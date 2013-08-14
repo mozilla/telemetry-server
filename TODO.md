@@ -2,6 +2,8 @@ TODO
 ====
 
 - [P1] Error handling in pipe-based compressor
+- [P1] Add a server unique identifier to the log file names so that we can run
+       many server nodes
 - [P2] nginx: Check into load-balancing
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
@@ -29,6 +31,10 @@ TODO
 - [P3] Add proper [logging][2]
 - [P3] Ensure things are in order to accept Addon Histograms, such as
        from [pdf.js][5]
+- [P4] Make sure we handle fetching Histograms.json from the server for feature
+       branches (cedar/larch/fig, etc):
+         http://hg.mozilla.org/releases/cedar/raw-file/9a6b98023a90/toolkit/components/telemetry/Histograms.json
+       is wrong.
 - [P4] Change the RevisionCache to fetch the entire history of Histograms.json
        and then convert incoming revisions to times to find the right version
 - [P4] Preopen the mapper input files in the parent process, pass fd's to child
