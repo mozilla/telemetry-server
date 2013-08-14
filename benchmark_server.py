@@ -141,14 +141,6 @@ def send_records(worker_id, lines, args):
             latencies[int(0.95 * request_count)],
             latencies[int(0.99 * request_count)],
             latencies[int(0.999 * request_count)])
-    #print worker_id, "Min:",   latencies[0]
-    #print worker_id, "Max:",   latencies[-1]
-    #print worker_id, "Med:",   latencies[int(0.5 * request_count)]
-    #print worker_id, "Avg:",   sum(latencies) / request_count
-    #print worker_id, "75%:",   latencies[int(0.75 * request_count)]
-    #print worker_id, "95%:",   latencies[int(0.95 * request_count)]
-    #print worker_id, "99%:",   latencies[int(0.99 * request_count)]
-    #print worker_id, "99.9%:", latencies[int(0.999 * request_count)]
     print_stats(str(worker_id) + ": Including only request latency", total_mb, record_count, request_count, total_sec)
     return record_count, request_count, total_size
 
