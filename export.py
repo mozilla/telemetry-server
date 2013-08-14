@@ -48,7 +48,7 @@ class Exporter:
                 size += len(chunk)
         return md5.hexdigest(), size
 
-    def export_batch(self, files):
+    def export_batch(self, conn, bucket, files):
         # Time the s3funnel call:
         start = datetime.now()
         result = subprocess.call(self.s3f_cmd + files, cwd=self.data_dir)
@@ -58,8 +58,6 @@ class Exporter:
         total_size = 0
         if result == 0:
             # Success! Verify each file's checksum, then truncate it.
-            conn = S3Connection(self.aws_key, self.aws_secret_key)
-            bucket = conn.get_bucket(self.bucket)
             for f in files:
                 # Verify checksum and track cumulative size so we can figure out MB/s
                 full_filename = os.path.join(self.data_dir, f)
@@ -151,6 +149,16 @@ class Exporter:
         batches = self.batches(self.batch_size, uploadables)
         print "Found", len(uploadables), "files:", len(batches), "batches of size", len(batches[0])
 
+        # Make sure the target S3 bucket exists.
+        conn = S3Connection(self.aws_key, self.aws_secret_key)
+        try:
+            print "Verifying that we can write to", self.bucket
+            bucket = conn.get_bucket(self.bucket)
+            print "Looks good!"
+        except S3ResponseError:
+            print "Bucket", self.bucket, "not found.  Attempting to create it."
+            bucket = conn.create_bucket(self.bucket)
+
         # Export each batch
         fail_count = 0
         batch_count = 0
@@ -158,7 +166,7 @@ class Exporter:
             batch_count += 1
             print "Exporting batch", batch_count, "of", len(batches)
             try:
-                batch_response = self.export_batch(batch)
+                batch_response = self.export_batch(conn, bucket, batch)
                 if batch_response != 0:
                     print "Batch", batch_count, "failed: returned", batch_response
                     fail_count += 1
