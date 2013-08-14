@@ -123,6 +123,10 @@ def submit_without_dims(id):
     today = date.today().strftime("%Y%m%d")
     return submit(id, request.data, today)
 
+@app.route('/submit/telemetry/noop', methods=['POST'])
+def submit_noop():
+    return "NOOP:" + request.data[0:3], 200
+
 @app.route('/submit/telemetry/batch', methods=['POST'])
 def submit_batch():
     STATS.submit_batch += 1
