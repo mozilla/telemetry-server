@@ -1,7 +1,10 @@
 Telemetry Server
 ================
 
-Server for the Mozilla Telemetry project
+Server components to receive, validate, convert, store, and process Telemetry
+data from the [Mozilla Firefox](http://www.mozilla.org) browser.
+
+Talk to us on `irc.mozilla.org` in the `#telemetry` channel.
 
 Roadmap
 =======
