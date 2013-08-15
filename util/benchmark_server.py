@@ -22,7 +22,11 @@ import zlib
 def send(conn, path, data):
     conn.request("POST", path, data)
     response = conn.getresponse()
-    return response.read()
+    result = response.read()
+#    if response.status > 201:
+#        print "Got an unexpected response:", response.status
+#        print result
+    return result
 
 def delta_ms(start, end=None):
     if end is None:
@@ -118,8 +122,8 @@ def send_records(worker_id, lines, args, queue=None):
 
     path = urltemplate % ("batch")
     if args.noop:
-        #path = urltemplate % ("noop")
-        path = "/"
+        path = urltemplate % ("noop")
+        #path = "/"
     elif args.batch_size > 0 and args.parse_dims:
         path = urltemplate % ("batch_dims")
     # else we make a custom path for each request
@@ -176,17 +180,18 @@ def send_records(worker_id, lines, args, queue=None):
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
+        data = "\t".join(batch)
         if args.dry_run:
             resp = "created"
         else:
-            resp = send(conn, path, "\t".join(batch))
+            resp = send(conn, path, data)
         ms = delta_ms(start)
         latencies.append(ms)
         if worst_time < ms:
             worst_time = ms
         total_ms += ms
         request_count += 1
-        total_size += len(line)
+        total_size += len(data)
         if args.verbose:
             print worker_id, "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
 
