@@ -67,7 +67,6 @@ def bootstrap_instance(config, instance):
     #sudo("apt-get --yes dist-upgrade")
     sudo('pip install simplejson scales boto')
 
-    mr_cfg = config["mapreduce"]
     home = "/home/" + ssl_user
     print "Preparing MR code"
     with cd(home):

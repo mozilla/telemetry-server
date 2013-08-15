@@ -63,7 +63,7 @@ def bootstrap_instance(config, instance):
 
     # TODO: attach a newly-created or existing EBS volume
     #sudo("mkfs -t ext4 /dev/xvdf")
-    sudo("mkdir /data")
+    #sudo("mkdir /data")
     #sudo("echo '/dev/xvdf       /data    ext4   noatime,nodiratime      0 0' >> /etc/fstab")
     #sudo("mount /data")
 
@@ -75,7 +75,7 @@ def bootstrap_instance(config, instance):
     telemetry_home = "/home/telemetry/telemetry-server"
     telemetry_server = config.get("server_path", "/var/www/telemetry-server")
 
-    sudo("mkdir " + telemetry_data)
+    sudo("mkdir -p " + telemetry_data)
     sudo("chown telemetry:telemetry " + telemetry_data)
 
     ## grant www-data access to read/write telemetry data:
