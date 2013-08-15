@@ -17,12 +17,14 @@ import aws_util
 
 def create_instance(config):
     conn = aws_util.connect_cfg(config)
+    itype = config.get("instance_type", "m1.large"),
+    print "Creating a new instance of type", itype
     # Known images:
     # ami-bf1d8a8f == Ubuntu 13.04
     reservation = conn.run_instances(
             config.get("image", "ami-bf1d8a8f"),
             key_name=config["ssl_key_name"],
-            instance_type=config.get("instance_type", "m1.large"),
+            instance_type=itype,
             security_groups=config["security_groups"],
             placement=config["placement"],
             instance_initiated_shutdown_behavior="stop")
@@ -208,7 +210,6 @@ if "instance_id" in config:
     instance = aws_util.get_instance(conn, config["instance_id"])
     print "Instance", instance.id, "is", instance.state
 else:
-    print "Creating a new instance"
     conn, instance = create_instance(config)
 
 # Set up Fabric:
