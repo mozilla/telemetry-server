@@ -17,7 +17,7 @@ import aws_util
 
 def create_instance(config):
     conn = aws_util.connect_cfg(config)
-    itype = config.get("instance_type", "m1.large"),
+    itype = config.get("instance_type", "m1.large")
     print "Creating a new instance of type", itype
     # Known images:
     # ami-bf1d8a8f == Ubuntu 13.04
