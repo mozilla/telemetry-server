@@ -3,7 +3,8 @@ TODO
 
 - [P1] Error handling in pipe-based compressor
 - [P1] Add a server unique identifier to the log file names so that we can run
-       many server nodes
+       many server nodes, or possibly just add a UUID to the filename instead
+       of .3.log, .4.log, etc.
 - [P2] nginx: Check into load-balancing
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
