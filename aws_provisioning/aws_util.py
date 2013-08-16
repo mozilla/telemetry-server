@@ -23,6 +23,40 @@ def connect(region, aws_key, aws_secret_key):
             aws_secret_access_key=aws_secret_key)
     return conn
 
+def create_instance(config):
+    conn = aws_util.connect_cfg(config)
+    itype = config.get("instance_type", "m1.large")
+    print "Creating a new instance of type", itype
+    # Known images:
+    # ami-bf1d8a8f == Ubuntu 13.04
+    reservation = conn.run_instances(
+            config.get("image", "ami-bf1d8a8f"),
+            key_name=config["ssl_key_name"],
+            instance_type=itype,
+            security_groups=config["security_groups"],
+            placement=config["placement"],
+            instance_initiated_shutdown_behavior=config.get("shutdown_behavior", "stop"))
+
+    instance = reservation.instances[0]
+
+    default_tags = config.get("default_tags", {})
+    if len(default_tags) > 0:
+        conn.create_tags([instance.id], default_tags)
+    # TODO:
+    # - find all instances where Owner = mreid and Application = telemetry-server
+    # - get the highest number
+    # - use the next one (or first unused one) for the current instance name.
+    name_tag = {"Name": config["name"]}
+    conn.create_tags([instance.id], name_tag)
+
+    while instance.state == 'pending':
+        print "Instance is pending - Waiting 10s for instance to start up..."
+        time.sleep(10)
+        instance.update()
+
+    print "Instance", instance.id, "is", instance.state
+    return conn, instance
+
 def get_instance(conn, instance_id):
     reservations = conn.get_all_instances(instance_ids=[instance_id])
     instance = reservations[0].instances[0]
