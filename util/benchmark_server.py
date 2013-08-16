@@ -16,12 +16,17 @@ import sys
 import httplib, urllib
 from urlparse import urlparse
 from datetime import datetime
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+import zlib
 
 def send(conn, path, data):
     conn.request("POST", path, data)
     response = conn.getresponse()
-    return response.read()
+    result = response.read()
+#    if response.status > 201:
+#        print "Got an unexpected response:", response.status
+#        print result
+    return result
 
 def delta_ms(start, end=None):
     if end is None:
@@ -51,25 +56,57 @@ def run_benchmark(args):
         size_bytes += len(lines[-1])
     print "Done."
 
+    print "Preprocessing input data..."
+    for i in range(len(lines)):
+        line = lines[i]
+        data = ""
+        dims = None
+        if args.parse_dims:
+            dims = line.split("\t")
+            data = dims.pop()
+
+        if dims is None or len(dims) == 0:
+            dims = ["bogusid"]
+            data = line
+        if data and args.gzip_compress:
+            size_before = len(data)
+            data = zlib.compress(data)
+            size_after = len(data)
+            if args.verbose:
+                print "Before compression, payload was", size_before, ", after:", size_after, ", ratio:", float(size_before - size_after) / size_before
+        lines[i] = (dims, data)
+    print "Done."
+
     print "Starting up", args.num_processes, "helpers"
     num_per_process = len(lines) / args.num_processes
 
+    result_queue = Queue()
     helpers = []
     start = datetime.now()
     for i in range(args.num_processes):
         startline = i * num_per_process
         endline = (i + 1) * num_per_process
         p = Process(target=send_records,
-                args=(i + 1, lines[startline:endline], args))
+                args=(i + 1, lines[startline:endline], args, result_queue))
         helpers.append(p)
         p.start()
     for h in helpers:
         h.join()
-    duration = delta_sec(start)
-    size_mb = size_bytes / 1024.0 / 1024.0
-    print_stats("Overall", size_mb, len(lines), 0, duration)
 
-def send_records(worker_id, lines, args):
+    results = [result_queue.get() for h in helpers]
+    duration = delta_sec(start)
+    size_sent = 0.0
+    records_sent = 0
+    requests_sent = 0
+    for (recs, reqs, size, sec) in results:
+        size_sent += size
+        records_sent += recs
+        requests_sent += reqs
+
+    size_mb = size_bytes / 1024.0 / 1024.0
+    print_stats("Overall read %.2fMB" % (size_mb), size_sent, records_sent, requests_sent, duration)
+
+def send_records(worker_id, lines, args, queue=None):
     conn = httplib.HTTPConnection(args.server_name)
     urltemplate = "/submit/telemetry/%s"
     worst_time = -1.0
@@ -86,21 +123,21 @@ def send_records(worker_id, lines, args):
     path = urltemplate % ("batch")
     if args.noop:
         path = urltemplate % ("noop")
+        #path = "/"
     elif args.batch_size > 0 and args.parse_dims:
         path = urltemplate % ("batch_dims")
     # else we make a custom path for each request
 
-    for line in lines:
+    for dims, data in lines:
         record_count += 1
-        data = ""
-        dims = None
-        if args.parse_dims:
-            dims = line.split("\t")
-            data = dims.pop()
-
-        if dims is None:
-            dims = ["bogusid"]
-            data = line
+        #data = ""
+        #dims = None
+        #if args.parse_dims:
+        #    dims = line.split("\t")
+        #    data = dims.pop()
+        #if dims is None:
+        #    dims = ["bogusid"]
+        #    data = line
         #print "Record", record_count, "dims:", dims
 
         if args.batch_size == 0:
@@ -115,6 +152,12 @@ def send_records(worker_id, lines, args):
                 batch = []
 
         if data:
+            #if args.gzip_compress:
+            #    size_before = len(data)
+            #    data = zlib.compress(data)
+            #    size_after = len(data)
+            #    if args.verbose:
+            #        print "Before compression, payload was", size_before, ", after:", size_after, ", ratio:", float(size_before - size_after) / size_before
             start = datetime.now()
             #print "Sending to path:", path
             if args.dry_run:
@@ -137,17 +180,18 @@ def send_records(worker_id, lines, args):
     # Send the last (partial) batch
     if len(batch):
         start = datetime.now()
+        data = "\t".join(batch)
         if args.dry_run:
             resp = "created"
         else:
-            resp = send(conn, path, "\t".join(batch))
+            resp = send(conn, path, data)
         ms = delta_ms(start)
         latencies.append(ms)
         if worst_time < ms:
             worst_time = ms
         total_ms += ms
         request_count += 1
-        total_size += len(line)
+        total_size += len(data)
         if args.verbose:
             print worker_id, "%s %.1fms, avg %.1f, max %.1f, %.2fMB/s, %.2f reqs/s, %.2f records/s" % (resp, ms, total_ms/request_count, worst_time, (total_size/1000.0/total_ms), (1000.0 * request_count / total_ms), (1000.0 * record_count / total_ms))
 
@@ -166,6 +210,8 @@ def send_records(worker_id, lines, args):
             latencies[int(0.99 * request_count)],
             latencies[int(0.999 * request_count)])
     print_stats(str(worker_id) + ": Including only request latency", total_mb, record_count, request_count, total_sec)
+    if queue:
+        queue.put((record_count, request_count, total_mb, total_sec))
     return record_count, request_count, total_size
 
 def main():
