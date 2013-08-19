@@ -2,7 +2,7 @@ var http = require('http');
 var fs = require('fs');
 var max_length = 200 * 1024;
 
-function fail(code, request, response, msg) {
+function finish(code, request, response, msg) {
   response.writeHead(code, {'Content-Type': 'text/plain'});
   response.end(msg);
 }
@@ -10,11 +10,12 @@ function fail(code, request, response, msg) {
 function postRequest(request, response, callback) {
   var len = request.headers["content-length"];
   if (!len) {
-    fail(411, request, response, "Missing content length");
+    finish(411, request, response, "Missing content length");
   } else if (len > max_length) {
-    fail(413, request, response, ""+queryData.length + "bytes -> too big of a request");
+    finish(413, request, response, ""+len + " bytes -> too big of a request");
+    // TODO: retutrn 202 Accepted instead (so that clients don't retry)?
   } else if (request.method != 'POST') {
-    fail(405, request, response, "Wrong request type");
+    finish(405, request, response, "Wrong request type");
   } else {
     var queryData = "";
     request.on('data', function(data) {
@@ -24,9 +25,10 @@ function postRequest(request, response, callback) {
     request.on('end', function() {
       fs.appendFile('log.txt', queryData, function (err) {
         if (err) {
-          fail(500, request, response, err);
+          finish(500, request, response, err);
         }
-        console.log("pathlen: " + request.url.length + "=" + request.url + ", " + len + "=" + queryData);
+        console.log("pathlen: " + request.url.length + "=" + request.url + ", datalen: " + len);
+        //console.log("pathlen: " + request.url.length + "=" + request.url + ", " + len + "=" + queryData);
         callback();
       });
     });
@@ -38,8 +40,7 @@ function run_server(port) {
   // In this case its a HTTP server
   http.createServer(function(request, response) {
     postRequest(request, response, function() {
-      response.writeHead(200, {'Content-Type': 'text/plain'});
-      response.end('OK');    
+      finish(200, request, response, 'OK');
     });
   }).listen(port);
   console.log("Listening on port "+port);
