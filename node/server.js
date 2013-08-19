@@ -17,9 +17,19 @@ function postRequest(request, response, callback) {
   } else if (request.method != 'POST') {
     finish(405, request, response, "Wrong request type");
   } else {
-    var queryData = "";
+    var queryData = new Buffer(len);
     request.on('data', function(data) {
-      queryData += data;
+      if (Buffer.isBuffer(data)) {
+        console.log("copying from buffer");
+        queryData.copy(data, queryData.length);
+      } else {
+        console.log("copying from string");
+        // String?
+        bytes_written = queryData.write(data, queryData.length);
+        if (bytes_written != data.length) {
+          finish(500, request, response, "error writing to buffer");
+        }
+      }
     });
 
     request.on('end', function() {
