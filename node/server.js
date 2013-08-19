@@ -1,23 +1,33 @@
 var http = require('http');
 var fs = require('fs');
-var max_length = 200 * 1024;
+var max_data_length = 200 * 1024;
+var max_path_length = 10 * 1024;
+var log_file = 'log.txt';
+var max_log_size = 500000000;
 
 function finish(code, request, response, msg) {
   response.writeHead(code, {'Content-Type': 'text/plain'});
   response.end(msg);
 }
 
+function unique_name(name) {
+  // Could use UUID or something, but pid + timestamp should suffice.
+  return name + "." + process.pid + "." + new Date().getTime();
+}
+
 function postRequest(request, response, callback) {
   var data_length = parseInt(request.headers["content-length"]);
   if (!data_length) {
     finish(411, request, response, "Missing content length");
-  } else if (data_length > max_length) {
-    finish(413, request, response, ""+data_length + " bytes -> too big of a request");
-    // TODO: retutrn 202 Accepted instead (so that clients don't retry)?
+  } else if (data_length > max_data_length) {
+    finish(413, request, response, "Request too large (" + data_length + " bytes). Limit is " + max_data_length + " bytes");
+    // TODO: return 202 Accepted instead (so that clients don't retry)?
   } else if (request.method != 'POST') {
     finish(405, request, response, "Wrong request type");
+  } else if (request.url.length > max_path_length) {
+    // TODO: stop at the "?" part of the url?
+    finish(413, request, response, "Path too long (" + request.url.length + " bytes). Limit is " + max_path_length + " bytes");
   } else {
-    // TODO: make sure the path is not too long (and stop at the "?")
     var chunks = [];
     request.on('data', function(data) {
       chunks.push(data);
@@ -48,12 +58,25 @@ function postRequest(request, response, callback) {
         pos += chunks[i].length;
       }
 
-      fs.appendFile('log.txt', buf, function (err) {
+      fs.appendFile(log_file, buf, function (err) {
         if (err) {
           finish(500, request, response, err);
           throw err;
         }
         console.log("pathlen: " + request.url.length + "=" + request.url + ", datalen: " + data_length);
+        // If length of outputfile is > max_log_size, rename it to something unique
+        fs.stat(log_file, function(err, stats) {
+          if (err) {
+            console.log("error stat'ing log file :(");
+          } else {
+            if (stats.size > max_log_size) {
+              console.log("rotating log file after " + stats.size + " bytes");
+              fs.rename(log_file, unique_name(log_file));
+            }
+          }
+        });
+
+        // All is well, call the callback
         callback();
       });
     });
