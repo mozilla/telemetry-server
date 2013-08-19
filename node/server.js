@@ -1,69 +1,67 @@
 var http = require('http');
 var fs = require('fs');
+var max_length = 200 * 1024;
 
-function fail(request, response, msg) {
-	response.writeHead(413, {'Content-Type': 'text/plain'});
-	response.end(msg);
+function fail(code, request, response, msg) {
+  response.writeHead(code, {'Content-Type': 'text/plain'});
+  response.end(msg);
 }
 
 function postRequest(request, response, callback) {
+  var len = request.headers["content-length"];
+  if (!len) {
+    fail(411, request, response, "Missing content length");
+  } else if (len > max_length) {
+    fail(413, request, response, ""+queryData.length + "bytes -> too big of a request");
+  } else if (request.method != 'POST') {
+    fail(405, request, response, "Wrong request type");
+  } else {
     var queryData = "";
+    request.on('data', function(data) {
+      queryData += data;
+    });
 
-    if(request.method == 'POST') {
-        request.on('data', function(data) {
-            queryData += data;
-			// drop data > 200K
-            if(queryData.length > 200*1024) {
-				fail(request, response, ""+queryData.length + "bytes -> too big of a request");
-				queryData = "";
-            }
-        });
-
-        request.on('end', function() {
-            fs.appendFile('log.txt', queryData, function (err) {
-				if (err) {
-					fail(request, response, err);
-				}
-				callback();
-			});
-        });
-
-    } else {
-		fail(request, response, "Wrong request type");
-        response.writeHead(405, {'Content-Type': 'text/plain'});
-        response.end();
-    }
+    request.on('end', function() {
+      fs.appendFile('log.txt', queryData, function (err) {
+        if (err) {
+          fail(500, request, response, err);
+        }
+        console.log("pathlen: " + request.url.length + "=" + request.url + ", " + len + "=" + queryData);
+        callback();
+      });
+    });
+  }
 }
 
 function run_server(port) {
-	// Workers can share any TCP connection
-	// In this case its a HTTP server
-	http.createServer(function(request, response) {
-		postRequest(request, response, function() {
-			response.writeHead(200, {'Content-Type': 'text/plain'});
-			response.end('OK');	
-		});
-	}).listen(port);
-	console.log("Listening on port "+port);
+  // Workers can share any TCP connection
+  // In this case its a HTTP server
+  http.createServer(function(request, response) {
+    postRequest(request, response, function() {
+      response.writeHead(200, {'Content-Type': 'text/plain'});
+      response.end('OK');    
+    });
+  }).listen(port);
+  console.log("Listening on port "+port);
 }
 var cluster = require('cluster');
 var numCPUs = require('os').cpus().length;
 
 if (cluster.isMaster) {
-	// Fork workers.
-	for (var i = 0; i < numCPUs; i++) {
-		cluster.fork();
-	}
+  // Fork workers.
+  for (var i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
 
-	cluster.on('exit', function(worker, code, signal) {
-		console.log('worker ' + worker.process.pid + ' died');
-	});
+  cluster.on('exit', function(worker, code, signal) {
+    console.log('worker ' + worker.process.pid + ' died');
+  });
 } else {
-	run_server(8000);
+  run_server(8080);
 }
 
 /*windows dualcore laptop benching quadcore server:
-$ ./ab -c600  -k -t 5 -n 900000 -p 30K  http://quad.:8000/                                                                                                                                                                                                                        This is ApacheBench, Version 2.3 <$Revision: 1430300 $>
+$ ./ab -c600  -k -t 5 -n 900000 -p 30K  http://localhost:8080/                                                                                                                                                                                                                        This is ApacheBench, Version 2.3 <$Revision: 1430300 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
 Licensed to The Apache Software Foundation, http://www.apache.org/
 
@@ -72,7 +70,7 @@ Benchmarking quad. (be patient)
 
 Server Software:
 Server Hostname:        quad.
-Server Port:            8000
+Server Port:            8080
 
 Document Path:          /
 Document Length:        2 bytes
@@ -113,7 +111,7 @@ Percentage of the requests served within a certain time (ms)
 Finished 5988 requests
 
 quadcore server benching node..EG WINDOWS being faster at being server on slower hw...wtf
-taras@quad:~/tmp$ ab -c600  -k -t 10 -n 900000 -p 30K  http://xps13.:8000/
+taras@quad:~/tmp$ ab -c600  -k -t 10 -n 900000 -p 30K  http://xps13.:8080/
 This is ApacheBench, Version 2.3 <$Revision: 1430300 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
 Licensed to The Apache Software Foundation, http://www.apache.org/
@@ -124,7 +122,7 @@ Finished 12149 requests
 
 Server Software:
 Server Hostname:        xps13.
-Server Port:            8000
+Server Port:            8080
 
 Document Path:          /
 Document Length:        2 bytes
