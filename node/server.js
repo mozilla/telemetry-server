@@ -8,37 +8,52 @@ function finish(code, request, response, msg) {
 }
 
 function postRequest(request, response, callback) {
-  var len = request.headers["content-length"];
-  if (!len) {
+  var data_length = parseInt(request.headers["content-length"]);
+  if (!data_length) {
     finish(411, request, response, "Missing content length");
-  } else if (len > max_length) {
-    finish(413, request, response, ""+len + " bytes -> too big of a request");
+  } else if (data_length > max_length) {
+    finish(413, request, response, ""+data_length + " bytes -> too big of a request");
     // TODO: retutrn 202 Accepted instead (so that clients don't retry)?
   } else if (request.method != 'POST') {
     finish(405, request, response, "Wrong request type");
   } else {
-    var queryData = new Buffer(len);
+    // TODO: make sure the path is not too long (and stop at the "?")
+    var chunks = [];
     request.on('data', function(data) {
-      if (Buffer.isBuffer(data)) {
-        console.log("copying from buffer");
-        queryData.copy(data, queryData.length);
-      } else {
-        console.log("copying from string");
-        // String?
-        bytes_written = queryData.write(data, queryData.length);
-        if (bytes_written != data.length) {
-          finish(500, request, response, "error writing to buffer");
-        }
-      }
+      chunks.push(data);
     });
 
     request.on('end', function() {
-      fs.appendFile('log.txt', queryData, function (err) {
+      var data_offset = 2 * 4;
+      var path_length = request.url.length;
+      var buffer_length = path_length + data_length + data_offset;
+      var buf = new Buffer(buffer_length);
+
+      // Write the preamble so we can read the pieces back out:
+      // 4 bytes to indicate path length
+      // 4 bytes to indicate data length
+      buf.writeUInt32LE(path_length, 0);
+      buf.writeUInt32LE(data_length, 4);
+
+      // now write the path:
+      buf.write(request.url, data_offset);
+
+      // now write all the data:
+      numchunks = chunks.length;
+      pos = data_offset + path_length;
+
+      for (var i = 0; i < numchunks; i++) {
+        //console.log("writing chunk " + i + " (" + chunks[i].length + " bytes)");
+        chunks[i].copy(buf, pos);
+        pos += chunks[i].length;
+      }
+
+      fs.appendFile('log.txt', buf, function (err) {
         if (err) {
           finish(500, request, response, err);
+          throw err;
         }
-        console.log("pathlen: " + request.url.length + "=" + request.url + ", datalen: " + len);
-        //console.log("pathlen: " + request.url.length + "=" + request.url + ", " + len + "=" + queryData);
+        console.log("pathlen: " + request.url.length + "=" + request.url + ", datalen: " + data_length);
         callback();
       });
     });
