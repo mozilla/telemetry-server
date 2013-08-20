@@ -7,6 +7,7 @@ var log_base = "telemetry.log";
 if (process.argv.length > 2) {
   log_path = process.argv[2];
 }
+
 var log_file = unique_name(log_base);
 var log_size = 0;
 console.log("Using log file: " + log_file);
@@ -45,7 +46,7 @@ function rotate() {
 
 function unique_name(name) {
   // Could use UUID or something, but pid + timestamp should suffice.
-  return name + "." + process.pid + "." + new Date().getTime();
+  return log_path + "/" + name + "." + process.pid + "." + new Date().getTime();
 }
 
 function postRequest(request, response, callback) {
