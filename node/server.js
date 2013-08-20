@@ -9,6 +9,8 @@ if (process.argv.length > 2) {
   log_path = process.argv[2];
 }
 
+var url_prefix = "/submit/telemetry/";
+var url_prefix_len = url_prefix.length;
 var log_file = unique_name(log_base);
 var log_size = 0;
 console.log("Using log file: " + log_file);
@@ -66,6 +68,14 @@ function postRequest(request, response, callback) {
   // Parse the url to strip off any query params.
   var url_parts = url.parse(request.url);
   var url_path = url_parts.pathname;
+  // Make sure that url_path starts with the expected prefix, then chop that
+  // off before storing.
+  if (url_path.slice(0, url_prefix_len) != url_prefix) {
+    return finish(404, request, response, "Not Found");
+  } else {
+    // Strip off the un-interesting part of the path.
+    url_path = url_path.slice(url_prefix_len);
+  }
   var path_length = Buffer.byteLength(url_path);
   if (path_length > max_path_length) {
     return finish(413, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes");
@@ -98,6 +108,8 @@ function postRequest(request, response, callback) {
       if (err) {
         console.log("Error appending to log file: " + err);
         // TODO: what about log_size?
+        // TODO: Since we can't easily recover from a partially written record,
+        //       we should always attempt to start a new file in case of error.
         return finish(500, request, response, err);
       }
       log_size += buf.length;
