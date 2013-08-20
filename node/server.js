@@ -1,5 +1,6 @@
 var http = require('http');
 var fs = require('fs');
+var url = require('url');
 var max_data_length = 200 * 1024;
 var max_path_length = 10 * 1024;
 var log_path = "./";
@@ -61,12 +62,15 @@ function postRequest(request, response, callback) {
   if (request.method != 'POST') {
     return finish(405, request, response, "Wrong request type");
   }
-  if (request.url.length > max_path_length) {
-    // TODO: stop at the "?" part of the url?
-    return finish(413, request, response, "Path too long (" + request.url.length + " bytes). Limit is " + max_path_length + " bytes");
+
+  // Parse the url to strip off any query params.
+  var url_parts = url.parse(request.url);
+  var url_path = url_parts.pathname;
+  var path_length = Buffer.byteLength(url_path);
+  if (path_length > max_path_length) {
+    return finish(413, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes");
   }
   var data_offset = 2 * 4;
-  var path_length = request.url.length;
   var buffer_length = path_length + data_length + data_offset;
   var buf = new Buffer(buffer_length);
 
@@ -77,7 +81,7 @@ function postRequest(request, response, callback) {
   buf.writeUInt32LE(data_length, 4);
 
   // now write the path:
-  buf.write(request.url, data_offset);
+  buf.write(url_path, data_offset);
   var pos = data_offset + path_length;
 
   // Write the data as it comes in
@@ -88,6 +92,8 @@ function postRequest(request, response, callback) {
 
   request.on('end', function() {
     // Write buffered data to file.
+    // TODO: Keep a persistent fd/stream open and append, instead of opening
+    //       and closing every time we write.
     fs.appendFile(log_file, buf, function (err) {
       if (err) {
         console.log("Error appending to log file: " + err);
