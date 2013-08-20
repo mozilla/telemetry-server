@@ -23,69 +23,71 @@ function unique_name(name) {
 function postRequest(request, response, callback) {
   var data_length = parseInt(request.headers["content-length"]);
   if (!data_length) {
-    finish(411, request, response, "Missing content length");
-  } else if (data_length > max_data_length) {
-    finish(413, request, response, "Request too large (" + data_length + " bytes). Limit is " + max_data_length + " bytes");
+    return finish(411, request, response, "Missing content length");
+  }
+  if (data_length > max_data_length) {
+    return finish(413, request, response, "Request too large (" + data_length + " bytes). Limit is " + max_data_length + " bytes");
     // TODO: return 202 Accepted instead (so that clients don't retry)?
-  } else if (request.method != 'POST') {
-    finish(405, request, response, "Wrong request type");
-  } else if (request.url.length > max_path_length) {
+  }
+  if (request.method != 'POST') {
+    return finish(405, request, response, "Wrong request type");
+  }
+  if (request.url.length > max_path_length) {
     // TODO: stop at the "?" part of the url?
-    finish(413, request, response, "Path too long (" + request.url.length + " bytes). Limit is " + max_path_length + " bytes");
-  } else {
-    var chunks = [];
-    request.on('data', function(data) {
-      chunks.push(data);
-    });
+    return finish(413, request, response, "Path too long (" + request.url.length + " bytes). Limit is " + max_path_length + " bytes");
+  }
+  var chunks = [];
+  request.on('data', function(data) {
+    chunks.push(data);
+  });
 
-    request.on('end', function() {
-      var data_offset = 2 * 4;
-      var path_length = request.url.length;
-      var buffer_length = path_length + data_length + data_offset;
-      var buf = new Buffer(buffer_length);
+  request.on('end', function() {
+    var data_offset = 2 * 4;
+    var path_length = request.url.length;
+    var buffer_length = path_length + data_length + data_offset;
+    var buf = new Buffer(buffer_length);
 
-      // Write the preamble so we can read the pieces back out:
-      // 4 bytes to indicate path length
-      // 4 bytes to indicate data length
-      buf.writeUInt32LE(path_length, 0);
-      buf.writeUInt32LE(data_length, 4);
+    // Write the preamble so we can read the pieces back out:
+    // 4 bytes to indicate path length
+    // 4 bytes to indicate data length
+    buf.writeUInt32LE(path_length, 0);
+    buf.writeUInt32LE(data_length, 4);
 
-      // now write the path:
-      buf.write(request.url, data_offset);
+    // now write the path:
+    buf.write(request.url, data_offset);
 
-      // now write all the data:
-      numchunks = chunks.length;
-      pos = data_offset + path_length;
+    // now write all the data:
+    numchunks = chunks.length;
+    pos = data_offset + path_length;
 
-      for (var i = 0; i < numchunks; i++) {
-        //console.log("writing chunk " + i + " (" + chunks[i].length + " bytes)");
-        chunks[i].copy(buf, pos);
-        pos += chunks[i].length;
+    for (var i = 0; i < numchunks; i++) {
+      //console.log("writing chunk " + i + " (" + chunks[i].length + " bytes)");
+      chunks[i].copy(buf, pos);
+      pos += chunks[i].length;
+    }
+
+    fs.appendFile(log_file, buf, function (err) {
+      if (err) {
+        finish(500, request, response, err);
+        throw err;
       }
 
-      fs.appendFile(log_file, buf, function (err) {
-        if (err) {
-          finish(500, request, response, err);
-          throw err;
+      // If length of outputfile is > max_log_size, rename it to something unique
+      // TODO: this should be part of the append() logic - if f.tell() > max, rotate immediately.
+      try {
+        stats = fs.statSync(log_file);
+        if (stats.size > max_log_size) {
+          console.log("rotating log file after " + stats.size + " bytes " + process.pid);
+          fs.renameSync(log_file, unique_name(log_file));
         }
+      } catch (err) {
+        console.log("failed to rotate log file - someone else probably did it already");
+      }
 
-        // If length of outputfile is > max_log_size, rename it to something unique
-        // TODO: this should be part of the append() logic - if f.tell() > max, rotate immediately.
-        try {
-          stats = fs.statSync(log_file);
-          if (stats.size > max_log_size) {
-            console.log("rotating log file after " + stats.size + " bytes " + process.pid);
-            fs.renameSync(log_file, unique_name(log_file));
-          }
-        } catch (err) {
-          console.log("failed to rotate log file - someone else probably did it already");
-        }
-
-        // All is well, call the callback
-        callback();
-      });
+      // All is well, call the callback
+      callback();
     });
-  }
+  });
 }
 
 function run_server(port) {
