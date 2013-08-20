@@ -2,17 +2,45 @@ var http = require('http');
 var fs = require('fs');
 var max_data_length = 200 * 1024;
 var max_path_length = 10 * 1024;
-var log_file = "log.txt";
+var log_path = "./";
+var log_base = "telemetry.log";
 if (process.argv.length > 2) {
-  log_file = process.argv[2];
+  log_path = process.argv[2];
 }
+var log_file = unique_name(log_base);
+var log_size = 0;
 console.log("Using log file: " + log_file);
 
-var max_log_size = 500000000;
+var max_log_size = 500 * 1024 * 1024;
+var max_log_age_ms = 60 * 60 * 1000; // 1 hour in milliseconds
+//var max_log_age_ms = 60 * 1000; // 1 minute in milliseconds
+
+// TODO: keep track of "last touched" and don't rotate
+//       until they've been untouched for max_log_age_ms.
+// Rotate any in-progress logs occasionally.
+var timer = setInterval(function(){ rotate(); }, max_log_age_ms);
 
 function finish(code, request, response, msg) {
   response.writeHead(code, {'Content-Type': 'text/plain'});
   response.end(msg);
+}
+
+function rotate() {
+  // Don't bother rotating empty log files (presumably by time).
+  if (log_size == 0) {
+    console.log("not rotating empty log");
+    return;
+  }
+  console.log("rotating " + log_file + " after " + log_size + " bytes");
+  fs.rename(log_file, log_file + ".finished", function (err) {
+    if (err) {
+      console.log("Error rotating " + log_file + " (" + log_size + "): " + err);
+    }
+  });
+
+  // Start a new file whether the rename succeeded or not.
+  log_file = unique_name(log_base);
+  log_size = 0;
 }
 
 function unique_name(name) {
@@ -36,52 +64,39 @@ function postRequest(request, response, callback) {
     // TODO: stop at the "?" part of the url?
     return finish(413, request, response, "Path too long (" + request.url.length + " bytes). Limit is " + max_path_length + " bytes");
   }
-  var chunks = [];
+  var data_offset = 2 * 4;
+  var path_length = request.url.length;
+  var buffer_length = path_length + data_length + data_offset;
+  var buf = new Buffer(buffer_length);
+
+  // Write the preamble so we can read the pieces back out:
+  // 4 bytes to indicate path length
+  // 4 bytes to indicate data length
+  buf.writeUInt32LE(path_length, 0);
+  buf.writeUInt32LE(data_length, 4);
+
+  // now write the path:
+  buf.write(request.url, data_offset);
+  var pos = data_offset + path_length;
+
+  // Write the data as it comes in
   request.on('data', function(data) {
-    chunks.push(data);
+    data.copy(buf, pos);
+    pos += data.length;
   });
 
   request.on('end', function() {
-    var data_offset = 2 * 4;
-    var path_length = request.url.length;
-    var buffer_length = path_length + data_length + data_offset;
-    var buf = new Buffer(buffer_length);
-
-    // Write the preamble so we can read the pieces back out:
-    // 4 bytes to indicate path length
-    // 4 bytes to indicate data length
-    buf.writeUInt32LE(path_length, 0);
-    buf.writeUInt32LE(data_length, 4);
-
-    // now write the path:
-    buf.write(request.url, data_offset);
-
-    // now write all the data:
-    numchunks = chunks.length;
-    pos = data_offset + path_length;
-
-    for (var i = 0; i < numchunks; i++) {
-      //console.log("writing chunk " + i + " (" + chunks[i].length + " bytes)");
-      chunks[i].copy(buf, pos);
-      pos += chunks[i].length;
-    }
-
+    // Write buffered data to file.
     fs.appendFile(log_file, buf, function (err) {
       if (err) {
-        finish(500, request, response, err);
-        throw err;
+        console.log("Error appending to log file: " + err);
+        // TODO: what about log_size?
+        return finish(500, request, response, err);
       }
-
-      // If length of outputfile is > max_log_size, rename it to something unique
-      // TODO: this should be part of the append() logic - if f.tell() > max, rotate immediately.
-      try {
-        stats = fs.statSync(log_file);
-        if (stats.size > max_log_size) {
-          console.log("rotating log file after " + stats.size + " bytes " + process.pid);
-          fs.renameSync(log_file, unique_name(log_file));
-        }
-      } catch (err) {
-        console.log("failed to rotate log file - someone else probably did it already");
+      log_size += buf.length;
+      // If length of outputfile is > max_log_size, start writing a new one.
+      if (log_size > max_log_size) {
+        rotate();
       }
 
       // All is well, call the callback
@@ -91,8 +106,6 @@ function postRequest(request, response, callback) {
 }
 
 function run_server(port) {
-  // Workers can share any TCP connection
-  // In this case its a HTTP server
   http.createServer(function(request, response) {
     postRequest(request, response, function() {
       finish(200, request, response, 'OK');
@@ -113,5 +126,16 @@ if (cluster.isMaster) {
     console.log('worker ' + worker.process.pid + ' died');
   });
 } else {
+  // TODO: make this work so we can finalize our log files on exit.
+  /*
+  process.on('exit', function() {
+    console.log("Received exit message in pid " + process.pid);
+    // TODO: rename log to log.finished
+  });
+  process.on('SIGTERM', function() {
+    console.log("Received SIGTERM in pid " + process.pid);
+    // TODO: rename log to log.finished
+  });
+  */
   run_server(8080);
 }
