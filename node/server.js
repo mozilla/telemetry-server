@@ -9,9 +9,13 @@ if (process.argv.length > 2) {
   log_path = process.argv[2];
 }
 
+// TODO: URL Validation to ensure we're receiving dimensions
+// ^/submit/telemetry/id/reason/appName/appUpdateChannel/appVersion/appBuildID$
+// See http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#658
 var url_prefix = "/submit/telemetry/";
 var url_prefix_len = url_prefix.length;
 var log_file = unique_name(log_base);
+var log_time = new Date().getTime();
 var log_size = 0;
 console.log("Using log file: " + log_file);
 
@@ -22,20 +26,30 @@ var max_log_age_ms = 60 * 60 * 1000; // 1 hour in milliseconds
 // TODO: keep track of "last touched" and don't rotate
 //       until they've been untouched for max_log_age_ms.
 // Rotate any in-progress logs occasionally.
-var timer = setInterval(function(){ rotate(); }, max_log_age_ms);
+var timer = setInterval(function(){ rotate_time(); }, max_log_age_ms);
 
 function finish(code, request, response, msg) {
   response.writeHead(code, {'Content-Type': 'text/plain'});
   response.end(msg);
 }
 
-function rotate() {
-  // Don't bother rotating empty log files (presumably by time).
+// We don't want to do this calculation within rotate() because it is also
+// called when the log reaches the max size and we don't need to check both
+// conditions (time and size) every time.
+function rotate_time() {
+  // Don't bother rotating empty log files (by time).
   if (log_size == 0) {
-    console.log("not rotating empty log");
     return;
   }
-  console.log("rotating " + log_file + " after " + log_size + " bytes");
+  last_modified_age = new Date().getTime() - log_time;
+  if (last_modified_age > max_log_age_ms) {
+    console.log("Time to rotate " + log_file + " unmodified for " + last_modified_age + "ms");
+    rotate();
+  }
+}
+
+function rotate() {
+  console.log("Rotating " + log_file + " after " + log_size + " bytes");
   fs.rename(log_file, log_file + ".finished", function (err) {
     if (err) {
       console.log("Error rotating " + log_file + " (" + log_size + "): " + err);
@@ -113,6 +127,7 @@ function postRequest(request, response, callback) {
         return finish(500, request, response, err);
       }
       log_size += buf.length;
+      log_time = new Date().getTime();
       // If length of outputfile is > max_log_size, start writing a new one.
       if (log_size > max_log_size) {
         rotate();
