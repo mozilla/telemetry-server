@@ -1,4 +1,4 @@
-import sys, struct, re, os, argparse, zlib
+import sys, struct, re, os, argparse, gzip, StringIO
 import simplejson as json
 from persist import StorageLayout
 from telemetry_schema import TelemetrySchema
@@ -47,18 +47,24 @@ def main():
             break
         len_path, len_data = struct.unpack("II", lengths)
         path = unicode(fin.read(len_path), errors="replace")
+        #print "Path for record", record_count, path, "length of data:", len_data
 
-        print "Path for record", record_count, path, "length of data:", len_data
-        # TODO: detect and handle gzipped data.
+        # Detect and handle gzipped data.
         data = fin.read(len_data)
         try:
-            data = unicode(zlib.decompress(data, -1), errors="replace")
-        except zlib.error, e:
-            print e
+            # Note: from brief testing, cStringIO doesn't appear to be any
+            #       faster. In fact, it seems slightly slower than StringIO.
+            data_reader = StringIO.StringIO(data)
+            uncompressor = gzip.GzipFile(fileobj=data_reader, mode="r")
+            data = unicode(uncompressor.read(), errors="replace")
+            uncompressor.close()
+            data_reader.close()
+        except Exception, e:
+            #print e
+            # Use the string as-is
             data = unicode(data, errors="replace")
 
         bytes_read += 8 + len_path + len_data
-
         #print "Path for record", record_count, path, "length of data:", len_data, "data:", data[0:5] + "..."
 
         path_components = path.split("/")
@@ -76,8 +82,7 @@ def main():
         info["appUpdateChannel"] = path_components.pop(0)
         info["appBuildID"] = path_components.pop(0)
         dimensions = schema.dimensions_from(info, submission_date)
-        
-        print "  Converted path to filename", schema.get_filename(args.output_dir, dimensions)
+        #print "  Converted path to filename", schema.get_filename(args.output_dir, dimensions)
         storage.write(key, data, dimensions)
     duration = timer.delta_sec(start)
     mb_read = bytes_read / 1024.0 / 1024.0
