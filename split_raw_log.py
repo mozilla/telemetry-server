@@ -1,10 +1,11 @@
-import sys, struct, re, os, argparse
+import sys, struct, re, os, argparse, zlib
 import simplejson as json
 from persist import StorageLayout
 from telemetry_schema import TelemetrySchema
-from datetime import date
+from datetime import date, datetime
+import util.timer as timer
 
-filename_timestamp_pattern = re.compile("^telemetry.log.([0-9]+).([0-9]+)$")
+filename_timestamp_pattern = re.compile("^telemetry.log.([0-9]+).([0-9]+)(.finished)?$")
 
 def main():
     parser = argparse.ArgumentParser(description='Split raw logs into partitioned files.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -33,9 +34,11 @@ def main():
     m = filename_timestamp_pattern.match(os.path.basename(args.input_file))
     submission_date = date.today().strftime("%Y%m%d")
     if m:
-        timestamp = int(m.group(2))
+        timestamp = int(m.group(2)) / 1000
         submission_date = date.fromtimestamp(timestamp).strftime("%Y%m%d")
 
+    bytes_read = 0
+    start = datetime.now()
     while True:
         record_count += 1
         # Read 2 * 4 bytes
@@ -43,10 +46,20 @@ def main():
         if lengths == '':
             break
         len_path, len_data = struct.unpack("II", lengths)
-        path = fin.read(len_path)
-        data = fin.read(len_data)
+        path = unicode(fin.read(len_path), errors="replace")
 
-        print "Path for record", record_count, path, "length of data:", len_data, "data:", data[0:5] + "..."
+        print "Path for record", record_count, path, "length of data:", len_data
+        # TODO: detect and handle gzipped data.
+        data = fin.read(len_data)
+        try:
+            data = unicode(zlib.decompress(data, -1), errors="replace")
+        except zlib.error, e:
+            print e
+            data = unicode(data, errors="replace")
+
+        bytes_read += 8 + len_path + len_data
+
+        #print "Path for record", record_count, path, "length of data:", len_data, "data:", data[0:5] + "..."
 
         path_components = path.split("/")
         if len(path_components) != expected_dim_count:
@@ -56,10 +69,19 @@ def main():
             continue
 
         key = path_components.pop(0)
-        path_components.append(submission_date)
+        info = {}
+        info["reason"] = path_components.pop(0)
+        info["appName"] = path_components.pop(0)
+        info["appVersion"] = path_components.pop(0)
+        info["appUpdateChannel"] = path_components.pop(0)
+        info["appBuildID"] = path_components.pop(0)
+        dimensions = schema.dimensions_from(info, submission_date)
         
-        print "  Converted path to filename", schema.get_filename(args.output_dir, path_components)
-        storage.write(key, data, path_components)
+        print "  Converted path to filename", schema.get_filename(args.output_dir, dimensions)
+        storage.write(key, data, dimensions)
+    duration = timer.delta_sec(start)
+    mb_read = bytes_read / 1024.0 / 1024.0
+    print "Read %.2fMB in %.2fs (%.2fMB/s)" % (mb_read, duration, mb_read / duration)
 
 if __name__ == "__main__":
     sys.exit(main())
