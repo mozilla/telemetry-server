@@ -18,6 +18,7 @@ from urlparse import urlparse
 from datetime import datetime
 from multiprocessing import Process, Queue
 import zlib
+import timer
 
 def send(conn, path, data):
     conn.request("POST", path, data)
@@ -27,19 +28,6 @@ def send(conn, path, data):
 #        print "Got an unexpected response:", response.status
 #        print result
     return result
-
-def delta_ms(start, end=None):
-    if end is None:
-        end = datetime.now()
-    delta = end - start
-    ms = delta.seconds * 1000.0 + float(delta.microseconds) / 1000.0
-    # prevent division-by-zero errors by cheating:
-    if ms == 0.0:
-        return 0.0001
-    return ms
-
-def delta_sec(start, end=None):
-    return delta_ms(start, end) / 1000.0
 
 def print_stats(label, total_mb, record_count, request_count, total_sec):
     print "%s, sent %.2fMB: %d records in %d requests in %.2f seconds: %.2fMB/s, %.2f reqs/s, %.2f records/s" % (label, total_mb, record_count, request_count, total_sec, total_mb / total_sec, request_count / total_sec, record_count / total_sec)
@@ -94,7 +82,7 @@ def run_benchmark(args):
         h.join()
 
     results = [result_queue.get() for h in helpers]
-    duration = delta_sec(start)
+    duration = timer.delta_sec(start)
     size_sent = 0.0
     records_sent = 0
     requests_sent = 0
@@ -164,7 +152,7 @@ def send_records(worker_id, lines, args, queue=None):
                 resp = "created"
             else:
                 resp = send(conn, path, data)
-            ms = delta_ms(start)
+            ms = timer.delta_ms(start)
             latencies.append(ms)
             if worst_time < ms:
                 worst_time = ms
@@ -185,7 +173,7 @@ def send_records(worker_id, lines, args, queue=None):
             resp = "created"
         else:
             resp = send(conn, path, data)
-        ms = delta_ms(start)
+        ms = timer.delta_ms(start)
         latencies.append(ms)
         if worst_time < ms:
             worst_time = ms
