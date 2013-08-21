@@ -20,7 +20,7 @@ var log_size = 0;
 console.log("Using log file: " + log_file);
 
 var max_log_size = 500 * 1024 * 1024;
-var max_log_age_ms = 60 * 60 * 1000; // 1 hour in milliseconds
+var max_log_age_ms = 5 * 60 * 1000; // 5 minutes in milliseconds
 //var max_log_age_ms = 60 * 1000; // 1 minute in milliseconds
 
 // TODO: keep track of "last touched" and don't rotate
@@ -37,8 +37,10 @@ function finish(code, request, response, msg) {
 // called when the log reaches the max size and we don't need to check both
 // conditions (time and size) every time.
 function rotate_time() {
-  // Don't bother rotating empty log files (by time).
+  // Don't bother rotating empty log files (by time). Instead, assign a new
+  // name so that the timestamp reflects the contained data.
   if (log_size == 0) {
+    log_file = unique_name(log_base);
     return;
   }
   last_modified_age = new Date().getTime() - log_time;
