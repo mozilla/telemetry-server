@@ -5,6 +5,12 @@ TODO
 - [P1] Add a server unique identifier to the log file names so that we can run
        many server nodes, or possibly just add a UUID to the filename instead
        of .3.log, .4.log, etc.
+- [PX] Have "process incoming" accept a list of filenames
+- [PX] Have the "process incoming launcher" specify a list of files to process
+- [PX] Verify each step of process_incoming.py, make sure that if we have any
+       failures, we do not end up publishing partial results
+- [PX] SSH Tunnel for replaying from prod -> proto
+- [PX] Add hostname to raw log files to prevent dupes
 - [P2] nginx: Check into load-balancing
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
