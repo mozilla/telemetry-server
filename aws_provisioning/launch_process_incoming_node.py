@@ -39,13 +39,14 @@ def bootstrap_instance(config, instance):
         sudo("python setup.py install")
     with cd(home + "/telemetry-server"):
         # "data" is a dummy dir just to give it somewhere to look for local data.
+        run("git checkout node_server")
         run("mkdir work processed")
 
-def run(config, instance):
+def process_incoming(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     home = "/home/" + ssl_user
     with cd(home + "/telemetry-server"):
-        run('python process_incoming.py -k "%s" -s "%s" -w work -o processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"))
+        run('python process_incoming.py -k "%s" -s "%s" -w work -o processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"]))
 
 if len(sys.argv) < 2:
     print "Usage:", sys.argv[0], "/path/to/config_file.json"
@@ -60,10 +61,10 @@ print json.dumps(config)
 #sys.exit(-1)
 
 if "instance_id" in config:
-    conn, instance = aws_util.get_instance(config)
-else:
     conn = aws_util.connect_cfg(config)
-    instance = aws_util.create_instance(conn, config["instance_id"])
+    instance = aws_util.get_instance(conn, config["instance_id"])
+else:
+    conn, instance = aws_util.create_instance(config)
 
 try:
     ssl_user = config.get("ssl_user", "ubuntu")
@@ -86,7 +87,7 @@ try:
         sys.exit(2)
 
     bootstrap_instance(config, instance)
-    run(config, instance)
+    process_incoming(config, instance)
 finally:
     # All done: Terminate this mofo
     print "Terminating", instance.id
