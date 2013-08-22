@@ -46,6 +46,8 @@ def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
     return result
 
 def split_raw_logs(files, output_dir, schema_file):
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
     split_cmd = ["python"]
     split_cmd.append("-o")
     split_cmd.append(args.output_dir)
