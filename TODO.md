@@ -10,7 +10,6 @@ TODO
 - [PX] Verify each step of process_incoming.py, make sure that if we have any
        failures, we do not end up publishing partial results
 - [PX] SSH Tunnel for replaying from prod -> proto
-- [PX] Add hostname to raw log files to prevent dupes
 - [PX] Add "received at" timestamps to the server log
 - [P2] nginx: Check into load-balancing
 - [P2] nginx: Accept gzip-encoded submissions

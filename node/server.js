@@ -1,5 +1,6 @@
 var http = require('http');
 var fs = require('fs');
+var os = require('os');
 var url = require('url');
 var max_data_length = 200 * 1024;
 var max_path_length = 10 * 1024;
@@ -65,7 +66,7 @@ function rotate() {
 
 function unique_name(name) {
   // Could use UUID or something, but pid + timestamp should suffice.
-  return log_path + "/" + name + "." + process.pid + "." + new Date().getTime();
+  return log_path + "/" + name + "." + os.hostname() + "." + process.pid + "." + new Date().getTime();
 }
 
 function postRequest(request, response, callback) {
@@ -150,7 +151,7 @@ function run_server(port) {
   console.log("Listening on port "+port);
 }
 var cluster = require('cluster');
-var numCPUs = require('os').cpus().length;
+var numCPUs = os.cpus().length;
 
 if (cluster.isMaster) {
   // Fork workers.
