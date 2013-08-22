@@ -50,9 +50,9 @@ def split_raw_logs(files, output_dir, schema_file):
         os.makedirs(output_dir)
     split_cmd = ["python"]
     split_cmd.append("-o")
-    split_cmd.append(args.output_dir)
+    split_cmd.append(output_dir)
     split_cmd.append("-t")
-    split_cmd.append(args.telemetry_schema)
+    split_cmd.append(schema_file)
     split_cmd.append("-i")
     for raw_log in files:
        result = subprocess.call(split_cmd + [raw_log])
