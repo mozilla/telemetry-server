@@ -25,12 +25,13 @@ class Exporter:
     UPLOADABLE_PATTERN = re.compile("^.*\\" + StorageLayout.COMPRESSED_SUFFIX + "$")
     MIN_UPLOADABLE_SIZE = 50
 
-    def __init__(self, data_dir, bucket, aws_key, aws_secret_key, batch_size):
+    def __init__(self, data_dir, bucket, aws_key, aws_secret_key, batch_size, pattern):
         self.data_dir = data_dir
         self.bucket = bucket
         self.aws_key = aws_key
         self.aws_secret_key = aws_secret_key
         self.batch_size = batch_size
+        self.pattern = pattern
         self.s3f_cmd = [Exporter.S3F_PATH, bucket, "put", "-a", aws_key,
                 "-s", aws_secret_key, "-t", str(Exporter.S3F_THREADS),
                 "--put-only-new", "--put-full-path"]
@@ -128,7 +129,7 @@ class Exporter:
         uploadables = []
         for root, dirs, files in os.walk(self.data_dir):
             for f in files:
-                m = Exporter.UPLOADABLE_PATTERN.match(f)
+                m = self.pattern.match(f)
                 if m:
                     full_file = os.path.join(root, f)
                     file_size = os.path.getsize(full_file)
@@ -180,6 +181,7 @@ class Exporter:
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Export Telemetry data")
     parser.add_argument("-d", "--data-dir", help="Path to the root of the telemetry data", required=True)
+    parser.add_argument("-p", "--file-pattern", help="Filenames must match this pattern to be uploaded", default=Exporter.UPLOADABLE_PATTERN)
     parser.add_argument("-b", "--bucket", help="S3 Bucket name", default="mreid-telemetry-dev")
     parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
     parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
@@ -196,7 +198,14 @@ def main(argv=None):
         print "ERROR:", args.data_dir, "is not a valid directory"
         parser.print_help()
         return 2
-    exporter = Exporter(args.data_dir, args.bucket, args.aws_key, args.aws_secret_key, args.batch_size)
+
+    pattern = None
+    try:
+        pattern = re.compile(args.file_pattern)
+    except Exception, e:
+        print "ERROR: invalid file pattern:", args.file_pattern, " (must be a valid regex)"
+        return 3
+    exporter = Exporter(args.data_dir, args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern)
     return exporter.export()
 
 if __name__ == "__main__":

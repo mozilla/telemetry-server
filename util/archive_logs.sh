@@ -16,6 +16,11 @@ if [ -z "$DATA_DIR" ] || [ ! -d "$DATA_DIR" ]; then
   exit 2
 fi
 
+if [ ! -f "$CODE_DIR/histogram_tools.py" ]; then
+  echo "Fetching histogram_tools.py"
+  bash ./get_histogram_tools.sh
+fi
+
 PYTHON=/usr/bin/python
 cd $CODE_DIR
 # Note that this assumes a bunch of stuff, including that all the defaults
