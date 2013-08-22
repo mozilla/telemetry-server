@@ -92,6 +92,7 @@ def main():
     print "Fetching file list from S3..."
     for f in incoming_bucket.list():
         incoming_filenames.append(f.name)
+        print "  ", f.name
     print "Done"
 
     result = 0
@@ -126,6 +127,7 @@ def main():
 
     print "Removing processed logs from S3..."
     for f in incoming_filenames:
+        print "  Deleting", f
         incoming_bucket.delete_key(f)
     print "Done"
 
