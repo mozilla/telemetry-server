@@ -87,6 +87,7 @@ def main():
     duration = timer.delta_sec(start)
     mb_read = bytes_read / 1024.0 / 1024.0
     print "Read %.2fMB in %.2fs (%.2fMB/s)" % (mb_read, duration, mb_read / duration)
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())
