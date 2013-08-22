@@ -11,6 +11,7 @@ TODO
        failures, we do not end up publishing partial results
 - [PX] SSH Tunnel for replaying from prod -> proto
 - [PX] Add hostname to raw log files to prevent dupes
+- [PX] Add "received at" timestamps to the server log
 - [P2] nginx: Check into load-balancing
 - [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
