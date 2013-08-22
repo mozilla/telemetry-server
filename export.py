@@ -25,13 +25,14 @@ class Exporter:
     UPLOADABLE_PATTERN = re.compile("^.*\\" + StorageLayout.COMPRESSED_SUFFIX + "$")
     MIN_UPLOADABLE_SIZE = 50
 
-    def __init__(self, data_dir, bucket, aws_key, aws_secret_key, batch_size, pattern):
+    def __init__(self, data_dir, bucket, aws_key, aws_secret_key, batch_size, pattern, remove_files):
         self.data_dir = data_dir
         self.bucket = bucket
         self.aws_key = aws_key
         self.aws_secret_key = aws_secret_key
         self.batch_size = batch_size
         self.pattern = pattern
+        self.remove_files = remove_files
         self.s3f_cmd = [Exporter.S3F_PATH, bucket, "put", "-a", aws_key,
                 "-s", aws_secret_key, "-t", str(Exporter.S3F_THREADS),
                 "--put-only-new", "--put-full-path"]
@@ -80,17 +81,17 @@ class Exporter:
                     print "ERROR: %s failed checksum verification: Local=%s, Remote=%s" % (f, md5, remote_md5)
                     result = -1
                 else:
-                    # Validation passed.
-                    # Keep a copy of the original, just in case.
-                    # TODO: This can either be removed for production use,
-                    #       or we can have yet another cleanup job to remove
-                    #       them on a schedule.
-                    os.rename(full_filename, full_filename + ".uploaded")
+                    # Validation passed. Time to clean up the file.
+                    if not self.remove_files:
+                        # Keep a copy of the original, just in case.
+                        os.rename(full_filename, full_filename + ".uploaded")
 
                     # Create / Truncate: we must keep the original file around to
                     # properly calculate the next archived log number, ie if we
                     # are uploading whatever.log.5.lzma, the next one should still
                     # be whatever.log.6.lzma.
+                    # TODO: if we switch to using UUIDs in the filename, we can
+                    #       stop keeping the dummy files around.
                     h = open(full_filename, "w")
                     h.close()
         else:
@@ -181,10 +182,11 @@ class Exporter:
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Export Telemetry data")
     parser.add_argument("-d", "--data-dir", help="Path to the root of the telemetry data", required=True)
-    parser.add_argument("-p", "--file-pattern", help="Filenames must match this pattern to be uploaded", default=Exporter.UPLOADABLE_PATTERN)
+    parser.add_argument("-p", "--file-pattern", help="Filenames must match this regular expression to be uploaded", default=Exporter.UPLOADABLE_PATTERN)
     parser.add_argument("-b", "--bucket", help="S3 Bucket name", default="mreid-telemetry-dev")
     parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
     parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
+    parser.add_argument("--remove-files", help="Remove files after successfully uploading (default is to rename them to X.uploaded)", action="store_true")
     parser.add_argument("-B", "--batch-size", help="Number of files to upload at a time", default=8)
     args = parser.parse_args()
 
@@ -205,7 +207,7 @@ def main(argv=None):
     except Exception, e:
         print "ERROR: invalid file pattern:", args.file_pattern, " (must be a valid regex)"
         return 3
-    exporter = Exporter(args.data_dir, args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern)
+    exporter = Exporter(args.data_dir, args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern, args.remove_files)
     return exporter.export()
 
 if __name__ == "__main__":
