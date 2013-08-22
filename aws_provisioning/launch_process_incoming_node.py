@@ -39,6 +39,7 @@ def bootstrap_instance(config, instance):
         sudo("python setup.py install")
     with cd(home + "/telemetry-server"):
         # "data" is a dummy dir just to give it somewhere to look for local data.
+        # FIXME: remove this once we merge into 'master'
         run("git checkout node_server")
         run("mkdir work processed")
 
