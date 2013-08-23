@@ -102,7 +102,7 @@ function postRequest(request, response, callback) {
   var buffer_length = path_length + data_length + data_offset;
   var buf = new Buffer(buffer_length);
 
-  console.log("Received " + data_length + " on " + url_path + " at " + request_time);
+  //console.log("Received " + data_length + " on " + url_path + " at " + request_time);
 
   // Write the preamble so we can read the pieces back out:
   // 4 bytes to indicate path length
