@@ -17,11 +17,12 @@ import httplib, urllib
 from urlparse import urlparse
 from datetime import datetime
 from multiprocessing import Process, Queue
-import zlib
+import gzip
+import StringIO
 import timer
 
-def send(conn, path, data):
-    conn.request("POST", path, data)
+def send(conn, path, data, headers=None):
+    conn.request("POST", path, data, headers)
     response = conn.getresponse()
     result = response.read()
 #    if response.status > 201:
@@ -58,7 +59,12 @@ def run_benchmark(args):
             data = line
         if data and args.gzip_compress:
             size_before = len(data)
-            data = zlib.compress(data)
+            writer = StringIO.StringIO()
+            gzipper = gzip.GzipFile(fileobj=writer, mode="wb")
+            gzipper.write(data)
+            gzipper.close()
+            data = writer.getvalue()
+            writer.close()
             size_after = len(data)
             if args.verbose:
                 print "Before compression, payload was", size_before, ", after:", size_after, ", ratio:", float(size_before - size_after) / size_before
@@ -98,8 +104,10 @@ def send_records(worker_id, lines, args, queue=None):
     conn = httplib.HTTPConnection(args.server_name)
     urltemplate = "/submit/telemetry/%s"
     worst_time = -1.0
-    #headers = {"Content-type": "application/x-www-form-urlencoded",
-    #           "Accept": "text/plain"}
+    headers = {"Content-Type": "application/json; charset=UTF-8"}
+    if args.gzip_compress:
+        headers["Content-Encoding"] = "gzip";
+
     total_ms = 0.0
     record_count = 0
     request_count = 0
@@ -140,18 +148,12 @@ def send_records(worker_id, lines, args, queue=None):
                 batch = []
 
         if data:
-            #if args.gzip_compress:
-            #    size_before = len(data)
-            #    data = zlib.compress(data)
-            #    size_after = len(data)
-            #    if args.verbose:
-            #        print "Before compression, payload was", size_before, ", after:", size_after, ", ratio:", float(size_before - size_after) / size_before
             start = datetime.now()
             #print "Sending to path:", path
             if args.dry_run:
                 resp = "created"
             else:
-                resp = send(conn, path, data)
+                resp = send(conn, path, data, headers)
             ms = timer.delta_ms(start)
             latencies.append(ms)
             if worst_time < ms:
@@ -172,7 +174,7 @@ def send_records(worker_id, lines, args, queue=None):
         if args.dry_run:
             resp = "created"
         else:
-            resp = send(conn, path, data)
+            resp = send(conn, path, data, headers)
         ms = timer.delta_ms(start)
         latencies.append(ms)
         if worst_time < ms:
