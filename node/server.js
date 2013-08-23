@@ -70,6 +70,7 @@ function unique_name(name) {
 }
 
 function postRequest(request, response, callback) {
+  var request_time = new Date().getTime();
   var data_length = parseInt(request.headers["content-length"]);
   if (!data_length) {
     return finish(411, request, response, "Missing content length");
@@ -97,15 +98,27 @@ function postRequest(request, response, callback) {
   if (path_length > max_path_length) {
     return finish(413, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes");
   }
-  var data_offset = 2 * 4;
+  var data_offset = 16; // 4 path + 4 data + 8 timestamp
   var buffer_length = path_length + data_length + data_offset;
   var buf = new Buffer(buffer_length);
+
+  console.log("Received " + data_length + " on " + url_path + " at " + request_time);
 
   // Write the preamble so we can read the pieces back out:
   // 4 bytes to indicate path length
   // 4 bytes to indicate data length
+  // 8 bytes to indicate request timestamp (epoch) split into two 4-byte writes
   buf.writeUInt32LE(path_length, 0);
   buf.writeUInt32LE(data_length, 4);
+
+  // Blast the lack of 64 bit int support :(
+  // Standard bitwise operations treat numbers as 32-bit integers, so we have
+  // to do it the ugly way.  Note that Javascript can represent exact ints
+  // up to 2^53 so timestamps are safe for approximately a bazillion years.
+  // This produces the equivalent of a single little-endian 64-bit value (and
+  // can be read back out that way by other code).
+  buf.writeUInt32LE(request_time % 0x100000000, 8);
+  buf.writeUInt32LE(Math.floor(request_time / 0x100000000), 12);
 
   // now write the path:
   buf.write(url_path, data_offset);
@@ -130,7 +143,7 @@ function postRequest(request, response, callback) {
         return finish(500, request, response, err);
       }
       log_size += buf.length;
-      log_time = new Date().getTime();
+      log_time = request_time;
       // If length of outputfile is > max_log_size, start writing a new one.
       if (log_size > max_log_size) {
         rotate();

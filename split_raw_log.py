@@ -31,21 +31,20 @@ def main():
 
     record_count = 0;
     fin = open(args.input_file, "rb")
-    m = filename_timestamp_pattern.match(os.path.basename(args.input_file))
-    submission_date = date.today().strftime("%Y%m%d")
-    if m:
-        timestamp = int(m.group(2)) / 1000
-        submission_date = date.fromtimestamp(timestamp).strftime("%Y%m%d")
 
     bytes_read = 0
     start = datetime.now()
     while True:
         record_count += 1
-        # Read 2 * 4 bytes
-        lengths = fin.read(8)
+        # Read two 4-byte values and one 8-byte value
+        lengths = fin.read(16)
         if lengths == '':
             break
-        len_path, len_data = struct.unpack("II", lengths)
+        len_path, len_data, timestamp = struct.unpack("<IIQ", lengths)
+
+        # Incoming timestamps are in milliseconds, so convert to POSIX first
+        # (ie. seconds)
+        submission_date = date.fromtimestamp(timestamp / 1000).strftime("%Y%m%d")
         path = unicode(fin.read(len_path), errors="replace")
         #print "Path for record", record_count, path, "length of data:", len_data
 
