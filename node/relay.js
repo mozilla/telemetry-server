@@ -15,13 +15,17 @@ var total_requests_completed = 0;
 var total_requests_error = 0;
 var data_sent = 0;
 
+function dumpstats() {
+  console.log("counts: " + JSON.stringify(counts) + ", sent: " + data_sent + " bytes in " + total_requests_sent + " requests, of which " + total_requests_completed + " completed normally.");
+}
+
 var partial = '';
 function line(l) {
   if (l.length > 0) {
     total_requests_sent++;
     //console.log("processing a line: " + l.substring(0, 80) + "...");
     if (total_requests_sent > 0 && total_requests_sent % 500 == 0) {
-      console.log("counts: " + JSON.stringify(counts) + ", sent: " + data_sent + " bytes in " + total_requests_sent + " requests, of which " + total_requests_completed + " completed normally.");
+      dumpstats();
     }
 
     var parts = l.split("\t");
@@ -57,7 +61,7 @@ function line(l) {
 }
 
 var server = net.createServer(function (socket) {
-  console.log("Server connected");
+  console.log("Client connected");
   socket.on('end', function() {
     line(partial);
     console.log("Client disconnected");
@@ -68,6 +72,7 @@ var server = net.createServer(function (socket) {
     if (outstanding > 500) {
       // If we don't rate-limit, we will run out of memory.
       console.log("there are too many outstanding requests (" + outstanding + "), pausing for 1sec");
+      dumpstats();
       socket.pause();
       setTimeout(function(){ socket.resume(); }, 1000);
     }
