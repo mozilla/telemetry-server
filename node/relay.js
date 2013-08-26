@@ -7,85 +7,150 @@ var options = {
   method: "POST"
 };
 
-var counts = {
+var DEBUG = false;
+
+var eol = new Buffer('\n');
+
+var stats = {
+  sent: 0,
+  completed: 0,
+  errors: 0,
+  responses: {
+  }
 };
 
-var total_requests_sent = 0;
-var total_requests_completed = 0;
-var total_requests_error = 0;
-var data_sent = 0;
+var timer = setInterval(function() {
+  console.log("Stats for " + new Date());
+  console.log("  requests sent:      " + stats.sent);
+  console.log("  requests completed: " + stats.completed);
+  console.log("  errors:             " + stats.errors);
+  console.log("  response codes:");
+  var keys = [];
+  for (var k in stats.responses) {
+    keys.push(k);
+  }
+  keys.sort();
+  for (var i = 0; i < keys.length; i++) {
+    console.log("    " + keys[i] + ": " + stats.responses[keys[i]]);
+  }
+}, 10000);
 
-function dumpstats() {
-  console.log("counts: " + JSON.stringify(counts) + ", sent: " + data_sent + " bytes in " + total_requests_sent + " requests, of which " + total_requests_completed + " completed normally.");
-}
-
-var partial = '';
-function line(l) {
-  if (l.length > 0) {
-    total_requests_sent++;
-    //console.log("processing a line: " + l.substring(0, 80) + "...");
-    if (total_requests_sent > 0 && total_requests_sent % 500 == 0) {
-      dumpstats();
-    }
-
-    var parts = l.split("\t");
-    var path = parts[0];
-    var data = parts[1];
-    //console.log("submitting to " + path);
-    options.path = path;
-    data_length = data.length + 1;
-    options.headers = {"Content-Length": data_length}
-    data_sent += data_length;
-    var req = http.request(options, function(response) {
-      if (counts[response.statusCode]) {
-        counts[response.statusCode]++;
-      } else {
-        counts[response.statusCode] = 1;
-      }
-      total_requests_completed++;
-    });
-
-    req.on('error', function(e) {
-      var k = "err:" + e.message;
-      total_requests_error++;
-      if (counts[k]) {
-        counts[k]++;
-      } else {
-        counts[k] = 1;
-      }
-    });
-    req.end(data + "\n");
-  //} else {
-  //  console.log("got an empty line");
+function debug(message) {
+  if(DEBUG) {
+    console.log(message);
   }
 }
 
+// process the data once it's reached end of line
+function processData(buf) {
+  //debug("buf is " + buf.toString());
+  if (buf.length == 0) {
+    return;
+  }
+  // manually search for \t == 9
+  var i = 0;
+  for (; i < buf.length; i++) {
+    // found \t
+    if (buf[i] === 9) {
+      options.path = buf.slice(0, i).toString();
+      break;
+    }
+  }
+
+  var path = buf.slice(0, i).toString();
+  var data = buf.slice(i + 1).toString();
+
+  debug("Path: " + path);
+  //debug("Data: " + data);
+  // now grab a slice of the rest
+  buf = buf.slice(i + 1);
+  //options.headers = { 'Content-Length': buf.length + 1};
+  options.headers = { 'Content-Length': buf.length};
+
+  var req = http.request(options, function(res) {
+    debug("req finished: " + res.statusCode);
+    stats.responses[res.statusCode] = (stats.responses[res.statusCode] || 0) + 1;
+    stats.completed++;
+    res.on('data', function(chunk) {
+      // discard.
+    });
+  });
+
+  /*
+  req.on('socket', function(socket) {
+    socket.setTimeout(500);
+    socket.on('timeout', function(){
+      console.log("request timed out, aborting");
+      req.abort();
+    });
+  });
+  */
+
+  req.on('error', function(e) {
+    console.log("Path " + path + " errored: " + e.message);
+    stats.errors++;
+  });
+
+  //req.write(buf);
+  //req.end(eol);
+  req.end(buf);
+  stats.sent++;
+}
+
+// in v0.10 this data comes from the SlabAllocator, and we don't want
+// to hold onto a large chunk of memory, so we're going to copy it out
+function dupChunk(buf, start, end) {
+  if (end - start < 0)
+    throw new RangeError('end - start < 0');
+
+  var new_buf = new Buffer(end - start);
+  buf.copy(new_buf, 0, start, end);
+  return new_buf;
+}
+
+var partials = [];
 var server = net.createServer(function (socket) {
-  console.log("Client connected");
+  console.log('Client connected');
+
+  socket.on('readable', function() {
+    debug("readable");
+    var data;
+    while (data = socket.read()) {
+      debug("read " + data.length + " bytes");
+      var start = 0;
+      var i = 0;
+      // manually search for new line (10 == ascii \n)
+      for (i = 0; i < data.length; i++) {
+        // we've hit a new line, copy out the data and process
+        if (data[i] === 10) {
+          debug("Found a new line at " + i);
+          // dupChunk copies up to one less than i (so it skips the newline)
+          debug("Adding eol partial #" + partials.length + " start: " + start + ", i:" + i);
+          partials.push(dupChunk(data, start, i));
+          processData(Buffer.concat(partials));
+          partials = [];
+          // add one to skip the new line
+          start = i + 1;
+          //debug("New start: " + start);
+          continue;
+        }
+      }
+      // we've reached the end of the buffer, and there's still buffer left
+      if (i === data.length && i > start) {
+        debug("Appending partial #" + partials.length + ", start:" + start + ", end:" + data.length);
+        //debug("Adding chunk: " + data.toString("utf8", start, data.length));
+        partials.push(dupChunk(data, start, data.length));
+      }
+    }
+  });
+
   socket.on('end', function() {
-    line(partial);
+    processData(Buffer.concat(partials));
     console.log("Client disconnected");
   });
 
-  socket.on('data', function(chunk) {
-    var outstanding = total_requests_sent - total_requests_completed - total_requests_error;
-    if (outstanding > 500) {
-      // If we don't rate-limit, we will run out of memory.
-      console.log("there are too many outstanding requests (" + outstanding + "), pausing for 1sec");
-      dumpstats();
-      socket.pause();
-      setTimeout(function(){ socket.resume(); }, 1000);
-    }
-    // console.log("Got a chunk of data");
-    partial += chunk;
-    var eol = partial.indexOf("\n");
-    while (eol > 0) {
-      // use eol - 1 to skip the \n itself.
-      line(partial.substring(0, eol - 1));
-      partial = partial.substring(eol + 1);
-      eol = partial.indexOf("\n");
-    }
-  });
 });
 
-server.listen(9090);
+server.listen(9090, function() {
+  console.log('Server listening on 127.0.0.1:9090');
+});
