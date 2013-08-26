@@ -11,18 +11,32 @@ var DEBUG = false;
 
 var eol = new Buffer('\n');
 
+var p_stats = null;
+
 var stats = {
   sent: 0,
   completed: 0,
   errors: 0,
+  bytes_sent: 0,
   responses: {
   }
 };
 
 var timer = setInterval(function() {
   console.log("Stats for " + new Date());
+  stats.ts = new Date().getTime();
   console.log("  requests sent:      " + stats.sent);
   console.log("  requests completed: " + stats.completed);
+  console.log("  bytes sent:         " + stats.bytes_sent);
+  if (p_stats != null) {
+    duration = (stats.ts - p_stats.ts) / 1000;
+    //console.log("  duration:           " + duration);
+    b_sent = stats.bytes_sent - p_stats.bytes_sent;
+    rate = (b_sent / 1024.0 / 1024.0) / duration;
+    console.log("  data rate:          " + rate.toFixed(2) + "MB/s");
+    console.log("  req comp rate:      " + ((stats.completed - p_stats.completed) / duration).toFixed(2) + "r/s");
+    console.log("  req send rate:      " + ((stats.sent - p_stats.sent) / duration).toFixed(2) + "r/s");
+  }
   console.log("  errors:             " + stats.errors);
   console.log("  response codes:");
   var keys = [];
@@ -33,6 +47,7 @@ var timer = setInterval(function() {
   for (var i = 0; i < keys.length; i++) {
     console.log("    " + keys[i] + ": " + stats.responses[keys[i]]);
   }
+  p_stats = JSON.parse(JSON.stringify(stats));
 }, 10000);
 
 function debug(message) {
@@ -71,6 +86,7 @@ function processData(buf) {
     debug("req finished: " + res.statusCode);
     stats.responses[res.statusCode] = (stats.responses[res.statusCode] || 0) + 1;
     stats.completed++;
+    stats.bytes_sent += buf.length;
     res.on('data', function(chunk) {
       // discard.
     });
@@ -112,35 +128,40 @@ var partials = [];
 var server = net.createServer(function (socket) {
   console.log('Client connected');
 
-  socket.on('readable', function() {
-    debug("readable");
-    var data;
-    while (data = socket.read()) {
-      debug("read " + data.length + " bytes");
-      var start = 0;
-      var i = 0;
-      // manually search for new line (10 == ascii \n)
-      for (i = 0; i < data.length; i++) {
-        // we've hit a new line, copy out the data and process
-        if (data[i] === 10) {
-          debug("Found a new line at " + i);
-          // dupChunk copies up to one less than i (so it skips the newline)
-          debug("Adding eol partial #" + partials.length + " start: " + start + ", i:" + i);
-          partials.push(dupChunk(data, start, i));
-          processData(Buffer.concat(partials));
-          partials = [];
-          // add one to skip the new line
-          start = i + 1;
-          //debug("New start: " + start);
-          continue;
-        }
+  socket.on('data', function(data) {
+    debug("data");
+    debug("read " + data.length + " bytes");
+    var start = 0;
+    var i = 0;
+    // manually search for new line (10 == ascii \n)
+    for (i = 0; i < data.length; i++) {
+      // we've hit a new line, copy out the data and process
+      if (data[i] === 10) {
+        debug("Found a new line at " + i);
+        // dupChunk copies up to one less than i (so it skips the newline)
+        debug("Adding eol partial #" + partials.length + " start: " + start + ", i:" + i);
+        partials.push(dupChunk(data, start, i));
+        processData(Buffer.concat(partials));
+        partials = [];
+        // add one to skip the new line
+        start = i + 1;
+        //debug("New start: " + start);
+        continue;
       }
-      // we've reached the end of the buffer, and there's still buffer left
-      if (i === data.length && i > start) {
-        debug("Appending partial #" + partials.length + ", start:" + start + ", end:" + data.length);
-        //debug("Adding chunk: " + data.toString("utf8", start, data.length));
-        partials.push(dupChunk(data, start, data.length));
-      }
+    }
+    // we've reached the end of the buffer, and there's still buffer left
+    if (i === data.length && i > start) {
+      debug("Appending partial #" + partials.length + ", start:" + start + ", end:" + data.length);
+      //debug("Adding chunk: " + data.toString("utf8", start, data.length));
+      partials.push(dupChunk(data, start, data.length));
+    }
+    var outstanding = stats.sent - stats.completed;
+    if (outstanding > 5000) {
+      socket.pause();
+      console.log("Too many pending requests (" + outstanding + "). pausing");
+      setTimeout(function(){
+        socket.resume();
+      }, 1000);
     }
   });
 
