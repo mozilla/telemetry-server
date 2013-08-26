@@ -39,10 +39,7 @@ var timer = setInterval(function() {
   }
   console.log("  errors:             " + stats.errors);
   console.log("  response codes:");
-  var keys = [];
-  for (var k in stats.responses) {
-    keys.push(k);
-  }
+  var keys = Object.keys(stats.responses);
   keys.sort();
   for (var i = 0; i < keys.length; i++) {
     console.log("    " + keys[i] + ": " + stats.responses[keys[i]]);
@@ -79,16 +76,18 @@ function processData(buf) {
     }
   }
 
-  // These are expensive.  Don't do it.
-  //var path = buf.slice(0, i).toString();
-  //var data = buf.slice(i + 1).toString();
+  debug("Path: " + options.path);
 
-  //debug("Path: " + path);
+  // Buffer -> String conversion is expensive. Don't do it unless necessary.
+  //var data = buf.slice(i + 1).toString();
   //debug("Data: " + data);
-  // now grab a slice of the rest
+  
+  // Send the rest as the request body.
   buf = buf.slice(i + 1);
-  //options.headers = { 'Content-Length': buf.length + 1};
-  options.headers = { 'Content-Length': buf.length};
+  options.headers = {
+    'Content-Length': buf.length,
+    'Connection': 'keep-alive'
+  };
 
   var req = http.request(options, function(res) {
     debug("req finished: " + res.statusCode);
