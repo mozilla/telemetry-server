@@ -48,6 +48,13 @@ var timer = setInterval(function() {
     console.log("    " + keys[i] + ": " + stats.responses[keys[i]]);
   }
   p_stats = JSON.parse(JSON.stringify(stats));
+
+  // TODO: run gc
+  /*
+  console.log("Running gc");
+  gc();
+  console.log("Done");
+  */
 }, 10000);
 
 function debug(message) {
@@ -72,10 +79,11 @@ function processData(buf) {
     }
   }
 
-  var path = buf.slice(0, i).toString();
-  var data = buf.slice(i + 1).toString();
+  // These are expensive.  Don't do it.
+  //var path = buf.slice(0, i).toString();
+  //var data = buf.slice(i + 1).toString();
 
-  debug("Path: " + path);
+  //debug("Path: " + path);
   //debug("Data: " + data);
   // now grab a slice of the rest
   buf = buf.slice(i + 1);
@@ -125,12 +133,14 @@ function dupChunk(buf, start, end) {
 }
 
 var partials = [];
+var data_read = 0;
 var server = net.createServer(function (socket) {
   console.log('Client connected');
 
   socket.on('data', function(data) {
     debug("data");
     debug("read " + data.length + " bytes");
+    data_read += data.length;
     var start = 0;
     var i = 0;
     // manually search for new line (10 == ascii \n)
@@ -140,9 +150,13 @@ var server = net.createServer(function (socket) {
         debug("Found a new line at " + i);
         // dupChunk copies up to one less than i (so it skips the newline)
         debug("Adding eol partial #" + partials.length + " start: " + start + ", i:" + i);
-        partials.push(dupChunk(data, start, i));
-        processData(Buffer.concat(partials));
-        partials = [];
+        if (partials.length === 0) {
+          processData(dupChunk(data, start, i));
+        } else {
+          partials.push(dupChunk(data, start, i));
+          processData(Buffer.concat(partials));
+          partials.length = 0;
+        }
         // add one to skip the new line
         start = i + 1;
         //debug("New start: " + start);
@@ -155,6 +169,14 @@ var server = net.createServer(function (socket) {
       //debug("Adding chunk: " + data.toString("utf8", start, data.length));
       partials.push(dupChunk(data, start, data.length));
     }
+    
+    /*
+    // TODO: test to see if we free up memory.
+    if (data_read > 1024 * 1024 * 1024) {
+      socket.pause();
+      console.log("pausing after reading " + data_read + " bytes");
+    }
+    */
     var outstanding = stats.sent - stats.completed;
     if (outstanding > 5000) {
       socket.pause();
