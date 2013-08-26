@@ -21,6 +21,21 @@ import gzip
 import StringIO
 import timer
 
+def get_partition(values, n, count):
+    # split values into 'count' partitions, and return the start and end of the
+    # nth partition
+    num_values = len(values)
+    values_per_partition = num_values / count
+    leftovers = num_values % count
+    start = n * values_per_partition
+    end = (n + 1) * values_per_partition
+    if leftovers > 0:
+        start += n
+        end += n
+    if leftovers > n:
+        end += 1
+    return start, end
+
 def send(conn, path, data, headers=None):
     conn.request("POST", path, data, headers)
     response = conn.getresponse()
@@ -78,8 +93,7 @@ def run_benchmark(args):
     helpers = []
     start = datetime.now()
     for i in range(args.num_processes):
-        startline = i * num_per_process
-        endline = (i + 1) * num_per_process
+        startline, endline = get_partition(lines, i, args.num_processes)
         p = Process(target=send_records,
                 args=(i + 1, lines[startline:endline], args, result_queue))
         helpers.append(p)
