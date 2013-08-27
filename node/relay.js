@@ -45,13 +45,6 @@ var timer = setInterval(function() {
     console.log("    " + keys[i] + ": " + stats.responses[keys[i]]);
   }
   p_stats = JSON.parse(JSON.stringify(stats));
-
-  // TODO: run gc
-  /*
-  console.log("Running gc");
-  gc();
-  console.log("Done");
-  */
 }, 10000);
 
 function debug(message) {
@@ -84,16 +77,6 @@ function processData(curr_req) {
       // discard.
     });
   });
-
-  /*
-  req.on('socket', function(socket) {
-    socket.setTimeout(500);
-    socket.on('timeout', function(){
-      console.log("request timed out, aborting");
-      req.abort();
-    });
-  });
-  */
 
   req.on('error', function(e) {
     console.log("Path " + curr_req.path + " errored: " + e.message);
