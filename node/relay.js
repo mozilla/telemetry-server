@@ -61,39 +61,25 @@ function debug(message) {
 }
 
 // process the data once it's reached end of line
-function processData(buf) {
-  //debug("buf is " + buf.toString());
-  if (buf.length == 0) {
-    return;
+function processData(curr_req) {
+  options.path = curr_req.path;
+  if (curr_req.path.slice(0, 18) != "/submit/telemetry/") {
+    options.path = "/submit/telemetry/" + curr_req.path;
   }
-  // manually search for \t == 9
-  var i = 0;
-  for (; i < buf.length; i++) {
-    // found \t
-    if (buf[i] === 9) {
-      options.path = buf.slice(0, i).toString();
-      break;
-    }
+  if (curr_req.data_len != curr_req.data.length) {
+    console.log("SEVERE: actual data length (" + curr_req.data.length + ") does not match expected length (" + curr_req.data_len + ")");
   }
-
-  debug("Path: " + options.path);
-
-  // Buffer -> String conversion is expensive. Don't do it unless necessary.
-  //var data = buf.slice(i + 1).toString();
-  //debug("Data: " + data);
-  
-  // Send the rest as the request body.
-  buf = buf.slice(i + 1);
   options.headers = {
-    'Content-Length': buf.length,
+    'Content-Length': curr_req.data.length,
     'Connection': 'keep-alive'
   };
+  //debug("Path: " + curr_req.path);
 
   var req = http.request(options, function(res) {
     debug("req finished: " + res.statusCode);
     stats.responses[res.statusCode] = (stats.responses[res.statusCode] || 0) + 1;
     stats.completed++;
-    stats.bytes_sent += buf.length;
+    stats.bytes_sent += curr_req.data.length;
     res.on('data', function(chunk) {
       // discard.
     });
@@ -110,13 +96,11 @@ function processData(buf) {
   */
 
   req.on('error', function(e) {
-    console.log("Path " + path + " errored: " + e.message);
+    console.log("Path " + curr_req.path + " errored: " + e.message);
     stats.errors++;
   });
 
-  //req.write(buf);
-  //req.end(eol);
-  req.end(buf);
+  req.end(curr_req.data);
   stats.sent++;
 }
 
@@ -131,8 +115,19 @@ function dupChunk(buf, start, end) {
   return new_buf;
 }
 
+function blank_request() {
+  return {
+    path_len: -1,
+    data_len: -1,
+    timestamp: -1,
+    path: null,
+    data: null
+  };
+}
 var partials = [];
 var data_read = 0;
+var current_request = blank_request();
+
 var server = net.createServer(function (socket) {
   console.log('Client connected');
 
@@ -140,6 +135,95 @@ var server = net.createServer(function (socket) {
     debug("data");
     debug("read " + data.length + " bytes");
     data_read += data.length;
+
+    partials.push(data);
+    if (partials.length == 1) {
+      data = partials[0];
+    } else {
+      data = Buffer.concat(partials);
+    }
+    partials = [];
+
+    var pending = stats.sent - stats.completed;
+    if (pending > 500) {
+      socket.pause();
+      console.log("Too many pending requests (" + pending + "). pausing");
+      setTimeout(function(){
+        console.log("Resuming socket after a nice rest.");
+        socket.resume();
+      }, 1000);
+    }
+    while (data.length > 0) {
+      if (current_request.path_len < 0) {
+        if (data.length >= 4) {
+          current_request.path_len = data.readUInt32LE(0);
+          debug("Got path length: " + current_request.path_len);
+          if (current_request.path_len > 1024) {
+            debug("Warning: path length was " + current_request.path_len);
+            // TODO: close socket since path is BS
+          }
+          data = data.slice(4);
+        } else {
+          // TODO: dupChunk?
+          partials.push(data);
+          return;
+        }
+      }
+
+      if (current_request.data_len < 0) {
+        if (data.length >= 4) {
+          current_request.data_len = data.readUInt32LE(0);
+          debug("Got data length: " + current_request.data_len);
+          data = data.slice(4);
+        } else {
+          partials.push(data);
+          return;
+        }
+      }
+
+      if (current_request.timestamp < 0) {
+        if (data.length >= 8) {
+          current_request.timestamp = data.readUInt32LE(0);
+          current_request.timestamp += data.readUInt32LE(4) * 0x100000000;
+          debug("Got timestamp: " + current_request.timestamp);
+          data = data.slice(8);
+        } else {
+          partials.push(data);
+          return;
+        }
+      }
+
+      if (current_request.path === null) {
+        if (data.length >= current_request.path_len) {
+          current_request.path = data.slice(0, current_request.path_len);
+          debug("Got path: " + current_request.path);
+          data = data.slice(current_request.path_len);
+        } else {
+          partials.push(data);
+          return;
+        }
+      }
+
+      if (current_request.data === null) {
+        if (data.length >= current_request.data_len) {
+          current_request.data = data.slice(0, current_request.data_len);
+          debug("Got " + current_request.data.length + " bytes of data");
+          data = data.slice(current_request.data_len);
+
+          // Here we have a complete request: send it!
+          debug("Sending complete request...");
+          processData(current_request);
+          current_request = blank_request();
+        } else {
+          partials.push(data);
+          return;
+        }
+      }
+
+      debug("Here we have " + data.length + " bytes left over");
+    }
+
+    /*
     var start = 0;
     var i = 0;
     // manually search for new line (10 == ascii \n)
@@ -168,7 +252,7 @@ var server = net.createServer(function (socket) {
       //debug("Adding chunk: " + data.toString("utf8", start, data.length));
       partials.push(dupChunk(data, start, data.length));
     }
-    
+    */
     /*
     // TODO: test to see if we free up memory.
     if (data_read > 1024 * 1024 * 1024) {
@@ -176,18 +260,15 @@ var server = net.createServer(function (socket) {
       console.log("pausing after reading " + data_read + " bytes");
     }
     */
-    var outstanding = stats.sent - stats.completed;
-    if (outstanding > 5000) {
-      socket.pause();
-      console.log("Too many pending requests (" + outstanding + "). pausing");
-      setTimeout(function(){
-        socket.resume();
-      }, 1000);
-    }
   });
 
   socket.on('end', function() {
-    processData(Buffer.concat(partials));
+    if (partials.length > 0) {
+      console.log("SEVERE: we should have processed " + partials.length + " 'partials'");
+      partials = [];
+      // reset current_request:
+      current_request = blank_request();
+    }
     console.log("Client disconnected");
   });
 
