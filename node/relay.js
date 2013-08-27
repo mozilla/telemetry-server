@@ -222,44 +222,6 @@ var server = net.createServer(function (socket) {
 
       debug("Here we have " + data.length + " bytes left over");
     }
-
-    /*
-    var start = 0;
-    var i = 0;
-    // manually search for new line (10 == ascii \n)
-    for (i = 0; i < data.length; i++) {
-      // we've hit a new line, copy out the data and process
-      if (data[i] === 10) {
-        debug("Found a new line at " + i);
-        // dupChunk copies up to one less than i (so it skips the newline)
-        debug("Adding eol partial #" + partials.length + " start: " + start + ", i:" + i);
-        if (partials.length === 0) {
-          processData(dupChunk(data, start, i));
-        } else {
-          partials.push(dupChunk(data, start, i));
-          processData(Buffer.concat(partials));
-          partials.length = 0;
-        }
-        // add one to skip the new line
-        start = i + 1;
-        //debug("New start: " + start);
-        continue;
-      }
-    }
-    // we've reached the end of the buffer, and there's still buffer left
-    if (i === data.length && i > start) {
-      debug("Appending partial #" + partials.length + ", start:" + start + ", end:" + data.length);
-      //debug("Adding chunk: " + data.toString("utf8", start, data.length));
-      partials.push(dupChunk(data, start, data.length));
-    }
-    */
-    /*
-    // TODO: test to see if we free up memory.
-    if (data_read > 1024 * 1024 * 1024) {
-      socket.pause();
-      console.log("pausing after reading " + data_read + " bytes");
-    }
-    */
   });
 
   socket.on('end', function() {
@@ -274,6 +236,10 @@ var server = net.createServer(function (socket) {
 
 });
 
-server.listen(9090, function() {
-  console.log('Server listening on 127.0.0.1:9090');
+var listen_port = 9090;
+if (process.argv.length > 2) {
+  listen_port = parseInt(process.argv[2]);
+}
+server.listen(listen_port, function() {
+  console.log('Server listening on 127.0.0.1:' + listen_port);
 });
