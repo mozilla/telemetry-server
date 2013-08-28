@@ -2,7 +2,7 @@ var net = require('net');
 var http = require('http');
 
 var agent = new http.Agent();
-agent.maxSockets = 5000;
+agent.maxSockets = 50;
 
 var options = {
   hostname: "localhost",
