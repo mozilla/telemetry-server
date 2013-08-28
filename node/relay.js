@@ -13,6 +13,10 @@ var options = {
 
 var DEBUG = false;
 
+var listen_port = 9090;
+if (process.argv.length > 2) {
+  listen_port = parseInt(process.argv[2]);
+}
 
 var p_stats = null;
 
@@ -26,7 +30,7 @@ var stats = {
 };
 
 var timer = setInterval(function() {
-  console.log("Stats for " + new Date());
+  console.log("Stats for port " + listen_port + " at " + new Date());
   stats.ts = new Date().getTime();
   console.log("  requests sent:      " + stats.sent);
   console.log("  requests completed: " + stats.completed);
@@ -225,10 +229,6 @@ var server = net.createServer(function (socket) {
 
 });
 
-var listen_port = 9090;
-if (process.argv.length > 2) {
-  listen_port = parseInt(process.argv[2]);
-}
 server.listen(listen_port, function() {
   console.log('Server listening on 127.0.0.1:' + listen_port);
 });
