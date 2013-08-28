@@ -2,7 +2,7 @@ var net = require('net');
 var http = require('http');
 
 var agent = new http.Agent();
-agent.maxSockets = 50000;
+agent.maxSockets = 5000;
 
 var options = {
   hostname: "localhost",
@@ -137,7 +137,7 @@ var server = net.createServer(function (socket) {
     }
     partials = [];
 
-    var pending = stats.sent - stats.completed;
+    var pending = stats.sent - stats.completed - stats.errors;
     if (pending > 500) {
       socket.pause();
       console.log("Too many pending requests (" + pending + "). pausing");
