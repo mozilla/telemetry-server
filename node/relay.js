@@ -1,15 +1,18 @@
 var net = require('net');
 var http = require('http');
 
+var agent = new http.Agent();
+agent.maxSockets = 50000;
+
 var options = {
   hostname: "localhost",
   port: 8080,
-  method: "POST"
+  method: "POST",
+  agent: agent
 };
 
 var DEBUG = false;
 
-var eol = new Buffer('\n');
 
 var p_stats = null;
 
@@ -68,8 +71,11 @@ function processData(curr_req) {
   };
   //debug("Path: " + curr_req.path);
 
+  var req_start = new Date().getTime();
   var req = http.request(options, function(res) {
-    debug("req finished: " + res.statusCode);
+    var req_end = new Date().getTime();
+    var req_duration = req_end - req_start;
+    debug("req finished: " + res.statusCode + " after " + req_duration + "ms (started " + req_start + ", fin: " + req_end + ")");
     stats.responses[res.statusCode] = (stats.responses[res.statusCode] || 0) + 1;
     stats.completed++;
     stats.bytes_sent += curr_req.data.length;
