@@ -26,12 +26,12 @@ See the [TODO list](TODO.md)
 
 Storage Format
 -----------------
-See [StorageFormat.md][1] for details.
+See [StorageFormat][1] for details.
 
 
 On-disk Storage Structure
 ----------------------------
-See [StorageLayout.md][2] for details.
+See [StorageLayout][2] for details.
 
 Data Converter
 -----------------
@@ -113,12 +113,12 @@ Telemetry data. There are example job scripts and input filters in the
 Contains code to compress and rotate raw data files. Suitable for running from
 `cron`.
 
-[1]: StorageFormat.md "Storage Format"
-[2]: StorageLayout.md "On-disk Storage Layout"
+[1]: docs/StorageFormat.md "Storage Format"
+[2]: docs/StorageLayout.md "On-disk Storage Layout"
 [3]: https://github.com/tarasglek/telemetry-frontend "Telemetry Frontend"
 [4]: https://bugzilla.mozilla.org/show_bug.cgi?id=856263 "Bug 856263"
 [5]: https://etherpad.mozilla.org/telemetry-reboot "Telemetry Reboot"
-[6]: MapReduce.md "Telemetry MapReduce Framework"
-[7]: BagheeraIntegration.md "Integration with Bagheera"
-[8]: server.py "Telemetry Server"
+[6]: docs/MapReduce.md "Telemetry MapReduce Framework"
+[7]: docs/BagheeraIntegration.md "Integration with Bagheera"
+[8]: server/server.js "Telemetry Server"
 
