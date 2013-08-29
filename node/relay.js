@@ -1,14 +1,11 @@
 var net = require('net');
 var http = require('http');
 
-var agent = new http.Agent();
-agent.maxSockets = 50;
-
 var options = {
   hostname: "localhost",
   port: 8080,
   method: "POST",
-  agent: agent
+  agent: false // Disable keep-alives
 };
 
 var DEBUG = false;
@@ -71,7 +68,6 @@ function processData(curr_req) {
   }
   options.headers = {
     'Content-Length': curr_req.data.length,
-    'Connection': 'keep-alive'
   };
   //debug("Path: " + curr_req.path);
 
