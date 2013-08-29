@@ -39,7 +39,7 @@ This works fine in terms of deduplication, but does not scale well to the large
 volumes of data that need to be handled (as of 2013-07-29, approximately
 1.2TB/day of raw data).
 
-### Ignore lists
+### Tombstones
 From Taras:
 
 For map reduce jobs:
@@ -57,6 +57,12 @@ we can calculate such things better(eg intersect millions of UUIDs to
 find duplicates)
 
 * where pos is position in file after readline()
+
+Idle-daily deduplication notes:
+* 86400(seconds in day)*250(submissions per second)*8(bytes per UUID)= 161mb -> 2gb for 12 weeks
+* leveldb seems well-suited for this sort of workload, but a C++ implementation is trivial: https://github.com/tarasglek/tombstone_maker
+* skiplists(filename:offset)  are called tombstones
+* should have a compressed TOMBSTONE_INDEX for every IDLE_DAILY in a particular release. incoming_data EC2 job should generate those. Since these are basically sets they can be generated in parallel and UNIONED at the end of each EC2 job.
 
 ### Partial Key/Value storage
 A variation on the plain key/value storage described above.
