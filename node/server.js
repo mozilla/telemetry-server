@@ -140,7 +140,7 @@ function postRequest(request, response, callback) {
         // TODO: what about log_size?
         // TODO: Since we can't easily recover from a partially written record,
         //       we should always attempt to start a new file in case of error.
-        return finish(500, request, response, err);
+        return finish(500, request, response, err.message);
       }
       log_size += buf.length;
       log_time = request_time;
@@ -157,7 +157,10 @@ function postRequest(request, response, callback) {
 
 function run_server(port) {
   http.createServer(function(request, response) {
+    var start_time = new Date().getTime();
     postRequest(request, response, function() {
+      var end_time = new Date().getTime();
+      // TODO: log request time: console.log(end_time - start_time);
       finish(200, request, response, 'OK');
     });
   }).listen(port);
