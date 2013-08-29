@@ -24,9 +24,8 @@ var max_log_size = 500 * 1024 * 1024;
 var max_log_age_ms = 5 * 60 * 1000; // 5 minutes in milliseconds
 //var max_log_age_ms = 60 * 1000; // 1 minute in milliseconds
 
-// TODO: keep track of "last touched" and don't rotate
-//       until they've been untouched for max_log_age_ms.
-// Rotate any in-progress logs occasionally.
+// We keep track of "last touched" and then rotate after current logs have
+// been untouched for max_log_age_ms.
 var timer = setInterval(function(){ rotate_time(); }, max_log_age_ms);
 
 function finish(code, request, response, msg) {
@@ -96,6 +95,7 @@ function postRequest(request, response, callback) {
   }
   var path_length = Buffer.byteLength(url_path);
   if (path_length > max_path_length) {
+    // TODO: return 202 here as well?
     return finish(413, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes");
   }
   var data_offset = 16; // 4 path + 4 data + 8 timestamp
@@ -138,8 +138,9 @@ function postRequest(request, response, callback) {
       if (err) {
         console.log("Error appending to log file: " + err);
         // TODO: what about log_size?
-        // TODO: Since we can't easily recover from a partially written record,
-        //       we should always attempt to start a new file in case of error.
+        // Since we can't easily recover from a partially written record, we
+        // start a new file in case of error.
+        log_file = unique_name(log_base);
         return finish(500, request, response, err.message);
       }
       log_size += buf.length;
