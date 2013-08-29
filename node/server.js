@@ -143,6 +143,7 @@ function postRequest(request, response, callback) {
         // Since we can't easily recover from a partially written record, we
         // start a new file in case of error.
         log_file = unique_name(log_base);
+        log_size = 0;
         return finish(500, request, response, err.message);
       }
       log_size += buf.length;
