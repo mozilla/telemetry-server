@@ -217,7 +217,7 @@ def main(argv=None):
 
     exporter = Exporter(args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern, args.keep_backups, args.remove_files)
 
-    if not loop:
+    if not args.loop:
         return exporter.export(exporter.find_uploadables(args.data_dir))
 
     while True:
