@@ -75,8 +75,9 @@ function postRequest(request, response, callback) {
     return finish(411, request, response, "Missing content length");
   }
   if (data_length > max_data_length) {
-    return finish(413, request, response, "Request too large (" + data_length + " bytes). Limit is " + max_data_length + " bytes");
-    // TODO: return 202 Accepted instead (so that clients don't retry)?
+    // Note, the standard way to deal with "request too large" is to return
+    // a HTTP Status 413, but we do not want clients to re-send large requests.
+    return finish(202, request, response, "Request too large (" + data_length + " bytes). Limit is " + max_data_length + " bytes. Server will discard submission.");
   }
   if (request.method != 'POST') {
     return finish(405, request, response, "Wrong request type");
@@ -95,8 +96,9 @@ function postRequest(request, response, callback) {
   }
   var path_length = Buffer.byteLength(url_path);
   if (path_length > max_path_length) {
-    // TODO: return 202 here as well?
-    return finish(413, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes");
+    // As with the content-length above, we would normally return 413, but we
+    // don't want clients to retry these either.
+    return finish(202, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes");
   }
   var data_offset = 16; // 4 path + 4 data + 8 timestamp
   var buffer_length = path_length + data_length + data_offset;
