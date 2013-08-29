@@ -10,12 +10,14 @@ import argparse
 import re
 import os
 import sys
+import time
 from persist import StorageLayout
 from datetime import datetime
 import hashlib
 import subprocess
 from boto.s3.connection import S3Connection
 from boto.exception import S3ResponseError
+import util.timer as timer
 
 
 class Exporter:
@@ -23,16 +25,17 @@ class Exporter:
     S3F_PATH = "/usr/local/bin/s3funnel"
     S3F_THREADS = 8
     UPLOADABLE_PATTERN = re.compile("^.*\\" + StorageLayout.COMPRESSED_SUFFIX + "$")
+    # Minimum size in bytes (to support skipping truncated files)
     MIN_UPLOADABLE_SIZE = 50
 
-    def __init__(self, data_dir, bucket, aws_key, aws_secret_key, batch_size, pattern, remove_files):
-        self.data_dir = data_dir
+    def __init__(self, bucket, aws_key, aws_secret_key, batch_size, pattern, keep_backups=False, remove_files=True):
         self.bucket = bucket
         self.aws_key = aws_key
         self.aws_secret_key = aws_secret_key
         self.batch_size = batch_size
         self.pattern = pattern
         self.remove_files = remove_files
+        self.keep_backups = keep_backups
         self.s3f_cmd = [Exporter.S3F_PATH, bucket, "put", "-a", aws_key,
                 "-s", aws_secret_key, "-t", str(Exporter.S3F_THREADS),
                 "--put-only-new", "--put-full-path"]
@@ -50,19 +53,18 @@ class Exporter:
                 size += len(chunk)
         return md5.hexdigest(), size
 
-    def export_batch(self, conn, bucket, files):
+    def export_batch(self, data_dir, conn, bucket, files):
         # Time the s3funnel call:
         start = datetime.now()
-        result = subprocess.call(self.s3f_cmd + files, cwd=self.data_dir)
-        delta = (datetime.now() - start)
-        sec = float(delta.seconds) + float(delta.microseconds) / 1000000.0
+        result = subprocess.call(self.s3f_cmd + files, cwd=data_dir)
+        sec = timer.delta_sec()
 
         total_size = 0
         if result == 0:
             # Success! Verify each file's checksum, then truncate it.
             for f in files:
                 # Verify checksum and track cumulative size so we can figure out MB/s
-                full_filename = os.path.join(self.data_dir, f)
+                full_filename = os.path.join(data_dir, f)
                 md5, size = self.md5file(full_filename)
                 if size < Exporter.MIN_UPLOADABLE_SIZE:
                     # Check file size again when uploading in case it has been
@@ -82,7 +84,7 @@ class Exporter:
                     result = -1
                 else:
                     # Validation passed. Time to clean up the file.
-                    if not self.remove_files:
+                    if self.keep_backups:
                         # Keep a copy of the original, just in case.
                         os.rename(full_filename, full_filename + ".uploaded")
 
@@ -92,16 +94,17 @@ class Exporter:
                     # be whatever.log.6.lzma.
                     # TODO: if we switch to using UUIDs in the filename, we can
                     #       stop keeping the dummy files around.
-                    h = open(full_filename, "w")
-                    h.close()
+                    if self.remove_files:
+                        if not self.keep_backups:
+                            os.remove(full_filename)
+                            # Otherwise it was renamed already.
+                    else:
+                        h = open(full_filename, "w")
+                        h.close()
         else:
             print "Failed to upload one or more files in the current batch. Error code was", result
 
         total_mb = float(total_size) / 1024.0 / 1024.0
-        # Don't divide by zero.
-        if sec == 0.0:
-            sec += 0.00001
-
         print "Transferred %.2fMB in %.2fs (%.2fMB/s)" % (total_mb, sec, total_mb / sec)
         return result
 
@@ -115,34 +118,36 @@ class Exporter:
             split.append(one_list[current:])
         return split
 
-    def remove_data_dir(self, full_file):
-        if full_file.startswith(self.data_dir):
-            chopped = full_file[len(self.data_dir):]
+    def strip_data_dir(self, data_dir, full_file):
+        if full_file.startswith(data_dir):
+            chopped = full_file[len(data_dir):]
             if chopped[0] == "/":
                 chopped = chopped[1:]
             return chopped
         else:
-            print "ERROR: cannot remove", self.data_dir, "from", full_file
+            print "ERROR: cannot remove", data_dir, "from", full_file
             raise ValueError("Invalid full filename: " + str(full_file))
 
-    def export(self):
-        # Find all uploadable files
+    def find_uploadables(self, data_dir):
+        # Find all uploadable files relative to the given base dir.
         uploadables = []
-        for root, dirs, files in os.walk(self.data_dir):
+        for root, dirs, files in os.walk(data_dir):
             for f in files:
                 m = self.pattern.match(f)
                 if m:
                     full_file = os.path.join(root, f)
                     file_size = os.path.getsize(full_file)
                     if file_size >= Exporter.MIN_UPLOADABLE_SIZE:
-                        relative_file = self.remove_data_dir(full_file)
+                        relative_file = self.strip_data_dir(data_dir, full_file)
                         uploadables.append(relative_file)
                         # TODO: we may also want to check a "minimum time since
                         #       last modification" so that we don't upload
                         #       partial compressed files.  Note that the md5
                         #       verification should take care of this, but it
                         #       would save on transfer time/cost to check here.
+        return uploadables
 
+    def export(self, uploadables):
         if len(uploadables) == 0:
             print "Nothing to do!"
             return 0
@@ -183,10 +188,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Export Telemetry data")
     parser.add_argument("-d", "--data-dir", help="Path to the root of the telemetry data", required=True)
     parser.add_argument("-p", "--file-pattern", help="Filenames must match this regular expression to be uploaded", default=Exporter.UPLOADABLE_PATTERN)
-    parser.add_argument("-b", "--bucket", help="S3 Bucket name", default="mreid-telemetry-dev")
+    parser.add_argument("-b", "--bucket", help="S3 Bucket name", required=True)
     parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
     parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
-    parser.add_argument("--remove-files", help="Remove files after successfully uploading (default is to rename them to X.uploaded)", action="store_true")
+    parser.add_argument("-l", "--loop", help="Run in a loop and keep watching for more files to export", action="store_true")
+    parser.add_argument("--remove-files", help="Remove files after successfully uploading (default is to truncate them)", action="store_true")
+    parser.add_argument("--keep-backups", help="Keep original files after uploading (rename them to X.uploaded)", action="store_true")
     parser.add_argument("-B", "--batch-size", help="Number of files to upload at a time", default=8)
     args = parser.parse_args()
 
@@ -207,8 +214,26 @@ def main(argv=None):
     except Exception, e:
         print "ERROR: invalid file pattern:", args.file_pattern, " (must be a valid regex)"
         return 3
-    exporter = Exporter(args.data_dir, args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern, args.remove_files)
-    return exporter.export()
+
+    exporter = Exporter(args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern, args.keep_backups, args.remove_files)
+
+    if not loop:
+        return exporter.export(exporter.find_uploadables(args.data_dir))
+
+    while True:
+        uploadables = exporter.find_uploadables(args.data_dir)
+        if len(uploadables) == 0:
+            print "No files to export yet.  Sleeping for a while..."
+            time.sleep(60)
+            continue
+
+        print "Processing", len(uploadables), "uploadables:"
+        for u in uploadables:
+            print "  ", u
+        err_count = exporter.export(uploadables)
+        if err_count > 0:
+            print "ERROR: There were", err_count, "errors uploading."
+
 
 if __name__ == "__main__":
     sys.exit(main())
