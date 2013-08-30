@@ -29,6 +29,8 @@ def bootstrap_instance(config, instance):
 
     #sudo("apt-get --yes dist-upgrade")
     sudo('pip install simplejson scales boto')
+    sudo('mkdir /mnt/telemetry')
+    sudo('chown %s:%s /mnt/telemetry' % (ssl_user, ssl_user))
 
     home = "/home/" + ssl_user
     print "Preparing code"
@@ -38,16 +40,13 @@ def bootstrap_instance(config, instance):
     with cd(home + "/s3funnel"):
         sudo("python setup.py install")
     with cd(home + "/telemetry-server"):
-        # "data" is a dummy dir just to give it somewhere to look for local data.
-        # FIXME: remove this once we merge into 'master'
-        run("git checkout node_server")
-        run("mkdir work processed")
+        run("mkdir /mnt/telemetry/work /mnt/telemetry/processed")
 
 def process_incoming(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     home = "/home/" + ssl_user
     with cd(home + "/telemetry-server"):
-        run('python process_incoming.py -k "%s" -s "%s" -w work -o processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"]))
+        run('python process_incoming.py -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"]))
 
 if len(sys.argv) < 2:
     print "Usage:", sys.argv[0], "/path/to/config_file.json"

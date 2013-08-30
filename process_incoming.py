@@ -40,6 +40,7 @@ def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
         start = datetime.now()
         result = subprocess.call(fetch_cmd + files, cwd=fetch_cwd)
         duration_sec = timer.delta_sec(start)
+        # TODO: verify MD5s
         downloaded_bytes = sum([ os.path.getsize(os.path.join(fetch_cwd, f)) for f in files ])
         downloaded_mb = downloaded_bytes / 1024.0 / 1024.0
         print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
@@ -80,20 +81,28 @@ def main():
     parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
     parser.add_argument("-w", "--work-dir", help="Location to cache downloaded files", required=True)
     parser.add_argument("-o", "--output-dir", help="Base dir to store processed data", required=True)
+    parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     args = parser.parse_args()
 
     # TODO: keep track of partial success so that subsequent runs are idempotent.
 
     start = datetime.now()
-    conn = S3Connection(args.aws_key, args.aws_secret_key)
-    incoming_bucket = conn.get_bucket(args.incoming_bucket)
     incoming_filenames = []
-    print "Fetching file list from S3..."
-    for f in incoming_bucket.list():
-        incoming_filenames.append(f.name)
-        print "  ", f.name
+    if args.input_files:
+        print "Fetching file list from file", args.input_files
+        incoming_filenames = [ l.strip() for l in args.input_files.readlines() ]
+        return 100;
+    else:
+        conn = S3Connection(args.aws_key, args.aws_secret_key)
+        incoming_bucket = conn.get_bucket(args.incoming_bucket)
+        print "Fetching file list from S3..."
+        for f in incoming_bucket.list():
+            incoming_filenames.append(f.name)
     print "Done"
+
+    for f in incoming_filenames:
+        print "  ", f
 
     result = 0
     print "Downloading", len(incoming_filenames), "files..."
