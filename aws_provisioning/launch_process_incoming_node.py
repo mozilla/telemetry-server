@@ -14,6 +14,7 @@ from fabric.api import *
 from fabric.exceptions import NetworkError
 import sys
 import aws_util
+from boto.s3.connection import S3Connection
 
 
 def bootstrap_instance(config, instance):
@@ -45,8 +46,21 @@ def bootstrap_instance(config, instance):
 def process_incoming(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     home = "/home/" + ssl_user
+    s3conn = S3Connection(config["aws_key"], config["aws_secret_key"])
+    incoming_bucket = s3conn.get_bucket(config["incoming_bucket"])
+    incoming_filenames = []
+    for f in incoming_bucket.list():
+        incoming_filenames.append(f.name)
     with cd(home + "/telemetry-server"):
-        run('python process_incoming.py -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"]))
+        while len(incoming_filenames) > 0:
+            current_filenames = incoming_filenames[0:4]
+            incoming_filenames = incoming_filenames[4:]
+            run("echo '%s' > inputs.txt" % (current_filenames.pop(0)))
+            for c in current_filenames:
+                run("echo '%s' >> inputs.txt" % (c))
+            run("echo 'Processing files:'")
+            run("cat inputs.txt")
+            run('python process_incoming.py -i inputs.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"]))
 
 if len(sys.argv) < 2:
     print "Usage:", sys.argv[0], "/path/to/config_file.json"
