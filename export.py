@@ -57,7 +57,7 @@ class Exporter:
         # Time the s3funnel call:
         start = datetime.now()
         result = subprocess.call(self.s3f_cmd + files, cwd=data_dir)
-        sec = timer.delta_sec()
+        sec = timer.delta_sec(start)
 
         total_size = 0
         if result == 0:
@@ -147,7 +147,7 @@ class Exporter:
                         #       would save on transfer time/cost to check here.
         return uploadables
 
-    def export(self, uploadables):
+    def export(self, data_dir, uploadables):
         if len(uploadables) == 0:
             print "Nothing to do!"
             return 0
@@ -173,7 +173,7 @@ class Exporter:
             batch_count += 1
             print "Exporting batch", batch_count, "of", len(batches)
             try:
-                batch_response = self.export_batch(conn, bucket, batch)
+                batch_response = self.export_batch(data_dir, conn, bucket, batch)
                 if batch_response != 0:
                     print "Batch", batch_count, "failed: returned", batch_response
                     fail_count += 1
@@ -218,7 +218,7 @@ def main(argv=None):
     exporter = Exporter(args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern, args.keep_backups, args.remove_files)
 
     if not args.loop:
-        return exporter.export(exporter.find_uploadables(args.data_dir))
+        return exporter.export(args.data_dir, exporter.find_uploadables(args.data_dir))
 
     while True:
         uploadables = exporter.find_uploadables(args.data_dir)
@@ -230,7 +230,7 @@ def main(argv=None):
         print "Processing", len(uploadables), "uploadables:"
         for u in uploadables:
             print "  ", u
-        err_count = exporter.export(uploadables)
+        err_count = exporter.export(args.data_dir, uploadables)
         if err_count > 0:
             print "ERROR: There were", err_count, "errors uploading."
 
