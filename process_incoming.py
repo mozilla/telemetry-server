@@ -92,7 +92,6 @@ def main():
     if args.input_files:
         print "Fetching file list from file", args.input_files
         incoming_filenames = [ l.strip() for l in args.input_files.readlines() ]
-        return 100;
     else:
         conn = S3Connection(args.aws_key, args.aws_secret_key)
         incoming_bucket = conn.get_bucket(args.incoming_bucket)
