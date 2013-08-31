@@ -56,10 +56,10 @@ class StorageLayout:
 
         # TODO: should we actually write "err" to file?
         if isinstance(obj, basestring):
-            jsonstr = self.clean_newlines(obj, obj)
+            jsonstr = self.clean_newlines(unicode(obj), obj)
         else:
             # Use minimal json (without excess spaces)
-            jsonstr = json.dumps(obj, separators=(',', ':'))
+            jsonstr = unicode(json.dumps(obj, separators=(',', ':')))
 
         output_line = u"%s\t%s\n" % (uuid, jsonstr)
 
