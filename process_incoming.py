@@ -88,13 +88,13 @@ def main():
     # TODO: keep track of partial success so that subsequent runs are idempotent.
 
     start = datetime.now()
+    conn = S3Connection(args.aws_key, args.aws_secret_key)
+    incoming_bucket = conn.get_bucket(args.incoming_bucket)
     incoming_filenames = []
     if args.input_files:
         print "Fetching file list from file", args.input_files
         incoming_filenames = [ l.strip() for l in args.input_files.readlines() ]
     else:
-        conn = S3Connection(args.aws_key, args.aws_secret_key)
-        incoming_bucket = conn.get_bucket(args.incoming_bucket)
         print "Fetching file list from S3..."
         for f in incoming_bucket.list():
             incoming_filenames.append(f.name)
