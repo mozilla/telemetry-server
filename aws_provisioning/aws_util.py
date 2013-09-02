@@ -29,6 +29,7 @@ def create_instance(config):
     print "Creating a new instance of type", itype
     # Known images:
     # ami-bf1d8a8f == Ubuntu 13.04
+    # ami-76831f46 == telemetry-base (based on Ubuntu 13.04 with dependencies already installed)
     reservation = conn.run_instances(
             config.get("image", "ami-bf1d8a8f"),
             key_name=config["ssl_key_name"],
