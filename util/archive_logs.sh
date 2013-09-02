@@ -26,6 +26,6 @@ cd $CODE_DIR
 # Note that this assumes a bunch of stuff, including that all the defaults
 # for compression will work relative to $CODE_DIR (histogram_cache location,
 # server config, etc)
-time $PYTHON ./get_compressibles.py $DATA_DIR | $PYTHON ./compressor.py >> $LOG_FILE 2>&1
+time $PYTHON ./get_compressibles.py $DATA_DIR | $PYTHON ./compressor.py | tee /usr/bin/tee $LOG_FILE 2>&1
 
 exit $?
