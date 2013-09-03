@@ -9,7 +9,6 @@ TODO
 - [PX] Have the "process incoming launcher" specify a list of files to process
 - [PX] Verify each step of process_incoming.py, make sure that if we have any
        failures, we do not end up publishing partial results
-- [PX] SSH Tunnel for replaying from prod -> proto
 - [P2] Add "number of records" to exported filenames
 - [P2] Add "storage version" to exported filenames
 - [P2] nginx: Check into load-balancing
