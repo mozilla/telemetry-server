@@ -7,6 +7,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import argparse
+import uuid
 import time
 import multiprocessing
 from multiprocessing import Process, Queue
@@ -64,6 +65,10 @@ class PipeStep(object):
     PAUSE_LENGTH = 5
     RETRIES = 3
     def __init__(self, num, name, q_in, q_out=None):
+        # Set instance vars so we can easily modify behaviour in subclasses
+        self.retries = PipeStep.RETRIES
+        self.pause_length = PipeStep.PAUSE_LENGTH
+
         self.num = num
         self.label = " ".join((name, str(num)))
         self.q_in = q_in
@@ -88,10 +93,10 @@ class PipeStep(object):
         pass
     def work(self):
         print self.label, "Starting up"
-        retries = PipeStep.RETRIES
+        retries = self.retries
         while True:
             try:
-                raw = self.q_in.get(True, PipeStep.PAUSE_LENGTH)
+                raw = self.q_in.get(True, self.pause_length)
                 self.handle(raw)
                 self.records_read += 1
             except Q.Empty:
@@ -232,8 +237,8 @@ class WriteConvertedStep(PipeStep):
         key, dims, data = record
         n = self.storage.write(key, data, dims)
         # TODO: write out completed files as we see them
-        #if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
-        #    q_out.put(n)
+        if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
+            q_out.put(n)
         self.records_written += 1
         self.bytes_written += len(data)
 
@@ -244,10 +249,11 @@ class BadRecordStep(PipeStep):
         PipeStep.__init__(self, num, name, q_in, None)
 
     def handle(self, record):
+        self.end_time = datetime.now()
         if self.output_file is not None:
             try:
                 key, dims, data, error = record
-                path = "/".join([key] + dims)
+                path = u"/".join([key] + dims)
                 self.storage.write_filename(path, data, self.output_file)
                 self.records_written += 1
                 self.bytes_written += len(path) + len(data) + 1
@@ -263,8 +269,58 @@ class BadRecordStep(PipeStep):
 
 
 class ExportCompletedStep(PipeStep):
+    def setup(self):
+        self.compress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.COMPRESSION_ARGS
+
+    # TODO: override the timeouts, since we want to wait a lot longer for
+    #       compressible logs to appear.
     def handle(self, record):
-        print self.label, "got a record"
+        filename = record
+        print self.label, "Compressing", filename
+        base_ends = filename.find(".log") + 4
+        if base_ends < 4:
+            logging.warn("Bad filename encountered, skipping: " + filename)
+            return
+        basename = filename[0:base_ends]
+
+        file_id = uuid.uuid4().hex
+
+        # Get a unique name for the compressed file:
+        comp_name = basename + "." + str(next_log_num) + StorageLayout.COMPRESSED_SUFFIX
+
+        # reserve it!
+        f_comp = open(comp_name, "wb")
+        # TODO: open f_comp with same buffer size as below?
+
+        # Rename uncompressed file to a temp name
+        tmp_name = comp_name + ".compressing"
+        print self.label, "Moving %s to %s" % (filename, tmp_name)
+        os.rename(filename, tmp_name)
+
+        # Read input file as text (line-buffered)
+        f_raw = open(tmp_name, "r", 1)
+
+        print self.label, "compressing %s to %s" % (filename, comp_name)
+        start = datetime.now()
+
+        # Now set up our processing pipe:
+        # - read from f_raw, compress, write to comp_name
+        p_compress = Popen(compress_cmd, bufsize=65536, stdin=f_raw, stdout=f_comp, stderr=sys.stderr)
+
+        # Note: it looks like p_compress.wait() is what we want, but the docs
+        #       warn of a deadlock, so we use communicate() instead.
+        p_compress.communicate()
+
+        raw_mb = float(f_raw.tell()) / 1024.0 / 1024.0
+        comp_mb = float(f_comp.tell()) / 1024.0 / 1024.0
+        f_raw.close()
+        f_comp.close()
+
+        # Remove raw file
+        os.remove(tmp_name)
+        sec = timer.delta_sec(start)
+        print self.label, "Compressed %s as %s in %.2fs. Size before: %.2fMB, after: %.2fMB (r: %.2fMB/s, w: %.2fMB/s)" % (filename, comp_name, sec, raw_mb, comp_mb, (raw_mb/sec), (comp_mb/sec))
+        # TODO: upload to S3
 
 
 def main():
