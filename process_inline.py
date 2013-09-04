@@ -270,6 +270,8 @@ class BadRecordStep(PipeStep):
 
 class ExportCompletedStep(PipeStep):
     def setup(self):
+        self.retries = 10
+        self.pause_length = 20
         self.compress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.COMPRESSION_ARGS
 
     # TODO: override the timeouts, since we want to wait a lot longer for
