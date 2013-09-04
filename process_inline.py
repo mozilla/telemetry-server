@@ -238,7 +238,7 @@ class WriteConvertedStep(PipeStep):
         n = self.storage.write(key, data, dims)
         # TODO: write out completed files as we see them
         if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
-            q_out.put(n)
+            self.q_out.put(n)
         self.records_written += 1
         self.bytes_written += len(data)
 
@@ -254,7 +254,7 @@ class BadRecordStep(PipeStep):
             try:
                 key, dims, data, error = record
                 path = u"/".join([key] + dims)
-                self.storage.write_filename(path, unicode(data, errors='replace'), self.output_file)
+                self.storage.write_filename(path, data, self.output_file)
                 self.records_written += 1
                 self.bytes_written += len(path) + len(data) + 1
             except Exception, e:
