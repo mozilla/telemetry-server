@@ -34,12 +34,12 @@ class StorageLayout:
 
     def write(self, uuid, obj, dimensions):
         filename = self._schema.get_filename(self._basedir, dimensions)
-        self.write_filename(uuid, obj, filename)
+        return self.write_filename(uuid, obj, filename)
 
     def write_invalid(self, uuid, obj, dimensions, err):
         # TODO: put 'err' into file?
         filename = self._schema.get_filename_invalid(self._basedir, dimensions)
-        self.write_filename(uuid, obj, filename, err)
+        return self.write_filename(uuid, obj, filename, err)
 
     def clean_newlines(self, value, tag="value"):
         # Clean any newlines (replace with spaces)
@@ -75,7 +75,9 @@ class StorageLayout:
 
         logging.debug("Wrote to %s: new size is %d" % (filename, filesize))
         if filesize >= self._max_log_size:
-            self.rotate(filename)
+            return self.rotate(filename)
+        else:
+            return filename
 
     def rotate(self, filename):
         logging.debug("Rotating %s" % (filename))
@@ -86,3 +88,4 @@ class StorageLayout:
         # Note that files are expected to be compressed elsewhere (see compressor.py)
         # The compressed log filenames will be something like
         #   a.b.c.log.3.COMPRESSED_SUFFIX
+        return tmp_name

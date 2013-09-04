@@ -29,6 +29,7 @@ import util.timer as timer
 import struct, gzip, StringIO
 from convert import Converter, BadPayloadError
 from revision_cache import RevisionCache
+from persist import StorageLayout
 
 def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
     result = 0
@@ -60,7 +61,7 @@ def wait_for(processes, label):
     print label, "Done."
 
 class PipeStep(object):
-    PAUSE_LENGTH = 2
+    PAUSE_LENGTH = 5
     RETRIES = 3
     def __init__(self, num, name, q_in, q_out=None):
         self.num = num
@@ -221,8 +222,21 @@ class ConvertRawRecordsStep(PipeStep):
 
 
 class WriteConvertedStep(PipeStep):
+    def __init__(self, num, name, q_in, q_out, storage):
+        self.storage = storage
+        self.bytes_written = 0
+        self.start_time = datetime.now()
+        self.end_time = datetime.now()
+        PipeStep.__init__(self, num, name, q_in, q_out)
+
     def handle(self, record):
-        print self.label, "got a record"
+        key, dims, data = record
+        n = self.storage.write(key, data, dims)
+        # TODO: write out completed files as we see them
+        #if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
+        #    q_out.put(n)
+        self.records_written += 1
+        self.bytes_written += len(data)
 
 
 class ExportCompletedStep(PipeStep):
@@ -242,6 +256,7 @@ def main():
     parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
     parser.add_argument("-c", "--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
+    parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
     args = parser.parse_args()
 
     schema_data = open(args.telemetry_schema)
@@ -250,6 +265,8 @@ def main():
 
     cache = RevisionCache(args.histogram_cache_path, "hg.mozilla.org")
     converter = Converter(cache, schema)
+
+    storage = StorageLayout(schema, args.output_dir, args.max_output_size)
 
     #num_cpus = multiprocessing.cpu_count()
     num_cpus = 2
@@ -282,12 +299,12 @@ def main():
     local_filenames = [os.path.join(args.work_dir, f) for f in incoming_filenames]
 
     # TODO: try a SimpleQueue
-    raw_files = Queue(100)
+    raw_files = Queue(1000)
     for l in local_filenames:
         raw_files.put(l)
 
-    raw_records = Queue(150000)
-    converted_records = Queue(50000)
+    raw_records = Queue(10000)
+    converted_records = Queue(20000)
     bad_records = Queue()
     completed_files = Queue()
     compressed_files = Queue()
@@ -319,7 +336,7 @@ def main():
     for i in range(num_cpus):
         w = Process(
                 target=WriteConvertedStep,
-                args=(i, "Writer", converted_records, completed_files))
+                args=(i, "Writer", converted_records, completed_files, storage))
         writers.append(w)
         w.start()
         print "Writer", i, "pid:", w.pid

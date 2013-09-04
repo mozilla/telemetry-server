@@ -124,6 +124,8 @@ class Converter:
 
     def rewrite_hists(self, revision_url, histograms):
         histogram_defs = self.get_histograms_for_revision(revision_url)
+        if histogram_defs is None:
+            raise ValueError("Failed to fetch histograms for URL: %s" % revision_url)
         rewritten = dict()
         for key, val in histograms.iteritems():
             real_histogram_name = key

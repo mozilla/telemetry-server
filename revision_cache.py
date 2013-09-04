@@ -63,7 +63,8 @@ class RevisionCache:
             # TODO: validate the resulting obj.
         except:
             # TODO: log an info / debug message
-            sys.stderr.write("INFO: failed to load '%s' from disk cache\n" % filename)
+            #sys.stderr.write("INFO: failed to load '%s' from disk cache\n" % filename)
+            pass
         return histograms
 
     def fetch_server(self, repo, revision):
