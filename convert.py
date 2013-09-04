@@ -181,6 +181,10 @@ class Converter:
             result = info.get(key)
         return result
 
+    # Serialize to minimal JSON
+    def serialize(self, json_dict):
+        return json.dumps(json_dict, separators=(',', ':'))
+
 def process(converter, target_date=None):
     line_num = 0
     bytes_read = 0;
@@ -204,7 +208,7 @@ def process(converter, target_date=None):
             json_dict, dimensions = converter.convert_json(jsonstr, target_date)
             sys.stdout.write(uuid)
             sys.stdout.write("\t")
-            sys.stdout.write(json.dumps(json_dict, separators=(',', ':')))
+            sys.stdout.write(converter.serialize(json_dict))
             sys.stdout.write("\n")
         except BadPayloadError, e:
             sys.stderr.write("Payload Error on line %d: %s\n%s\n" % (line_num, e.msg, jsonstr))

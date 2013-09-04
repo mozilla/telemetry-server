@@ -27,6 +27,8 @@ from subprocess import Popen, PIPE
 from boto.s3.connection import S3Connection
 import util.timer as timer
 import struct, gzip, StringIO
+from convert import Converter, BadPayloadError
+from revision_cache import RevisionCache
 
 def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
     result = 0
@@ -172,6 +174,52 @@ class ReadRawStep(PipeStep):
             print self.label, "- Error reading raw data from ", raw_file, e
 
 
+class ConvertRawRecordsStep(PipeStep):
+    def __init__(self, num, name, q_in, q_out, q_bad, converter):
+        self.q_bad = q_bad
+        self.bytes_read = 0
+        self.bytes_written = 0
+        self.bad_records = 0
+        self.converter = converter
+        self.start_time = datetime.now()
+        self.end_time = datetime.now()
+        PipeStep.__init__(self, num, name, q_in, q_out)
+
+    def handle(self, record):
+        self.end_time = datetime.now()
+        key, dims, data = record
+        #print self.label, "got", key
+        self.bytes_read += len(data)
+        try:
+            parsed_data, parsed_dims = self.converter.convert_json(data, dims[-1])
+            # TODO: take this out if it's too slow
+            for i in range(len(dims)):
+                if dims[i] != parsed_dims[i]:
+                    print self.label, "Record", self.records_read, "mismatched dimension", i, dims[i], "!=", parsed_dims[i]
+            serialized_data = self.converter.serialize(parsed_data)
+            self.q_out.put((key, parsed_dims, serialized_data))
+            self.bytes_written += len(serialized_data)
+            self.records_written += 1
+        except BadPayloadError, e:
+            #self.q_bad.put((key, dims, data, e.msg))
+            print self.label, "Bad payload:", e.msg
+            self.bad_records += 1
+        except Exception, e:
+            #self.q_bad.put((key, dims, data, str(e)))
+            print self.label, "ERROR:", e
+            self.bad_records += 1
+
+    def finish(self):
+        duration = timer.delta_sec(self.start_time, self.end_time)
+        read_rate = self.records_read / duration
+        mb_read = self.bytes_read / 1024.0 / 1024.0
+        mb_read_rate = mb_read / duration
+        write_rate = self.records_written / duration
+        mb_written = self.bytes_written / 1024.0 / 1024.0
+        mb_write_rate = mb_written / duration
+        print "%s All done, read %d records or %.2fMB (%.2fr/s, %.2fMB/s), wrote %d or %.2f MB (%.2fr/s, %.2fMB/s). Found %d bad records" % (self.label, self.records_read, mb_read, read_rate, mb_read_rate, self.records_written, mb_written, write_rate, mb_write_rate, self.bad_records)
+
+
 class WriteConvertedStep(PipeStep):
     def handle(self, record):
         print self.label, "got a record"
@@ -181,15 +229,6 @@ class ExportCompletedStep(PipeStep):
     def handle(self, record):
         print self.label, "got a record"
 
-
-class ConvertRawRecordsStep(PipeStep):
-    def __init__(self, num, name, q_in, q_out, q_bad):
-        self.q_bad = q_bad
-        PipeStep.__init__(self, num, name, q_in, q_out)
-
-    def handle(self, record):
-        key, dims, data = record
-        print self.label, "got", key
 
 
 def main():
@@ -201,12 +240,16 @@ def main():
     parser.add_argument("-w", "--work-dir", help="Location to cache downloaded files", required=True)
     parser.add_argument("-o", "--output-dir", help="Base dir to store processed data", required=True)
     parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
+    parser.add_argument("-c", "--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     args = parser.parse_args()
 
     schema_data = open(args.telemetry_schema)
     schema = TelemetrySchema(json.load(schema_data))
     schema_data.close()
+
+    cache = RevisionCache(args.histogram_cache_path, "hg.mozilla.org")
+    converter = Converter(cache, schema)
 
     #num_cpus = multiprocessing.cpu_count()
     num_cpus = 2
@@ -236,8 +279,6 @@ def main():
         return result
     print "Done"
 
-
-    print "Splitting raw logs..."
     local_filenames = [os.path.join(args.work_dir, f) for f in incoming_filenames]
 
     # TODO: try a SimpleQueue
@@ -267,7 +308,7 @@ def main():
     for i in range(num_cpus):
         cr = Process(
                 target=ConvertRawRecordsStep,
-                args=(i, "Converter", raw_records, converted_records, bad_records))
+                args=(i, "Converter", raw_records, converted_records, bad_records, converter))
         converters.append(cr)
         cr.start()
         print "Converter", i, "pid:", cr.pid
