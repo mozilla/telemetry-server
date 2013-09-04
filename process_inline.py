@@ -68,8 +68,12 @@ class PipeStep(object):
         self.label = " ".join((name, str(num)))
         self.q_in = q_in
         self.q_out = q_out
+        self.start_time = datetime.now()
+        self.end_time = datetime.now()
         self.records_read = 0
         self.records_written = 0
+        self.bytes_read = 0
+        self.bytes_written = 0
 
         # Do stuff.
         self.setup()
@@ -178,12 +182,8 @@ class ReadRawStep(PipeStep):
 class ConvertRawRecordsStep(PipeStep):
     def __init__(self, num, name, q_in, q_out, q_bad, converter):
         self.q_bad = q_bad
-        self.bytes_read = 0
-        self.bytes_written = 0
         self.bad_records = 0
         self.converter = converter
-        self.start_time = datetime.now()
-        self.end_time = datetime.now()
         PipeStep.__init__(self, num, name, q_in, q_out)
 
     def handle(self, record):
@@ -202,11 +202,11 @@ class ConvertRawRecordsStep(PipeStep):
             self.bytes_written += len(serialized_data)
             self.records_written += 1
         except BadPayloadError, e:
-            #self.q_bad.put((key, dims, data, e.msg))
+            self.q_bad.put((key, dims, data, e.msg))
             print self.label, "Bad payload:", e.msg
             self.bad_records += 1
         except Exception, e:
-            #self.q_bad.put((key, dims, data, str(e)))
+            self.q_bad.put((key, dims, data, str(e)))
             msg = str(e)
             if msg != "Missing in payload: info.revision":
                 print self.label, "ERROR:", e
@@ -226,9 +226,6 @@ class ConvertRawRecordsStep(PipeStep):
 class WriteConvertedStep(PipeStep):
     def __init__(self, num, name, q_in, q_out, storage):
         self.storage = storage
-        self.bytes_written = 0
-        self.start_time = datetime.now()
-        self.end_time = datetime.now()
         PipeStep.__init__(self, num, name, q_in, q_out)
 
     def handle(self, record):
@@ -240,11 +237,34 @@ class WriteConvertedStep(PipeStep):
         self.records_written += 1
         self.bytes_written += len(data)
 
+class BadRecordStep(PipeStep):
+    def __init__(self, num, name, q_in, output_file, storage):
+        self.output_file = output_file
+        self.storage = storage
+        PipeStep.__init__(self, num, name, q_in, None)
+
+    def handle(self, record):
+        if self.output_file is not None:
+            try:
+                key, dims, data, error = record
+                path = "/".join([key] + dims)
+                self.storage.write_filename(path, data, self.output_file)
+                self.records_written += 1
+                self.bytes_written += len(path) + len(data) + 1
+            except Exception, e:
+                print self.label, "ERROR:", e
+
+    def finish(self):
+        duration = timer.delta_sec(self.start_time, self.end_time)
+        write_rate = self.records_written / duration
+        mb_written = self.bytes_written / 1024.0 / 1024.0
+        mb_write_rate = mb_written / duration
+        print "%s All done, wrote %d or %.2f MB (%.2fr/s, %.2fMB/s)" % (self.label, self.records_written, mb_written, write_rate, mb_write_rate)
+
 
 class ExportCompletedStep(PipeStep):
     def handle(self, record):
         print self.label, "got a record"
-
 
 
 def main():
@@ -256,6 +276,7 @@ def main():
     parser.add_argument("-w", "--work-dir", help="Location to cache downloaded files", required=True)
     parser.add_argument("-o", "--output-dir", help="Base dir to store processed data", required=True)
     parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
+    parser.add_argument("-b", "--bad-data-log", help="Save bad records to this file")
     parser.add_argument("-c", "--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
@@ -333,6 +354,13 @@ def main():
         print "Converter", i, "pid:", cr.pid
     print "Converters all started"
 
+    # Save bad records for later inspection
+    bad_handler = Process(
+            target=BadRecordStep,
+            args=(i, "Bad Data Handler", bad_records, args.bad_data_log, storage))
+    bad_handler.start()
+    print "Bad Data Handler pid:", bad_handler.pid
+
     # Writer converted data as it becomes available
     writers = []
     for i in range(num_cpus):
@@ -360,6 +388,8 @@ def main():
 
     # Wait for conversion to complete.
     wait_for(converters, "Converters")
+
+    wait_for([bad_handler], "Bad Data Handler")
 
     wait_for(writers, "Converted Writers")
 
