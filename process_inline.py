@@ -62,13 +62,8 @@ def wait_for(processes, label):
     print label, "Done."
 
 class PipeStep(object):
-    PAUSE_LENGTH = 5
-    RETRIES = 3
+    SENTINEL = 'STOP'
     def __init__(self, num, name, q_in, q_out=None):
-        # Set instance vars so we can easily modify behaviour in subclasses
-        self.retries = PipeStep.RETRIES
-        self.pause_length = PipeStep.PAUSE_LENGTH
-
         self.num = num
         self.label = " ".join((name, str(num)))
         self.q_in = q_in
@@ -84,27 +79,29 @@ class PipeStep(object):
         self.setup()
         self.work()
         self.finish()
+
     def setup(self):
         pass
+
     def finish(self):
         print self.label, "All done, read", self.records_read, "records, wrote", self.records_written, "records"
         pass
+
     def handle(self, record):
         pass
+
     def work(self):
         print self.label, "Starting up"
-        retries = self.retries
         while True:
             try:
-                raw = self.q_in.get(True, self.pause_length)
+                raw = self.q_in.get()
+                if raw == PipeStep.SENTINEL:
+                    break
                 self.handle(raw)
                 self.records_read += 1
             except Q.Empty:
-                if retries > 0:
-                    print self.label, "- Get timed out, trying again"
-                    retries -= 1
-                else:
-                    break
+                break
+        print self.label, "Received stop message... all done"
 
 class ReadRawStep(PipeStep):
     def __init__(self, num, name, raw_files, q_raw, schema):
@@ -284,11 +281,8 @@ class ExportCompletedStep(PipeStep):
             logging.warn("Bad filename encountered, skipping: " + filename)
             return
         basename = filename[0:base_ends]
-
-        file_id = uuid.uuid4().hex
-
         # Get a unique name for the compressed file:
-        comp_name = basename + "." + str(next_log_num) + StorageLayout.COMPRESSED_SUFFIX
+        comp_name = basename + "." + uuid.uuid4().hex + StorageLayout.COMPRESSED_SUFFIX
 
         # reserve it!
         f_comp = open(comp_name, "wb")
@@ -307,7 +301,7 @@ class ExportCompletedStep(PipeStep):
 
         # Now set up our processing pipe:
         # - read from f_raw, compress, write to comp_name
-        p_compress = Popen(compress_cmd, bufsize=65536, stdin=f_raw, stdout=f_comp, stderr=sys.stderr)
+        p_compress = Popen(self.compress_cmd, bufsize=65536, stdin=f_raw, stdout=f_comp, stderr=sys.stderr)
 
         # Note: it looks like p_compress.wait() is what we want, but the docs
         #       warn of a deadlock, so we use communicate() instead.
@@ -401,6 +395,10 @@ def main():
         print "Reader", i, "pid:", rr.pid
     print "Readers all started"
 
+    # Tell readers to stop:
+    for i in range(num_cpus):
+        raw_files.put(PipeStep.SENTINEL)
+
     # Convert raw input as it becomes available
     converters = []
     for i in range(num_cpus):
@@ -443,16 +441,28 @@ def main():
 
     # Wait for raw input to complete.
     wait_for(raw_readers, "Raw Readers")
+    for i in range(num_cpus):
+        raw_records.put(PipeStep.SENTINEL)
 
     # Wait for conversion to complete.
     wait_for(converters, "Converters")
+    for i in range(num_cpus):
+        converted_records.put(PipeStep.SENTINEL)
+        bad_records.put(PipeStep.SENTINEL)
 
     wait_for([bad_handler], "Bad Data Handler")
 
     wait_for(writers, "Converted Writers")
 
-    # TODO: find <out_dir> -type f -not -name ".compressme"
+    # find <out_dir> -type f -not -name ".compressme"
     # Add them to completed_files
+    for root, dirs, files in os.walk(args.output_dir):
+        for f in files:
+            if f.endswith(".log"):
+                completed_files.put(os.path.join(root, f))
+
+    for i in range(num_cpus):
+        completed_files.put(PipeStep.SENTINEL)
 
     wait_for(exporters, "Exporters to S3")
 
