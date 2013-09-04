@@ -207,7 +207,9 @@ class ConvertRawRecordsStep(PipeStep):
             self.bad_records += 1
         except Exception, e:
             #self.q_bad.put((key, dims, data, str(e)))
-            print self.label, "ERROR:", e
+            msg = str(e)
+            if msg != "Missing in payload: info.revision":
+                print self.label, "ERROR:", e
             self.bad_records += 1
 
     def finish(self):
