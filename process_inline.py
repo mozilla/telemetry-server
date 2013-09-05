@@ -152,6 +152,9 @@ class ReadRawStep(PipeStep):
                     # Data looks weird, should be JSON.
                     print self.label, "Warning: Found unexpected data for record", record_count, "in", raw_file, "path:", path, "data:"
                     print data
+                else:
+                    # Raw JSON, make sure we treat it as unicode.
+                    data = unicode(data, errors="replace")
 
                 bytes_read += 8 + len_path + len_data
                 path_components = path.split("/")
@@ -329,13 +332,7 @@ class ExportCompressedStep(PipeStep):
                 "-a", self.aws_key, "-s", self.aws_secret_key, "-t",
                 str(self.batch_size), "--put-only-new", "--put-full-path"]
         self.conn = S3Connection(self.aws_key, self.aws_secret_key)
-        try:
-            print "Verifying that we can write to", self.aws_bucket_name
-            self.bucket = self.conn.get_bucket(self.aws_bucket_name)
-            print "Looks good!"
-        except S3ResponseError:
-            print "Bucket", self.aws_bucket_name, "not found.  Attempting to create it."
-            self.bucket = self.conn.create_bucket(self.aws_bucket_name)
+        self.bucket = self.conn.get_bucket(self.aws_bucket_name)
 
     def export_batch(self, data_dir, conn, bucket, files):
         print self.label, "Uploading", ",".join(files)
@@ -431,13 +428,6 @@ class ExportCompressedStep(PipeStep):
                 print self.label, "ERROR: failed to upload a batch:", ",".join(self.batch)
                 # TODO: add to a "failures" queue, save them or something?
 
-        n = self.storage.write(key, data, dims)
-        # TODO: write out completed files as we see them
-        if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
-            self.q_out.put(n)
-        self.records_written += 1
-        self.bytes_written += len(data)
-
     def finish(self):
         if len(self.batch) > 0:
             print "Sending last batch of", len(self.batch)
@@ -496,7 +486,6 @@ def main():
     storage = StorageLayout(schema, args.output_dir, args.max_output_size)
 
     num_cpus = multiprocessing.cpu_count()
-    #num_cpus = 2
 
     start = datetime.now()
     conn = S3Connection(args.aws_key, args.aws_secret_key)
@@ -514,6 +503,16 @@ def main():
     for f in incoming_filenames:
         print "  ", f
     
+    print "Verifying that we can write to", args.publish_bucket
+    if args.dry_run:
+        print "Dry run mode: don't care!"
+    else:
+        try:
+            publish_bucket = conn.get_bucket(args.publish_bucket)
+            print "Looks good!"
+        except S3ResponseError:
+            print "Bucket", args.publish_bucket, "not found.  Attempting to create it."
+            publish_bucket = conn.create_bucket(publish_bucket)
 
     result = 0
     print "Downloading", len(incoming_filenames), "files..."
