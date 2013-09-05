@@ -466,6 +466,18 @@ class ExportCompressedStep(PipeStep):
         return md5.hexdigest(), size
 
 
+def start_workers(count, name, clazz, q_in, more_args):
+    workers = []
+    for i in range(count):
+        w = Process(
+                target=clazz,
+                args=(i, name, q_in) + more_args)
+        workers.append(w)
+        w.start()
+        print name, i, "pid:", w.pid
+    print name + "s", "all started"
+    return workers
+
 def main():
     parser = argparse.ArgumentParser(description='Process incoming Telemetry data', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("incoming_bucket", help="The S3 bucket containing incoming files")
@@ -513,10 +525,11 @@ def main():
 
     result = 0
     print "Downloading", len(incoming_filenames), "files..."
-    if not args.dry_run:
-        result = fetch_s3_files(incoming_filenames, args.work_dir, args.incoming_bucket, args.aws_key, args.aws_secret_key)
-    else:
+    if args.dry_run:
         print "Dry run mode: skipping download from S3"
+    else:
+        result = fetch_s3_files(incoming_filenames, args.work_dir, 
+                args.incoming_bucket, args.aws_key, args.aws_secret_key)
 
     if result != 0:
         print "Error downloading files. Return code of s3funnel was", result
@@ -537,30 +550,16 @@ def main():
     compressed_files = Queue()
 
     # Begin reading raw input
-    raw_readers = []
-    for i in range(num_cpus):
-        rr = Process(
-                target=ReadRawStep,
-                args=(i, "Reader", raw_files, raw_records, schema))
-        raw_readers.append(rr)
-        rr.start()
-        print "Reader", i, "pid:", rr.pid
-    print "Readers all started"
+    raw_readers = start_workers(num_cpus, "Reader", ReadRawStep, raw_files,
+            (raw_records, schema))
 
-    # Tell readers to stop:
+    # Tell readers when to stop:
     for i in range(num_cpus):
         raw_files.put(PipeStep.SENTINEL)
 
     # Convert raw input as it becomes available
-    converters = []
-    for i in range(num_cpus):
-        cr = Process(
-                target=ConvertRawRecordsStep,
-                args=(i, "Converter", raw_records, converted_records, bad_records, converter))
-        converters.append(cr)
-        cr.start()
-        print "Converter", i, "pid:", cr.pid
-    print "Converters all started"
+    converters = start_workers(num_cpus, "Converter", ConvertRawRecordsStep,
+            raw_records, (converted_records, bad_records, converter))
 
     # Save bad records for later inspection
     bad_handler = Process(
@@ -570,37 +569,17 @@ def main():
     print "Bad Data Handler pid:", bad_handler.pid
 
     # Write converted data as it becomes available
-    writers = []
-    for i in range(num_cpus):
-        w = Process(
-                target=WriteConvertedStep,
-                args=(i, "Writer", converted_records, completed_files, storage))
-        writers.append(w)
-        w.start()
-        print "Writer", i, "pid:", w.pid
-    print "Writers all started"
+    writers = start_workers(num_cpus, "Writer", WriteConvertedStep,
+            converted_records, (completed_files, storage))
 
     # Compress completed files.
-    compressors = []
-    for i in range(num_cpus):
-        c = Process(
-                target=CompressCompletedStep,
-                args=(i, "Compressor", completed_files, compressed_files))
-        compressors.append(c)
-        c.start()
-        print "Compressor", i, "pid:", e.pid
-    print "Compressors all started"
+    compressors = start_workers(num_cpus, "Compressor", CompressCompletedStep,
+            completed_files, (compressed_files,))
 
     # Export compressed files to S3.
-    exporters = []
-    for i in range(num_cpus):
-        ex = Process(
-                target=ExportCompressedStep,
-                args=(i, "Exporter", compressed_files, args.output_dir, args.aws_key, args.aws_secret_key, args.publish_bucket, args.dry_run))
-        exporters.append(ex)
-        ex.start()
-        print "Exporter", i, "pid:", e.pid
-    print "Exporters all started"
+    exporters = start_workers(num_cpus, "Exporter", ExportCompressedStep,
+            compressed_files, (args.output_dir, args.aws_key,
+                args.aws_secret_key, args.publish_bucket, args.dry_run))
 
     # Wait for raw input to complete.
     wait_for(raw_readers, "Raw Readers")
