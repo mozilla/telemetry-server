@@ -265,7 +265,7 @@ class BadRecordStep(PipeStep):
         print "%s All done, wrote %d or %.2f MB (%.2fr/s, %.2fMB/s)" % (self.label, self.records_written, mb_written, write_rate, mb_write_rate)
 
 
-class ExportCompletedStep(PipeStep):
+class CompressCompletedStep(PipeStep):
     def setup(self):
         self.retries = 10
         self.pause_length = 20
@@ -319,6 +319,153 @@ class ExportCompletedStep(PipeStep):
         # TODO: upload to S3
 
 
+class ExportCompressedStep(PipeStep):
+    def __init__(self, num, name, q_in, base_dir, key, skey, bucket, dry_run):
+        self.dry_run = 0
+        self.batch_size = 8
+        self.retries = 10
+        self.base_dir = base_dir
+        self.aws_key = key
+        self.aws_secret_key = skey
+        self.aws_bucket_name = bucket
+        PipeStep.__init__(self, num, name, q_in)
+
+    def setup(self):
+        self.batch = []
+        self.s3f_cmd = ["/usr/local/bin/s3funnel", self.aws_bucket_name, "put",
+                "-a", self.aws_key, "-s", self.aws_secret_key, "-t",
+                str(self.batch_size), "--put-only-new", "--put-full-path"]
+        self.conn = S3Connection(self.aws_key, self.aws_secret_key)
+        try:
+            print "Verifying that we can write to", self.aws_bucket_name
+            self.bucket = self.conn.get_bucket(self.aws_bucket_name)
+            print "Looks good!"
+        except S3ResponseError:
+            print "Bucket", self.aws_bucket_name, "not found.  Attempting to create it."
+            self.bucket = self.conn.create_bucket(self.aws_bucket_name)
+
+    def export_batch(self, data_dir, conn, bucket, files):
+        if self.dry_run:
+            return 0
+
+        # Time the s3funnel call:
+        start = datetime.now()
+        result = subprocess.call(self.s3f_cmd + files, cwd=data_dir)
+        sec = timer.delta_sec(start)
+
+        total_size = 0
+        if result == 0:
+            # Success! Verify each file's checksum, then truncate it.
+            for f in files:
+                # Verify checksum and track cumulative size so we can figure out MB/s
+                full_filename = os.path.join(data_dir, f)
+                md5, size = self.md5file(full_filename)
+                if size < Exporter.MIN_UPLOADABLE_SIZE:
+                    # Check file size again when uploading in case it has been
+                    # concurrently uploaded / truncated elsewhere.
+                    print "Skipping upload for tiny file:", f
+                    continue
+
+                total_size += size
+
+                # f is the key name - it does not include the full path to the
+                # data dir.
+                key = bucket.get_key(f)
+                # Strip quotes from md5
+                remote_md5 = key.etag[1:-1]
+                if md5 != remote_md5:
+                    print "ERROR: %s failed checksum verification: Local=%s, Remote=%s" % (f, md5, remote_md5)
+                    result = -1
+                else:
+                    # Validation passed. Time to clean up the file.
+                    if self.keep_backups:
+                        # Keep a copy of the original, just in case.
+                        os.rename(full_filename, full_filename + ".uploaded")
+
+                    # Create / Truncate: we must keep the original file around to
+                    # properly calculate the next archived log number, ie if we
+                    # are uploading whatever.log.5.lzma, the next one should still
+                    # be whatever.log.6.lzma.
+                    # TODO: if we switch to using UUIDs in the filename, we can
+                    #       stop keeping the dummy files around.
+                    if self.remove_files:
+                        if not self.keep_backups:
+                            os.remove(full_filename)
+                            # Otherwise it was renamed already.
+                    else:
+                        h = open(full_filename, "w")
+                        h.close()
+        else:
+            print "Failed to upload one or more files in the current batch. Error code was", result
+
+        total_mb = float(total_size) / 1024.0 / 1024.0
+        print "Transferred %.2fMB in %.2fs (%.2fMB/s)" % (total_mb, sec, total_mb / sec)
+        return result
+
+    def retry_export_batch(self, data_dir, conn, bucket, files):
+        success = False
+        for i in range(self.retries):
+            batch_response = self.export_batch(self.base_dir, self.conn, self.bucket, self.batch)
+            if batch_response == 0:
+                success = True
+                break
+        return success
+
+    def strip_data_dir(self, data_dir, full_file):
+        if full_file.startswith(data_dir):
+            chopped = full_file[len(data_dir):]
+            if chopped[0] == "/":
+                chopped = chopped[1:]
+            return chopped
+        else:
+            print "ERROR: cannot remove", data_dir, "from", full_file
+            raise ValueError("Invalid full filename: " + str(full_file))
+
+    def handle(self, record):
+        # Remove the output dir prefix from filenames
+        try:
+            stripped_name = self.strip_data_dir(self.base_dir, record)
+        except Exception, e:
+            print self.label, "Warning: couldn't strip base dir from", record, e
+            stripped_name = record
+        self.batch.append(stripped_name)
+        if len(self.batch) >= self.batch_size:
+            success = self.retry_export_batch(self.base_dir, self.conn, self.bucket, self.batch)
+            if success:
+                self.batch = []
+            else:
+                print self.label, "ERROR: failed to upload a batch:", ",".join(self.batch)
+                # TODO: add to a "failures" queue, save them or something?
+
+        n = self.storage.write(key, data, dims)
+        # TODO: write out completed files as we see them
+        if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
+            self.q_out.put(n)
+        self.records_written += 1
+        self.bytes_written += len(data)
+
+    def finish(self):
+        if len(self.batch) > 0:
+            print "Sending last batch of", len(self.batch)
+            success = self.retry_export_batch(self.base_dir, self.conn, self.bucket, self.batch)
+            if not success:
+                print self.label, "ERROR: failed to upload a batch:", ",".join(self.batch)
+                # TODO: add to a "failures" queue, save them or something?
+
+    # TODO: move this to utils somewhere.
+    def md5file(self, filename):
+        md5 = hashlib.md5()
+        size = 0
+        with open(filename, "rb") as data:
+            while True:
+                chunk = data.read(8192)
+                if not chunk:
+                    break
+                md5.update(chunk)
+                size += len(chunk)
+        return md5.hexdigest(), size
+
+
 def main():
     parser = argparse.ArgumentParser(description='Process incoming Telemetry data', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("incoming_bucket", help="The S3 bucket containing incoming files")
@@ -332,6 +479,7 @@ def main():
     parser.add_argument("-c", "--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
+    parser.add_argument("-D", "--dry-run", help="Don't modify remote files", action="store_true")
     args = parser.parse_args()
 
     schema_data = open(args.telemetry_schema)
@@ -365,7 +513,11 @@ def main():
 
     result = 0
     print "Downloading", len(incoming_filenames), "files..."
-    result = 0#fetch_s3_files(incoming_filenames, args.work_dir, args.incoming_bucket, args.aws_key, args.aws_secret_key)
+    if not args.dry_run:
+        result = fetch_s3_files(incoming_filenames, args.work_dir, args.incoming_bucket, args.aws_key, args.aws_secret_key)
+    else:
+        print "Dry run mode: skipping download from S3"
+
     if result != 0:
         print "Error downloading files. Return code of s3funnel was", result
         return result
@@ -417,7 +569,7 @@ def main():
     bad_handler.start()
     print "Bad Data Handler pid:", bad_handler.pid
 
-    # Writer converted data as it becomes available
+    # Write converted data as it becomes available
     writers = []
     for i in range(num_cpus):
         w = Process(
@@ -428,14 +580,25 @@ def main():
         print "Writer", i, "pid:", w.pid
     print "Writers all started"
 
-    # Compress and export completed files.
+    # Compress completed files.
+    compressors = []
+    for i in range(num_cpus):
+        c = Process(
+                target=CompressCompletedStep,
+                args=(i, "Compressor", completed_files, compressed_files))
+        compressors.append(c)
+        c.start()
+        print "Compressor", i, "pid:", e.pid
+    print "Compressors all started"
+
+    # Export compressed files to S3.
     exporters = []
     for i in range(num_cpus):
-        e = Process(
-                target=ExportCompletedStep,
-                args=(i, "Exporter", completed_files))
-        exporters.append(e)
-        e.start()
+        ex = Process(
+                target=ExportCompressedStep,
+                args=(i, "Exporter", compressed_files, args.output_dir, args.aws_key, args.aws_secret_key, args.publish_bucket, args.dry_run))
+        exporters.append(ex)
+        ex.start()
         print "Exporter", i, "pid:", e.pid
     print "Exporters all started"
 
@@ -464,12 +627,19 @@ def main():
     for i in range(num_cpus):
         completed_files.put(PipeStep.SENTINEL)
 
-    wait_for(exporters, "Exporters to S3")
+    wait_for(compressors, "Compressors")
+    for i in range(num_cpus):
+        compressed_files.put(PipeStep.SENTINEL)
+
+    wait_for(exporters, "Exporters")
 
     print "Removing processed logs from S3..."
     for f in incoming_filenames:
-        print "  Deleting", f
-        #incoming_bucket.delete_key(f)
+        if args.dry_run:
+            print "  Dry run, so not really deleting", f
+        else:
+            print "  Deleting", f
+            incoming_bucket.delete_key(f)
     print "Done"
 
     duration = timer.delta_sec(start)
