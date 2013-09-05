@@ -338,6 +338,7 @@ class ExportCompressedStep(PipeStep):
             self.bucket = self.conn.create_bucket(self.aws_bucket_name)
 
     def export_batch(self, data_dir, conn, bucket, files):
+        print self.label, "Uploading", ",".join(files)
         if self.dry_run:
             return 0
 
