@@ -7,7 +7,6 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import argparse
-import re
 import sys
 import getopt
 try:
@@ -38,7 +37,6 @@ class Converter:
         self._histocache = {}
         self._cache = cache
         self._schema = schema
-        self._valid_revisions = re.compile('^(http://.*)/([^/]+)/rev/([0-9a-f]+)/?$')
 
     def map_key(self, histograms, key):
         return key
@@ -99,31 +97,8 @@ class Converter:
             self._histocache[key] = hist
         return self._histocache[key]
 
-    # Returns (repository name, revision)
-    def revision_url_to_parts(self, revision_url):
-        m = self._valid_revisions.match(revision_url)
-        if m:
-            #sys.stderr.write("Matched\n")
-            return (m.group(2), m.group(3))
-        else:
-            #sys.stderr.write("Did not Match: %s\n" % revision_url)
-            raise ValueError("Invalid revision URL: %s" % revision_url)
-        #return (None, None)
-
-    def get_histograms_for_revision(self, revision_url):
-        # revision_url is like
-        #    http://hg.mozilla.org/releases/mozilla-aurora/rev/089956e907ed
-        # and path should be like
-        #    toolkit/components/telemetry/Histograms.json
-        # to produce a full URL like
-        #    http://hg.mozilla.org/releases/mozilla-aurora/raw-file/089956e907ed/toolkit/components/telemetry/Histograms.json
-        repo, revision = self.revision_url_to_parts(revision_url)
-        #sys.stderr.write("Getting histograms for %s/%s\n" % (repo, revision))
-        histograms = self._cache.get_revision(repo, revision)
-        return histograms
-
     def rewrite_hists(self, revision_url, histograms):
-        histogram_defs = self.get_histograms_for_revision(revision_url)
+        histogram_defs = self._cache.get_histograms_for_revision(revision_url)
         if histogram_defs is None:
             raise ValueError("Failed to fetch histograms for URL: %s" % revision_url)
         rewritten = dict()
