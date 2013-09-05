@@ -65,12 +65,15 @@ def wait_for(processes, label):
 class PipeStep(object):
     SENTINEL = 'STOP'
     def __init__(self, num, name, q_in, q_out=None):
+        self.print_stats = True
         self.num = num
         self.label = " ".join((name, str(num)))
         self.q_in = q_in
         self.q_out = q_out
         self.start_time = datetime.now()
         self.end_time = datetime.now()
+        self.last_update = datetime.now()
+        self.bad_records = 0
         self.records_read = 0
         self.records_written = 0
         self.bytes_read = 0
@@ -84,9 +87,19 @@ class PipeStep(object):
     def setup(self):
         pass
 
+    def dump_stats(self):
+        duration = timer.delta_sec(self.start_time, self.end_time)
+        read_rate = self.records_read / duration
+        mb_read = self.bytes_read / 1024.0 / 1024.0
+        mb_read_rate = mb_read / duration
+        write_rate = self.records_written / duration
+        mb_written = self.bytes_written / 1024.0 / 1024.0
+        mb_write_rate = mb_written / duration
+        print "%s: Read %d records or %.2fMB (%.2fr/s, %.2fMB/s), wrote %d or %.2f MB (%.2fr/s, %.2fMB/s). Found %d bad records" % (self.label, self.records_read, mb_read, read_rate, mb_read_rate, self.records_written, mb_written, write_rate, mb_write_rate, self.bad_records)
+
     def finish(self):
-        print self.label, "All done, read", self.records_read, "records, wrote", self.records_written, "records"
-        pass
+        print self.label, "All done"
+        self.dump_stats()
 
     def handle(self, record):
         pass
@@ -100,16 +113,22 @@ class PipeStep(object):
                     break
                 self.handle(raw)
                 self.records_read += 1
+                if self.print_stats:
+                    this_update = datetime.now()
+                    if timer.delta_sec(self.last_update, this_update) > 10.0:
+                        self.dump_stats()
+                        self.last_update = this_update
+                self.end_time = datetime.now()
             except Q.Empty:
                 break
         print self.label, "Received stop message... all done"
 
 class ReadRawStep(PipeStep):
-    def __init__(self, num, name, raw_files, completed_files, schema, converter, storage):
+    def __init__(self, num, name, raw_files, completed_files, schema, converter, storage, bad_filename):
         self.schema = schema
         self.converter = converter
         self.storage = storage
-        self.bad_records = 0
+        self.bad_filename = bad_filename
         PipeStep.__init__(self, num, name, raw_files, completed_files)
 
     def setup(self):
@@ -153,7 +172,8 @@ class ReadRawStep(PipeStep):
                         data_reader.close()
                     except Exception, e:
                         # Corrupted data, let's skip this record.
-                        print self.label, "Warning: Found corrupted data for record", record_count, "in", raw_file, "path:", path
+                        print self.label, "ERROR: Found corrupted data for record", record_count, "in", raw_file, "path:", path
+                        self.bad_records += 1
                         continue
                 elif data[0] != "{":
                     # Data looks weird, should be JSON.
@@ -179,7 +199,7 @@ class ReadRawStep(PipeStep):
                 info["appVersion"] = path_components.pop(0)
                 info["appUpdateChannel"] = path_components.pop(0)
                 info["appBuildID"] = path_components.pop(0)
-                dimensions = self.schema.dimensions_from(info, submission_date)
+                dims = self.schema.dimensions_from(info, submission_date)
 
                 try:
                     # Convert data:
@@ -218,33 +238,20 @@ class ReadRawStep(PipeStep):
             # Corrupted data, let's skip this record.
             print self.label, "- Error reading raw data from ", raw_file, e
 
-    def write_bad_record(key, dims, data, error, message=None):
+    def write_bad_record(self, key, dims, data, error, message=None):
         self.bad_records += 1
         if message is not None:
             print self.label, message, error
-        if self.output_file is not None:
+        if self.bad_filename is not None:
             try:
-                key, dims, data, error = record
                 path = u"/".join([key] + dims)
-                self.storage.write_filename(path, data, self.output_file)
+                self.storage.write_filename(path, data, self.bad_filename)
             except Exception, e:
                 print self.label, "ERROR:", e
-
-    def finish(self):
-        duration = timer.delta_sec(self.start_time, self.end_time)
-        read_rate = self.records_read / duration
-        mb_read = self.bytes_read / 1024.0 / 1024.0
-        mb_read_rate = mb_read / duration
-        write_rate = self.records_written / duration
-        mb_written = self.bytes_written / 1024.0 / 1024.0
-        mb_write_rate = mb_written / duration
-        print "%s All done, read %d records or %.2fMB (%.2fr/s, %.2fMB/s), wrote %d or %.2f MB (%.2fr/s, %.2fMB/s). Found %d bad records" % (self.label, self.records_read, mb_read, read_rate, mb_read_rate, self.records_written, mb_written, write_rate, mb_write_rate, self.bad_records)
 
 
 class CompressCompletedStep(PipeStep):
     def setup(self):
-        self.retries = 10
-        self.pause_length = 20
         self.compress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.COMPRESSION_ARGS
 
     # TODO: override the timeouts, since we want to wait a lot longer for
@@ -342,6 +349,7 @@ class ExportCompressedStep(PipeStep):
                 remote_md5 = key.etag[1:-1]
                 if md5 != remote_md5:
                     print "ERROR: %s failed checksum verification: Local=%s, Remote=%s" % (f, md5, remote_md5)
+                    self.bad_records += 1
                     result = -1
                 # TODO: else add it to a "failed" queue.
         else:
@@ -393,6 +401,7 @@ class ExportCompressedStep(PipeStep):
             if not success:
                 print self.label, "ERROR: failed to upload a batch:", ",".join(self.batch)
                 # TODO: add to a "failures" queue, save them or something?
+        self.dump_stats()
 
     # TODO: move this to utils somewhere.
     def md5file(self, filename):
@@ -440,6 +449,9 @@ def main():
         print "ERROR: s3funnel not found at", S3FUNNEL_PATH
         print "You can get it from github: https://github.com/sstoiana/s3funnel"
         return -1
+
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
 
     schema_data = open(args.telemetry_schema)
     schema = TelemetrySchema(json.load(schema_data))
@@ -504,7 +516,7 @@ def main():
 
     # Begin reading raw input
     raw_readers = start_workers(num_cpus, "Reader", ReadRawStep, raw_files,
-            (completed_files, schema, converter, storage))
+            (completed_files, schema, converter, storage, args.bad_data_log))
 
     # Tell readers when to stop:
     for i in range(num_cpus):
