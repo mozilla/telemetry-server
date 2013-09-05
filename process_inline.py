@@ -32,12 +32,13 @@ from convert import Converter, BadPayloadError
 from revision_cache import RevisionCache
 from persist import StorageLayout
 
+S3FUNNEL_PATH = "/usr/local/bin/s3funnel"
 def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
     result = 0
     if len(files) > 0:
         if not os.path.isdir(fetch_cwd):
             os.makedirs(fetch_cwd)
-        fetch_cmd = ["/usr/local/bin/s3funnel"]
+        fetch_cmd = [S3FUNNEL_PATH]
         fetch_cmd.append(bucket_name)
         fetch_cmd.append("get")
         fetch_cmd.append("-a")
@@ -317,7 +318,7 @@ class CompressCompletedStep(PipeStep):
 
 class ExportCompressedStep(PipeStep):
     def __init__(self, num, name, q_in, base_dir, key, skey, bucket, dry_run):
-        self.dry_run = 0
+        self.dry_run = dry_run
         self.batch_size = 8
         self.retries = 10
         self.base_dir = base_dir
@@ -328,7 +329,7 @@ class ExportCompressedStep(PipeStep):
 
     def setup(self):
         self.batch = []
-        self.s3f_cmd = ["/usr/local/bin/s3funnel", self.aws_bucket_name, "put",
+        self.s3f_cmd = [S3FUNNEL_PATH, self.aws_bucket_name, "put",
                 "-a", self.aws_key, "-s", self.aws_secret_key, "-t",
                 str(self.batch_size), "--put-only-new", "--put-full-path"]
         self.conn = S3Connection(self.aws_key, self.aws_secret_key)
@@ -477,6 +478,11 @@ def main():
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
     parser.add_argument("-D", "--dry-run", help="Don't modify remote files", action="store_true")
     args = parser.parse_args()
+
+    if not os.path.isfile(S3FUNNEL_PATH):
+        print "ERROR: s3funnel not found at", S3FUNNEL_PATH
+        print "You can get it from github: https://github.com/sstoiana/s3funnel"
+        return -1
 
     schema_data = open(args.telemetry_schema)
     schema = TelemetrySchema(json.load(schema_data))
