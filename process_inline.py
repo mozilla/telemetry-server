@@ -105,9 +105,12 @@ class PipeStep(object):
         print self.label, "Received stop message... all done"
 
 class ReadRawStep(PipeStep):
-    def __init__(self, num, name, raw_files, q_raw, schema):
+    def __init__(self, num, name, raw_files, completed_files, schema, converter, storage):
         self.schema = schema
-        PipeStep.__init__(self, num, name, raw_files, q_raw)
+        self.converter = converter
+        self.storage = storage
+        self.bad_records = 0
+        PipeStep.__init__(self, num, name, raw_files, completed_files)
 
     def setup(self):
         self.expected_dim_count = len(self.schema._dimensions)
@@ -116,8 +119,10 @@ class ReadRawStep(PipeStep):
         print self.label, "reading", raw_file
         try:
             fin = open(raw_file, "rb")
-            bytes_read = 0
+            # Counts for the current file:
             record_count = 0
+            bytes_read = 0
+
             start = datetime.now()
             while True:
                 # Read two 4-byte values and one 8-byte value
@@ -125,6 +130,7 @@ class ReadRawStep(PipeStep):
                 if lengths == '':
                     break
                 record_count += 1
+                self.records_read += 1
                 len_path, len_data, timestamp = struct.unpack("<IIQ", lengths)
 
                 # Incoming timestamps are in milliseconds, so convert to POSIX first
@@ -158,6 +164,7 @@ class ReadRawStep(PipeStep):
                     data = unicode(data, errors="replace")
 
                 bytes_read += 8 + len_path + len_data
+                self.bytes_read += bytes_read
                 path_components = path.split("/")
                 if len(path_components) != self.expected_dim_count:
                     # We're going to pop the ID off, but we'll also add the submission,
@@ -173,47 +180,55 @@ class ReadRawStep(PipeStep):
                 info["appUpdateChannel"] = path_components.pop(0)
                 info["appBuildID"] = path_components.pop(0)
                 dimensions = self.schema.dimensions_from(info, submission_date)
-                self.q_out.put((key, dimensions, data))
-                self.records_written += 1
+
+                try:
+                    # Convert data:
+                    parsed_data, parsed_dims = self.converter.convert_json(data, dims[-1])
+                    # TODO: take this out if it's too slow
+                    for i in range(len(dims)):
+                        if dims[i] != parsed_dims[i]:
+                            print self.label, "Record", self.records_read, "mismatched dimension", i, dims[i], "!=", parsed_dims[i]
+                    serialized_data = self.converter.serialize(parsed_data)
+                    try:
+                        # Write to persistent storage
+                        n = self.storage.write(key, serialized_data, parsed_dims)
+                        self.bytes_written += len(key) + len(serialized_data) + 1
+                        self.records_written += 1
+                        # Compress rotated files as we generate them
+                        if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
+                            self.q_out.put(n)
+                    except Exception, e:
+                        self.write_bad_record(key, parsed_dims, serialized_data, str(e), "ERROR Writing to output file:")
+                except BadPayloadError, e:
+                    self.write_bad_record(key, dims, data, e.msg, "Bad Payload:")
+                except Exception, e:
+                    err_message = str(e)
+
+                    # We don't need to write these bad records out - we know
+                    # why they are being skipped.
+                    if err_message != "Missing in payload: info.revision":
+                        # TODO: recognize other common failure modes and handle them gracefully.
+                        self.write_bad_record(key, dims, data, err_message, "Conversion Error:")
+
             duration = timer.delta_sec(start)
             mb_read = bytes_read / 1024.0 / 1024.0
+            # Stats for the current file:
             print self.label, "- Read %d records %.2fMB in %.2fs (%.2fMB/s)" % (record_count, mb_read, duration, mb_read / duration)
         except Exception, e:
             # Corrupted data, let's skip this record.
             print self.label, "- Error reading raw data from ", raw_file, e
 
-
-class ConvertRawRecordsStep(PipeStep):
-    def __init__(self, num, name, q_in, q_out, q_bad, converter):
-        self.q_bad = q_bad
-        self.bad_records = 0
-        self.converter = converter
-        PipeStep.__init__(self, num, name, q_in, q_out)
-
-    def handle(self, record):
-        self.end_time = datetime.now()
-        key, dims, data = record
-        self.bytes_read += len(data)
-        try:
-            parsed_data, parsed_dims = self.converter.convert_json(data, dims[-1])
-            # TODO: take this out if it's too slow
-            for i in range(len(dims)):
-                if dims[i] != parsed_dims[i]:
-                    print self.label, "Record", self.records_read, "mismatched dimension", i, dims[i], "!=", parsed_dims[i]
-            serialized_data = self.converter.serialize(parsed_data)
-            self.q_out.put((key, parsed_dims, serialized_data))
-            self.bytes_written += len(serialized_data)
-            self.records_written += 1
-        except BadPayloadError, e:
-            self.q_bad.put((key, dims, data, e.msg))
-            print self.label, "Bad payload:", e.msg
-            self.bad_records += 1
-        except Exception, e:
-            self.q_bad.put((key, dims, data, str(e)))
-            msg = str(e)
-            if msg != "Missing in payload: info.revision":
+    def write_bad_record(key, dims, data, error, message=None):
+        self.bad_records += 1
+        if message is not None:
+            print self.label, message, error
+        if self.output_file is not None:
+            try:
+                key, dims, data, error = record
+                path = u"/".join([key] + dims)
+                self.storage.write_filename(path, data, self.output_file)
+            except Exception, e:
                 print self.label, "ERROR:", e
-            self.bad_records += 1
 
     def finish(self):
         duration = timer.delta_sec(self.start_time, self.end_time)
@@ -224,46 +239,6 @@ class ConvertRawRecordsStep(PipeStep):
         mb_written = self.bytes_written / 1024.0 / 1024.0
         mb_write_rate = mb_written / duration
         print "%s All done, read %d records or %.2fMB (%.2fr/s, %.2fMB/s), wrote %d or %.2f MB (%.2fr/s, %.2fMB/s). Found %d bad records" % (self.label, self.records_read, mb_read, read_rate, mb_read_rate, self.records_written, mb_written, write_rate, mb_write_rate, self.bad_records)
-
-
-class WriteConvertedStep(PipeStep):
-    def __init__(self, num, name, q_in, q_out, storage):
-        self.storage = storage
-        PipeStep.__init__(self, num, name, q_in, q_out)
-
-    def handle(self, record):
-        key, dims, data = record
-        n = self.storage.write(key, data, dims)
-        # TODO: write out completed files as we see them
-        if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
-            self.q_out.put(n)
-        self.records_written += 1
-        self.bytes_written += len(data)
-
-class BadRecordStep(PipeStep):
-    def __init__(self, num, name, q_in, output_file, storage):
-        self.output_file = output_file
-        self.storage = storage
-        PipeStep.__init__(self, num, name, q_in, None)
-
-    def handle(self, record):
-        self.end_time = datetime.now()
-        if self.output_file is not None:
-            try:
-                key, dims, data, error = record
-                path = u"/".join([key] + dims)
-                self.storage.write_filename(path, data, self.output_file)
-                self.records_written += 1
-                self.bytes_written += len(path) + len(data) + 1
-            except Exception, e:
-                print self.label, "ERROR:", e
-
-    def finish(self):
-        duration = timer.delta_sec(self.start_time, self.end_time)
-        write_rate = self.records_written / duration
-        mb_written = self.bytes_written / 1024.0 / 1024.0
-        mb_write_rate = mb_written / duration
-        print "%s All done, wrote %d or %.2f MB (%.2fr/s, %.2fMB/s)" % (self.label, self.records_written, mb_written, write_rate, mb_write_rate)
 
 
 class CompressCompletedStep(PipeStep):
@@ -368,25 +343,7 @@ class ExportCompressedStep(PipeStep):
                 if md5 != remote_md5:
                     print "ERROR: %s failed checksum verification: Local=%s, Remote=%s" % (f, md5, remote_md5)
                     result = -1
-                else:
-                    # Validation passed. Time to clean up the file.
-                    if self.keep_backups:
-                        # Keep a copy of the original, just in case.
-                        os.rename(full_filename, full_filename + ".uploaded")
-
-                    # Create / Truncate: we must keep the original file around to
-                    # properly calculate the next archived log number, ie if we
-                    # are uploading whatever.log.5.lzma, the next one should still
-                    # be whatever.log.6.lzma.
-                    # TODO: if we switch to using UUIDs in the filename, we can
-                    #       stop keeping the dummy files around.
-                    if self.remove_files:
-                        if not self.keep_backups:
-                            os.remove(full_filename)
-                            # Otherwise it was renamed already.
-                    else:
-                        h = open(full_filename, "w")
-                        h.close()
+                # TODO: else add it to a "failed" queue.
         else:
             print "Failed to upload one or more files in the current batch. Error code was", result
 
@@ -540,9 +497,6 @@ def main():
     for l in local_filenames:
         raw_files.put(l)
 
-    raw_records = Queue(10000)
-    converted_records = Queue(20000)
-    bad_records = Queue()
     completed_files = Queue()
     compressed_files = Queue()
 
@@ -550,26 +504,11 @@ def main():
 
     # Begin reading raw input
     raw_readers = start_workers(num_cpus, "Reader", ReadRawStep, raw_files,
-            (raw_records, schema))
+            (completed_files, schema, converter, storage))
 
     # Tell readers when to stop:
     for i in range(num_cpus):
         raw_files.put(PipeStep.SENTINEL)
-
-    # Convert raw input as it becomes available
-    converters = start_workers(num_cpus, "Converter", ConvertRawRecordsStep,
-            raw_records, (converted_records, bad_records, converter))
-
-    # Save bad records for later inspection
-    bad_handler = Process(
-            target=BadRecordStep,
-            args=(i, "Bad Data Handler", bad_records, args.bad_data_log, storage))
-    bad_handler.start()
-    print "Bad Data Handler pid:", bad_handler.pid
-
-    # Write converted data as it becomes available
-    writers = start_workers(num_cpus, "Writer", WriteConvertedStep,
-            converted_records, (completed_files, storage))
 
     # Compress completed files.
     compressors = start_workers(num_cpus, "Compressor", CompressCompletedStep,
@@ -581,19 +520,6 @@ def main():
                 args.aws_secret_key, args.publish_bucket, args.dry_run))
 
     wait_for(raw_readers, "Raw Readers")
-    # Reading raw files is done, signal converters to stop
-    for i in range(num_cpus):
-        raw_records.put(PipeStep.SENTINEL)
-
-    # Wait for conversion to complete.
-    wait_for(converters, "Converters")
-    for i in range(num_cpus):
-        converted_records.put(PipeStep.SENTINEL)
-        bad_records.put(PipeStep.SENTINEL)
-
-    wait_for([bad_handler], "Bad Data Handler")
-
-    wait_for(writers, "Converted Writers")
 
     # `find <out_dir> -type f -not -name ".compressme"`
     # Add them to completed_files
