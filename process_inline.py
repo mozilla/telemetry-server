@@ -154,8 +154,6 @@ class ReadRawStep(PipeStep):
                     print data
 
                 bytes_read += 8 + len_path + len_data
-                #print "Path for record", record_count, path, "length of data:", len_data, "data:", data[0:5] + "..."
-
                 path_components = path.split("/")
                 if len(path_components) != self.expected_dim_count:
                     # We're going to pop the ID off, but we'll also add the submission,
@@ -191,7 +189,6 @@ class ConvertRawRecordsStep(PipeStep):
     def handle(self, record):
         self.end_time = datetime.now()
         key, dims, data = record
-        #print self.label, "got", key
         self.bytes_read += len(data)
         try:
             parsed_data, parsed_dims = self.converter.convert_json(data, dims[-1])
@@ -275,7 +272,6 @@ class CompressCompletedStep(PipeStep):
     #       compressible logs to appear.
     def handle(self, record):
         filename = record
-        print self.label, "Compressing", filename
         base_ends = filename.find(".log") + 4
         if base_ends < 4:
             logging.warn("Bad filename encountered, skipping: " + filename)
@@ -290,13 +286,10 @@ class CompressCompletedStep(PipeStep):
 
         # Rename uncompressed file to a temp name
         tmp_name = comp_name + ".compressing"
-        print self.label, "Moving %s to %s" % (filename, tmp_name)
         os.rename(filename, tmp_name)
 
         # Read input file as text (line-buffered)
         f_raw = open(tmp_name, "r", 1)
-
-        print self.label, "compressing %s to %s" % (filename, comp_name)
         start = datetime.now()
 
         # Now set up our processing pipe:
@@ -316,7 +309,7 @@ class CompressCompletedStep(PipeStep):
         os.remove(tmp_name)
         sec = timer.delta_sec(start)
         print self.label, "Compressed %s as %s in %.2fs. Size before: %.2fMB, after: %.2fMB (r: %.2fMB/s, w: %.2fMB/s)" % (filename, comp_name, sec, raw_mb, comp_mb, (raw_mb/sec), (comp_mb/sec))
-        # TODO: upload to S3
+        self.q_out.put(comp_name)
 
 
 class ExportCompressedStep(PipeStep):
@@ -497,14 +490,12 @@ def main():
     schema_data = open(args.telemetry_schema)
     schema = TelemetrySchema(json.load(schema_data))
     schema_data.close()
-
     cache = RevisionCache(args.histogram_cache_path, "hg.mozilla.org")
     converter = Converter(cache, schema)
-
     storage = StorageLayout(schema, args.output_dir, args.max_output_size)
 
-    #num_cpus = multiprocessing.cpu_count()
-    num_cpus = 2
+    num_cpus = multiprocessing.cpu_count()
+    #num_cpus = 2
 
     start = datetime.now()
     conn = S3Connection(args.aws_key, args.aws_secret_key)
@@ -549,6 +540,8 @@ def main():
     completed_files = Queue()
     compressed_files = Queue()
 
+    # TODO: uploaded_files, failed_files?
+
     # Begin reading raw input
     raw_readers = start_workers(num_cpus, "Reader", ReadRawStep, raw_files,
             (raw_records, schema))
@@ -581,8 +574,8 @@ def main():
             compressed_files, (args.output_dir, args.aws_key,
                 args.aws_secret_key, args.publish_bucket, args.dry_run))
 
-    # Wait for raw input to complete.
     wait_for(raw_readers, "Raw Readers")
+    # Reading raw files is done, signal converters to stop
     for i in range(num_cpus):
         raw_records.put(PipeStep.SENTINEL)
 
@@ -596,7 +589,7 @@ def main():
 
     wait_for(writers, "Converted Writers")
 
-    # find <out_dir> -type f -not -name ".compressme"
+    # `find <out_dir> -type f -not -name ".compressme"`
     # Add them to completed_files
     for root, dirs, files in os.walk(args.output_dir):
         for f in files:

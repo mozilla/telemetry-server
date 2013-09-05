@@ -65,7 +65,13 @@ class StorageLayout:
 
         dirname = os.path.dirname(filename)
         if not os.path.exists(dirname):
-            os.makedirs(dirname)
+            try:
+                os.makedirs(dirname)
+            except OSError, e:
+                # errno 17 means "directory exists". This is a race condition
+                # in a multi-process environment, and can safely be ignored.
+                if e.errno != 17:
+                    raise
 
         # According to SO, this should be atomic on a well-behaved OS:
         # http://stackoverflow.com/questions/7561663/appending-to-the-end-of-a-file-in-a-concurrent-environment

@@ -91,7 +91,13 @@ class RevisionCache:
         try:
             fout = open(filename, 'w')
         except IOError:
-            os.makedirs(os.path.dirname(filename))
+            try:
+                os.makedirs(os.path.dirname(filename))
+            except OSError, e:
+                # errno 17 means "directory exists". This is a race condition
+                # in a multi-process environment, and can safely be ignored.
+                if e.errno != 17:
+                    raise
             fout = open(filename, 'w')
         fout.write(contents)
         fout.close()
