@@ -341,24 +341,18 @@ class ExportCompressedStep(PipeStep):
                 # Verify checksum and track cumulative size so we can figure out MB/s
                 full_filename = os.path.join(data_dir, f)
                 md5, size = self.md5file(full_filename)
-                if size < Exporter.MIN_UPLOADABLE_SIZE:
-                    # Check file size again when uploading in case it has been
-                    # concurrently uploaded / truncated elsewhere.
-                    print "Skipping upload for tiny file:", f
-                    continue
-
                 total_size += size
-
                 # f is the key name - it does not include the full path to the
                 # data dir.
                 key = bucket.get_key(f)
                 # Strip quotes from md5
                 remote_md5 = key.etag[1:-1]
                 if md5 != remote_md5:
+                    # TODO: add it to a "failed" queue.
                     print "ERROR: %s failed checksum verification: Local=%s, Remote=%s" % (f, md5, remote_md5)
                     self.bad_records += 1
                     result = -1
-                # TODO: else add it to a "failed" queue.
+                # TODO: else add it to a "succeeded" queue.
         else:
             print "Failed to upload one or more files in the current batch. Error code was", result
 
