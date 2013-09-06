@@ -45,13 +45,19 @@ def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
         fetch_cmd.append(aws_secret_key)
         fetch_cmd.append("-t")
         fetch_cmd.append("8")
-        start = datetime.now()
-        result = subprocess.call(fetch_cmd + files, cwd=fetch_cwd)
-        duration_sec = timer.delta_sec(start)
-        # TODO: verify MD5s
-        downloaded_bytes = sum([ os.path.getsize(os.path.join(fetch_cwd, f)) for f in files ])
-        downloaded_mb = downloaded_bytes / 1024.0 / 1024.0
-        print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
+        # Fetch in batches of 8 files at a time
+        while len(files) > 0:
+            current_files = files[0:8]
+            files = files[8:]
+            start = datetime.now()
+            result = subprocess.call(fetch_cmd + files, cwd=fetch_cwd)
+            duration_sec = timer.delta_sec(start)
+            # TODO: verify MD5s
+            downloaded_bytes = sum([ os.path.getsize(os.path.join(fetch_cwd, f)) for f in files ])
+            downloaded_mb = downloaded_bytes / 1024.0 / 1024.0
+            print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
+            if result != 0:
+                break
     return result
 
 def wait_for(processes, label):
@@ -557,6 +563,8 @@ def main():
         else:
             print "  Deleting", f
             incoming_bucket.delete_key(f)
+            # Delete file locally too.
+            os.remove(os.path.join(args.work_dir, f)
     print "Done"
 
     duration = timer.delta_sec(start)
