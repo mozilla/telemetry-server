@@ -50,10 +50,10 @@ def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
             current_files = files[0:8]
             files = files[8:]
             start = datetime.now()
-            result = subprocess.call(fetch_cmd + files, cwd=fetch_cwd)
+            result = subprocess.call(fetch_cmd + current_files, cwd=fetch_cwd)
             duration_sec = timer.delta_sec(start)
             # TODO: verify MD5s
-            downloaded_bytes = sum([ os.path.getsize(os.path.join(fetch_cwd, f)) for f in files ])
+            downloaded_bytes = sum([ os.path.getsize(os.path.join(fetch_cwd, f)) for f in curent_files ])
             downloaded_mb = downloaded_bytes / 1024.0 / 1024.0
             print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
             if result != 0:
