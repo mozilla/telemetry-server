@@ -564,7 +564,7 @@ def main():
             print "  Deleting", f
             incoming_bucket.delete_key(f)
             # Delete file locally too.
-            os.remove(os.path.join(args.work_dir, f)
+            os.remove(os.path.join(args.work_dir, f))
     print "Done"
 
     duration = timer.delta_sec(start)
