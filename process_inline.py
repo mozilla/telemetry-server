@@ -116,8 +116,8 @@ class PipeStep(object):
                 if self.print_stats:
                     this_update = datetime.now()
                     if timer.delta_sec(self.last_update, this_update) > 10.0:
-                        self.dump_stats()
                         self.last_update = this_update
+                        self.dump_stats()
                 self.end_time = datetime.now()
             except Q.Empty:
                 break
@@ -183,8 +183,9 @@ class ReadRawStep(PipeStep):
                     # Raw JSON, make sure we treat it as unicode.
                     data = unicode(data, errors="replace")
 
-                bytes_read += 8 + len_path + len_data
-                self.bytes_read += bytes_read
+                current_bytes = 8 + len_path + len_data
+                bytes_read += current_bytes
+                self.bytes_read += current_bytes
                 path_components = path.split("/")
                 if len(path_components) != self.expected_dim_count:
                     # We're going to pop the ID off, but we'll also add the submission,
@@ -229,6 +230,14 @@ class ReadRawStep(PipeStep):
                     if err_message != "Missing in payload: info.revision":
                         # TODO: recognize other common failure modes and handle them gracefully.
                         self.write_bad_record(key, dims, data, err_message, "Conversion Error:")
+
+                if self.print_stats:
+                    this_update = datetime.now()
+                    sec = timer.delta_sec(self.last_update, this_update)
+                    if sec > 10.0:
+                        self.last_update = this_update
+                        self.end_time = datetime.now()
+                        self.dump_stats()
 
             duration = timer.delta_sec(start)
             mb_read = bytes_read / 1024.0 / 1024.0
@@ -494,7 +503,7 @@ def main():
     if args.dry_run:
         print "Dry run mode: skipping download from S3"
     else:
-        result = fetch_s3_files(incoming_filenames, args.work_dir, 
+        result = fetch_s3_files(incoming_filenames, args.work_dir,
                 args.incoming_bucket, args.aws_key, args.aws_secret_key)
 
     if result != 0:
@@ -505,7 +514,7 @@ def main():
     local_filenames = [os.path.join(args.work_dir, f) for f in incoming_filenames]
 
     # TODO: try a SimpleQueue
-    raw_files = Queue(1000)
+    raw_files = Queue()
     for l in local_filenames:
         raw_files.put(l)
 
