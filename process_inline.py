@@ -16,9 +16,7 @@ import simplejson as json
 import imp
 import sys
 import os
-import json
-import marshal
-import traceback
+import hashlib
 from datetime import date, datetime
 from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
