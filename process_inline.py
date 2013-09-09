@@ -358,7 +358,7 @@ class ExportCompressedStep(PipeStep):
                     print "ERROR: %s failed checksum verification: Local=%s, Remote=%s" % (f, md5, remote_md5)
                     self.bad_records += 1
                     result = -1
-                # TODO: else add it to a "succeeded" queue.
+                # TODO: else add it to a "succeeded" queue and remove it locally.
         else:
             print "Failed to upload one or more files in the current batch. Error code was", result
 
