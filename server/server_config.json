@@ -1,0 +1,10 @@
+{
+  "motd": " ==== Telemetry Server. Accepting Submissions since 2013. ====",
+  "max_data_lenth": 204800,
+  "max_path_lenth": 10240,
+  "port": 8080,
+  "log_path": "./data",
+  "max_log_age_ms": 60000,
+  "stats_log_file": "./log/telemetry-server.log",
+  "stats_log_maxsize": 10485760
+}

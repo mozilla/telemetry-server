@@ -3,42 +3,51 @@ var winston = require('winston');
 var fs = require('fs');
 var os = require('os');
 var url = require('url');
-var max_data_length = 200 * 1024;
-var max_path_length = 10 * 1024;
+
+var config = {};
+if (process.argv.length > 2) {
+  // Attempt to read server config from the first argument
+  try {
+    config = require('./server_config.json');
+  } catch(e) {
+    // TODO: catch malformed JSON separately.
+    console.log(e);
+    config = {};
+  }
+} else {
+  config.motd = "Telemetry Server (default configuration)";
+}
+
+var max_data_length = config.max_data_length || 200 * 1024;
+var max_path_length = config.max_path_length || 10 * 1024;
 
 // NOTE: This is for logging actual telemetry submissions
-var log_path = "./";
-var log_base = "telemetry.log";
-if (process.argv.length > 2) {
-  log_path = process.argv[2];
-}
+var log_path = config.log_path || "./";
+var log_base = config.log_base || "telemetry.log";
 
 // TODO: URL Validation to ensure we're receiving dimensions
 // ^/submit/telemetry/id/reason/appName/appUpdateChannel/appVersion/appBuildID$
 // See http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#658
-var url_prefix = "/submit/telemetry/";
+var url_prefix = config.url_prefix || "/submit/telemetry/";
 var url_prefix_len = url_prefix.length;
 var log_file = unique_name(log_base);
 var log_time = new Date().getTime();
 var log_size = 0;
-console.log("Using log file: " + log_file);
 
-var max_log_size = 500 * 1024 * 1024;
-var max_log_age_ms = 5 * 60 * 1000; // 5 minutes in milliseconds
-//var max_log_age_ms = 60 * 1000; // 1 minute in milliseconds
+var max_log_size = config.max_log_size || 500 * 1024 * 1024;
+var max_log_age_ms = config.max_log_age_ms || 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // We keep track of "last touched" and then rotate after current logs have
 // been untouched for max_log_age_ms.
 var timer = setInterval(function(){ rotate_time(); }, max_log_age_ms);
 
 // NOTE: This is for logging request metadata (for monitoring and stats)
-//var request_log_file = "/var/log/telemetry/telemetry-server.log";
-var request_log_file = "/home/mark/mozilla/github/telemetry-server/server/log/telemetry-server.log";
+var request_log_file = config.stats_log_file || "/var/log/telemetry/telemetry-server.log";
 var request_log = new (winston.Logger)({
   transports: [ new (winston.transports.File)({
     filename: request_log_file,
-    maxsize: 200 * 1024 * 1024,
-    maxFiles: 20
+    maxsize: config.stats_log_maxsize || 200 * 1024 * 1024,
+    maxFiles: config.stats_log_maxfiles || 20
   }) ]
 });
 
@@ -185,7 +194,7 @@ function run_server(port) {
       finish(200, request, response, 'OK', start_time, bytes_written);
     });
   }).listen(port);
-  console.log("Listening on port "+port);
+  console.log("Process " + process.pid + " Listening on port " + port);
 }
 var cluster = require('cluster');
 var numCPUs = os.cpus().length;
@@ -194,6 +203,10 @@ if (cluster.isMaster) {
   // Fork workers.
   for (var i = 0; i < numCPUs; i++) {
     cluster.fork();
+  }
+
+  if (config.motd) {
+    console.log(config.motd);
   }
 
   cluster.on('exit', function(worker, code, signal) {
@@ -221,5 +234,5 @@ if (cluster.isMaster) {
     console.log("Received SIGINT in pid " + process.pid);
   });
 
-  run_server(8080);
+  run_server(config.port || 8080);
 }
