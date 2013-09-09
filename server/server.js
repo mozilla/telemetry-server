@@ -8,7 +8,7 @@ var config = {};
 if (process.argv.length > 2) {
   // Attempt to read server config from the first argument
   try {
-    config = require('./server_config.json');
+    config = require(process.argv[2]);
   } catch(e) {
     // TODO: catch malformed JSON separately.
     console.log(e);
