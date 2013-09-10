@@ -9,12 +9,12 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import hashlib
 
 # might as well return the size too...
-def md5file(filename):
+def md5file(filename, chunksize=8192):
     md5 = hashlib.md5()
     size = 0
     with open(filename, "rb") as data:
         while True:
-            chunk = data.read(8192)
+            chunk = data.read(chunksize)
             if not chunk:
                 break
             md5.update(chunk)
