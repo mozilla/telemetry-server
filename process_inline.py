@@ -31,13 +31,30 @@ from revision_cache import RevisionCache
 from persist import StorageLayout
 
 S3FUNNEL_PATH = "/usr/local/bin/s3funnel"
-def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
+def fetch_s3_files(incoming_files, fetch_cwd, bucket, aws_key, aws_secret_key):
     result = 0
-    if len(files) > 0:
+    if len(incoming_files) > 0:
         if not os.path.isdir(fetch_cwd):
             os.makedirs(fetch_cwd)
+
+        files = []
+        for f in incoming_files:
+            full_filename = os.path.join(fetch_cwd, f)
+            if os.path.isfile(full_filename):
+                md5, size = fileutil.md5file(full_filename)
+                # f is the key name - it does not include the full path to the
+                # data dir.
+                key = bucket.get_key(f)
+                # Strip quotes from md5
+                remote_md5 = key.etag[1:-1]
+                if md5 != remote_md5:
+                    files.append(f)
+                else:
+                    print "Already downloaded", f
+            else:
+                files.append(f)
         fetch_cmd = [S3FUNNEL_PATH]
-        fetch_cmd.append(bucket_name)
+        fetch_cmd.append(bucket.name)
         fetch_cmd.append("get")
         fetch_cmd.append("-a")
         fetch_cmd.append(aws_key)
@@ -498,7 +515,7 @@ def main():
         print "Dry run mode: skipping download from S3"
     else:
         result = fetch_s3_files(incoming_filenames, args.work_dir,
-                args.incoming_bucket, args.aws_key, args.aws_secret_key)
+                incoming_bucket, args.aws_key, args.aws_secret_key)
 
     if result != 0:
         print "Error downloading files. Return code of s3funnel was", result
