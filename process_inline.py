@@ -218,10 +218,11 @@ class ReadRawStep(PipeStep):
                             if dims[i] != parsed_dims[i]:
                                 print self.label, "Record", self.records_read, "mismatched dimension", i, dims[i], "!=", parsed_dims[i]
                         serialized_data = self.converter.serialize(parsed_data)
+                        dims = parsed_dims
                         data_version = 2
                     try:
                         # Write to persistent storage
-                        n = self.storage.write(key, serialized_data, parsed_dims, data_version)
+                        n = self.storage.write(key, serialized_data, dims, data_version)
                         self.bytes_written += len(key) + len(serialized_data) + 1
                         self.records_written += 1
                         # Compress rotated files as we generate them
