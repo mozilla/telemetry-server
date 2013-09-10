@@ -71,7 +71,7 @@ class TelemetrySchema:
         canonical_file = os.path.realpath(filename)
 
         if not canonical_file.startswith(canonical_base):
-            raise ValueError("Error: file '%s' is not under base dir '%s'" % filename, basedir)
+            raise ValueError("Error: file '%s' is not under base dir '%s'" % (filename, basedir))
 
         # Chop off the base dir and one path separator
         dimfile = canonical_file[len(canonical_base)+1:]

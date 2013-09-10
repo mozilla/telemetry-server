@@ -16,12 +16,6 @@ import sys
 import aws_util
 
 
-def get_running_instance(config):
-    conn = aws_util.connect_cfg(config)
-    instance = aws_util.get_instance(conn, config["instance_id"])
-    print "Instance", instance.id, "is", instance.state
-    return conn, instance
-
 def bootstrap_instance(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     ssl_key_path = config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
@@ -76,10 +70,13 @@ config_file.close()
 
 print "Using the following config:"
 print json.dumps(config)
-#sys.exit(-1)
 
-conn, instance = aws_util.create_instance(config)
-#conn, instance = get_running_instance(config)
+if "instance_id" in config:
+    conn = aws_util.connect_cfg(config)
+    instance = aws_util.get_instance(conn, config["instance_id"])
+else:
+    conn, instance = aws_util.create_instance(config)
+
 try:
     ssl_user = config.get("ssl_user", "ubuntu")
     ssl_key_path = config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
@@ -93,6 +90,7 @@ try:
 
     # Can't connect when using known hosts :(
     env.disable_known_hosts = True
+    env.keepalive = 5
 
     if aws_util.wait_for_ssh(config.get("ssl_retries", 3)):
         print "SSH Connection is ready."
@@ -100,9 +98,16 @@ try:
         print "Failed to establish SSH Connection to", instance.id
         sys.exit(2)
 
-    bootstrap_instance(config, instance)
+    if not config.get("skip_bootstrap", False):
+        bootstrap_instance(config, instance)
+
     run_mapreduce(config, instance)
 finally:
     # All done: Terminate this mofo
-    print "Terminating", instance.id
-    conn.terminate_instances(instance_ids=[instance.id])
+    if "instance_id" in config:
+        # It was an already-existing instance, leave it alone
+        print "Not terminating instance", instance.id
+    else:
+        # we created it ourselves, terminate it.
+        print "Terminating", instance.id
+        conn.terminate_instances(instance_ids=[instance.id])
