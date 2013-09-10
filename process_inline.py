@@ -16,7 +16,6 @@ import simplejson as json
 import imp
 import sys
 import os
-import hashlib
 from datetime import date, datetime
 from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
@@ -25,6 +24,7 @@ import subprocess
 from subprocess import Popen, PIPE
 from boto.s3.connection import S3Connection
 import util.timer as timer
+import util.files as fileutil
 import struct, gzip, StringIO
 from convert import Converter, BadPayloadError
 from revision_cache import RevisionCache
@@ -352,7 +352,7 @@ class ExportCompressedStep(PipeStep):
             for f in files:
                 # Verify checksum and track cumulative size so we can figure out MB/s
                 full_filename = os.path.join(data_dir, f)
-                md5, size = self.md5file(full_filename)
+                md5, size = fileutil.md5file(full_filename)
                 total_size += size
                 # f is the key name - it does not include the full path to the
                 # data dir.
@@ -415,20 +415,6 @@ class ExportCompressedStep(PipeStep):
                 print self.label, "ERROR: failed to upload a batch:", ",".join(self.batch)
                 # TODO: add to a "failures" queue, save them or something?
         self.dump_stats()
-
-    # TODO: move this to utils somewhere.
-    def md5file(self, filename):
-        md5 = hashlib.md5()
-        size = 0
-        with open(filename, "rb") as data:
-            while True:
-                chunk = data.read(8192)
-                if not chunk:
-                    break
-                md5.update(chunk)
-                size += len(chunk)
-        return md5.hexdigest(), size
-
 
 def start_workers(count, name, clazz, q_in, more_args):
     workers = []
