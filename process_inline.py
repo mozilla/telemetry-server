@@ -208,15 +208,20 @@ class ReadRawStep(PipeStep):
 
                 try:
                     # Convert data:
-                    parsed_data, parsed_dims = self.converter.convert_json(data, dims[-1])
-                    # TODO: take this out if it's too slow
-                    for i in range(len(dims)):
-                        if dims[i] != parsed_dims[i]:
-                            print self.label, "Record", self.records_read, "mismatched dimension", i, dims[i], "!=", parsed_dims[i]
-                    serialized_data = self.converter.serialize(parsed_data)
+                    if self.converter is None:
+                        serialized_data = data
+                        data_version = 1
+                    else:
+                        parsed_data, parsed_dims = self.converter.convert_json(data, dims[-1])
+                        # TODO: take this out if it's too slow
+                        for i in range(len(dims)):
+                            if dims[i] != parsed_dims[i]:
+                                print self.label, "Record", self.records_read, "mismatched dimension", i, dims[i], "!=", parsed_dims[i]
+                        serialized_data = self.converter.serialize(parsed_data)
+                        data_version = 2
                     try:
                         # Write to persistent storage
-                        n = self.storage.write(key, serialized_data, parsed_dims)
+                        n = self.storage.write(key, serialized_data, parsed_dims, data_version)
                         self.bytes_written += len(key) + len(serialized_data) + 1
                         self.records_written += 1
                         # Compress rotated files as we generate them
@@ -450,6 +455,7 @@ def main():
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
     parser.add_argument("-D", "--dry-run", help="Don't modify remote files", action="store_true")
+    parser.add_argument("-C", "--skip-conversion", help="Skip validation/conversion of payloads", action="store_true")
     args = parser.parse_args()
 
     if not os.path.isfile(S3FUNNEL_PATH):
@@ -464,7 +470,10 @@ def main():
     schema = TelemetrySchema(json.load(schema_data))
     schema_data.close()
     cache = RevisionCache(args.histogram_cache_path, "hg.mozilla.org")
-    converter = Converter(cache, schema)
+    if args.skip_conversion:
+        converter = None
+    else:
+        converter = Converter(cache, schema)
     storage = StorageLayout(schema, args.output_dir, args.max_output_size)
 
     num_cpus = multiprocessing.cpu_count()
