@@ -58,7 +58,7 @@ def process_incoming(config, instance):
             if config.get("skip_conversion", False):
                 skip_conversion = "--skip-conversion"
             print "Processing", len(current_filenames), "inputs,", len(incoming_filenames), "remaining"
-            run('python process_inline.py -i inputs.txt --bad-data-log ./bad_records.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s %s' % (config["aws_key"], config["aws_secret_key"], skip_conversion, config["incoming_bucket"], config["publish_bucket"]))
+            run('python process_inline.py -i inputs.txt --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s %s' % (config["aws_key"], config["aws_secret_key"], skip_conversion, config["incoming_bucket"], config["publish_bucket"]))
 
 if len(sys.argv) < 2:
     print "Usage:", sys.argv[0], "/path/to/config_file.json"
