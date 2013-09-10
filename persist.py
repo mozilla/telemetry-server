@@ -32,14 +32,9 @@ class StorageLayout:
         self._schema = schema
         self._basedir = basedir
 
-    def write(self, uuid, obj, dimensions):
-        filename = self._schema.get_filename(self._basedir, dimensions)
+    def write(self, uuid, obj, dimensions, version=1):
+        filename = self._schema.get_filename(self._basedir, dimensions, version)
         return self.write_filename(uuid, obj, filename)
-
-    def write_invalid(self, uuid, obj, dimensions, err):
-        # TODO: put 'err' into file?
-        filename = self._schema.get_filename_invalid(self._basedir, dimensions)
-        return self.write_filename(uuid, obj, filename, err)
 
     def clean_newlines(self, value, tag="value"):
         # Clean any newlines (replace with spaces)
@@ -49,7 +44,7 @@ class StorageLayout:
                 value = value.replace(eol, " ")
         return value
 
-    def write_filename(self, uuid, obj, filename, err=None):
+    def write_filename(self, uuid, obj, filename):
         # Working filename is like
         #   a.b.c.log
         # We want to roll this over (and compress) when it reaches a size limit
