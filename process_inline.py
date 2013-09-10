@@ -229,7 +229,7 @@ class ReadRawStep(PipeStep):
                         if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
                             self.q_out.put(n)
                     except Exception, e:
-                        self.write_bad_record(key, parsed_dims, serialized_data, str(e), "ERROR Writing to output file:")
+                        self.write_bad_record(key, dims, serialized_data, str(e), "ERROR Writing to output file:")
                 except BadPayloadError, e:
                     self.write_bad_record(key, dims, data, e.msg, "Bad Payload:")
                 except Exception, e:
@@ -519,6 +519,8 @@ def main():
         return result
     print "Done"
 
+    after_download = datetime.now()
+
     local_filenames = [os.path.join(args.work_dir, f) for f in incoming_filenames]
 
     # TODO: try a SimpleQueue
@@ -578,7 +580,7 @@ def main():
     print "Done"
 
     duration = timer.delta_sec(start)
-    print "All done in %.2fs" % (duration)
+    print "All done in %.2fs (%.2fs excluding download time)" % (duration, timer.delta_sec(after_download))
     return 0
 
 if __name__ == "__main__":
