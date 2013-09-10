@@ -15,7 +15,6 @@ from fabric.exceptions import NetworkError
 import sys
 import aws_util
 
-
 def bootstrap_instance(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     ssl_key_path = config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
@@ -30,6 +29,11 @@ def bootstrap_instance(config, instance):
     #sudo("apt-get --yes dist-upgrade")
     sudo('pip install simplejson scales boto')
 
+    base_dir = config.get("base_dir", "/mnt/telemetry")
+    # Put work dirs in /mnt where there's plenty of space:
+    sudo("mkdir -p " + base_dir)
+    sudo("chown %s:%s %s" % (ssl_user, ssl_user, base_dir))
+
     home = "/home/" + ssl_user
     print "Preparing MR code"
     with cd(home):
@@ -37,7 +41,7 @@ def bootstrap_instance(config, instance):
         run("git clone https://github.com/sstoiana/s3funnel.git")
     with cd(home + "/s3funnel"):
         sudo("python setup.py install")
-    with cd(home + "/telemetry-server"):
+    with cd(base_dir):
         # "data" is a dummy dir just to give it somewhere to look for local data.
         run("mkdir job work data")
 
@@ -45,19 +49,24 @@ def run_mapreduce(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     home = "/home/" + ssl_user
     mr_cfg = config["mapreduce"]
+    base_dir = config.get("base_dir", "/mnt/telemetry")
+    job_dir = base_dir + "/job"
+    data_dir = base_dir + "/data"
+    work_dir = base_dir + "/work"
     with cd(home + "/telemetry-server"):
         job_script = mr_cfg["job_script"]
         input_filter = mr_cfg["input_filter"]
-        put(job_script, "job")
-        put(input_filter, "job")
-        job_script_base = os.path.basename(job_script)
-        input_filter_base = os.path.basename(input_filter)
-        job_args = (job_script_base, input_filter_base, config["aws_key"], config["aws_secret_key"], mr_cfg["data_bucket"])
-        run('python job.py job/%s --input-filter job/%s --data-dir ./data --work-dir ./work --aws-key "%s" --aws-secret-key "%s" --bucket "%s" --output job/output.txt' % job_args)
+        put(job_script, job_dir)
+        put(input_filter, job_dir)
+        job_script_path = "/".join((job_dir, os.path.basename(job_script)))
+        input_filter_path = "/".join((job_dir, os.path.basename(input_filter)))
+        output_path = "/".join((job_dir, "output.txt"))
+        job_args = (job_script_path, input_filter_path, data_dir, work_dir, output_path, config["aws_key"], config["aws_secret_key"], mr_cfg["data_bucket"])
+        run('python job.py %s --input-filter %s --data-dir %s --work-dir %s --output %s --aws-key "%s" --aws-secret-key "%s" --bucket "%s"' % job_args)
         # TODO: consult "output_compression"
-        run("lzma job/output.txt")
+        run("lzma " + output_path)
         # TODO: upload job/output.txt.lzma to S3 output_bucket.output_filename
-        result = get("job/output.txt.lzma", mr_cfg["output_filename"])
+        result = get(output_path + ".lzma", mr_cfg["output_filename"])
         # TODO: check result.succeeded before bailing.
 
 if len(sys.argv) < 2:
