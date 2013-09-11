@@ -3,8 +3,8 @@
   "max_data_lenth": 204800,
   "max_path_lenth": 10240,
   "port": 8080,
-  "log_path": "./data",
-  "max_log_age_ms": 60000,
-  "stats_log_file": "./log/telemetry-server.log",
-  "stats_log_maxsize": 10485760
+  "log_path": "/mnt/telemetry/data",
+  "max_log_age_ms": 300000,
+  "max_log_size": 524288000,
+  "stats_log_file": "/var/log/telemetry/telemetry-server.log"
 }

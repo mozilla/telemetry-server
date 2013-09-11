@@ -10,6 +10,7 @@ except ImportError:
     import json
 import sys
 import os
+import re
 import urllib2
 
 # TODO:
@@ -28,6 +29,7 @@ class RevisionCache:
         self._repos = dict()
         self._hist_filename = "Histograms.json"
         self._hist_filepath = "toolkit/components/telemetry/" + self._hist_filename
+        self._valid_revisions = re.compile('^(http://[^/]+)/(.+)/rev/([0-9a-f]+)/?$')
 
     # TODO:
     #  [ ] deal with 'tip' and other named revisions / tags (fetch from source
@@ -54,6 +56,27 @@ class RevisionCache:
             cached_revision = cached_repo[revision]
         return cached_revision
 
+    # Returns (repository name, revision)
+    def revision_url_to_parts(self, revision_url):
+        m = self._valid_revisions.match(revision_url)
+        if m:
+            #sys.stderr.write("Matched\n")
+            return (m.group(2), m.group(3))
+        else:
+            #sys.stderr.write("Did not Match: %s\n" % revision_url)
+            raise ValueError("Invalid revision URL: %s" % revision_url)
+        #return (None, None)
+
+    def get_histograms_for_revision(self, revision_url):
+        # revision_url is like
+        #    http://hg.mozilla.org/releases/mozilla-aurora/rev/089956e907ed
+        # and path should be like
+        #    toolkit/components/telemetry/Histograms.json
+        # to produce a full URL like
+        #    http://hg.mozilla.org/releases/mozilla-aurora/raw-file/089956e907ed/toolkit/components/telemetry/Histograms.json
+        repo, revision = self.revision_url_to_parts(revision_url)
+        return self.get_revision(repo, revision)
+
     def fetch_disk(self, repo, revision):
         filename = os.path.join(self._cache_dir, repo, revision, self._hist_filename)
         histograms = None
@@ -63,11 +86,12 @@ class RevisionCache:
             # TODO: validate the resulting obj.
         except:
             # TODO: log an info / debug message
-            sys.stderr.write("INFO: failed to load '%s' from disk cache\n" % filename)
+            #sys.stderr.write("INFO: failed to load '%s' from disk cache\n" % filename)
+            pass
         return histograms
 
     def fetch_server(self, repo, revision):
-        url = '/'.join(('http:/', self._server, self.repo_to_path(repo), 'raw-file', revision, self._hist_filepath))
+        url = '/'.join(('http:/', self._server, repo, 'raw-file', revision, self._hist_filepath))
         histograms = None
         try:
             response = urllib2.urlopen(url)
@@ -80,17 +104,18 @@ class RevisionCache:
             sys.stderr.write("INFO: failed to load '%s' from server\n" % url)
         return histograms
 
-    def repo_to_path(self, repo):
-        if repo != "mozilla-central":
-            return '/'.join(('releases', repo))
-        return repo
-
     def save_to_cache(self, repo, revision, contents):
         filename = os.path.join(self._cache_dir, repo, revision, "Histograms.json")
         try:
             fout = open(filename, 'w')
         except IOError:
-            os.makedirs(os.path.dirname(filename))
+            try:
+                os.makedirs(os.path.dirname(filename))
+            except OSError, e:
+                # errno 17 means "directory exists". This is a race condition
+                # in a multi-process environment, and can safely be ignored.
+                if e.errno != 17:
+                    raise
             fout = open(filename, 'w')
         fout.write(contents)
         fout.close()

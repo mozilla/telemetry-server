@@ -10,7 +10,6 @@ import re
 import os
 
 class TelemetrySchema:
-    INVALID_DIR = "invalid"
     DISALLOWED_VALUE = "OTHER"
 
     def __init__(self, spec):
@@ -71,7 +70,7 @@ class TelemetrySchema:
         canonical_file = os.path.realpath(filename)
 
         if not canonical_file.startswith(canonical_base):
-            raise ValueError("Error: file '%s' is not under base dir '%s'" % filename, basedir)
+            raise ValueError("Error: file '%s' is not under base dir '%s'" % (filename, basedir))
 
         # Chop off the base dir and one path separator
         dimfile = canonical_file[len(canonical_base)+1:]
@@ -84,23 +83,16 @@ class TelemetrySchema:
         dims.append(file_dims.pop(0))
         return dims
 
-    def get_filename(self, basedir, dimensions):
+    def get_filename(self, basedir, dimensions, version=1):
         clean_dims = self.apply_schema(dimensions)
         submission_date = clean_dims.pop()
-        return self.get_current_file(basedir, clean_dims, submission_date)
+        return self.get_current_file(basedir, clean_dims, submission_date, version)
 
-    def get_filename_invalid(self, basedir, dimensions):
-        clean_dims = self.apply_schema(dimensions)
-        submission_date = clean_dims.pop()
-        # prepend invalid dir name.
-        clean_dims.insert(0, TelemetrySchema.INVALID_DIR)
-        return self.get_current_file(basedir, clean_dims, submission_date)
-
-    def get_current_file(self, basedir, dims, submission_date):
+    def get_current_file(self, basedir, dims, submission_date, version=1):
         # TODO: get files in order, find newest non-full one
         # use hex digits for seqnum
         dirname = os.path.join(*dims)
-        return ".".join((os.path.join(basedir, self.safe_filename(dirname)), submission_date, "log"))
+        return ".".join((os.path.join(basedir, self.safe_filename(dirname)), submission_date, "v" + str(version), "log"))
 
     def dimensions_from(self, info, submission_date):
         dimensions = []

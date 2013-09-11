@@ -13,7 +13,7 @@ import sys
 import time
 from persist import StorageLayout
 from datetime import datetime
-import hashlib
+import util.files as fileutil
 import subprocess
 from boto.s3.connection import S3Connection
 from boto.exception import S3ResponseError
@@ -40,19 +40,6 @@ class Exporter:
                 "-s", aws_secret_key, "-t", str(Exporter.S3F_THREADS),
                 "--put-only-new", "--put-full-path"]
 
-    # might as well return the size too...
-    def md5file(self, filename):
-        md5 = hashlib.md5()
-        size = 0
-        with open(filename, "rb") as data:
-            while True:
-                chunk = data.read(8192)
-                if not chunk:
-                    break
-                md5.update(chunk)
-                size += len(chunk)
-        return md5.hexdigest(), size
-
     def export_batch(self, data_dir, conn, bucket, files):
         # Time the s3funnel call:
         start = datetime.now()
@@ -65,7 +52,7 @@ class Exporter:
             for f in files:
                 # Verify checksum and track cumulative size so we can figure out MB/s
                 full_filename = os.path.join(data_dir, f)
-                md5, size = self.md5file(full_filename)
+                md5, size = fileutil.md5file(full_filename)
                 if size < Exporter.MIN_UPLOADABLE_SIZE:
                     # Check file size again when uploading in case it has been
                     # concurrently uploaded / truncated elsewhere.

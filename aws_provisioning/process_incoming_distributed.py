@@ -16,32 +16,21 @@ import sys
 import aws_util
 from boto.s3.connection import S3Connection
 
-
 def bootstrap_instance(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     ssl_key_path = config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
     ssl_host = "@".join((ssl_user, instance.public_dns_name))
-    print "To connect to it:"
-    print "ssh -i", ssl_key_path, ssl_host
 
-    # Now configure the instance:
-    print "Installing dependencies"
-    aws_util.install_packages("git python-pip build-essential python-dev xz-utils")
-
-    #sudo("apt-get --yes dist-upgrade")
-    sudo('pip install simplejson scales boto')
-    sudo('mkdir /mnt/telemetry')
+    sudo('mkdir -p /mnt/telemetry')
     sudo('chown %s:%s /mnt/telemetry' % (ssl_user, ssl_user))
+    run("mkdir -p /mnt/telemetry/work /mnt/telemetry/processed")
 
     home = "/home/" + ssl_user
     print "Preparing code"
     with cd(home):
         run("git clone https://github.com/mreid-moz/telemetry-server.git")
-        run("git clone https://github.com/sstoiana/s3funnel.git")
-    with cd(home + "/s3funnel"):
-        sudo("python setup.py install")
     with cd(home + "/telemetry-server"):
-        run("mkdir /mnt/telemetry/work /mnt/telemetry/processed")
+        run("bash get_histogram_tools.sh")
 
 def process_incoming(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
@@ -51,16 +40,22 @@ def process_incoming(config, instance):
     incoming_filenames = []
     for f in incoming_bucket.list():
         incoming_filenames.append(f.name)
+
+    # TODO: sort the incoming list by time (oldest first)
     with cd(home + "/telemetry-server"):
         while len(incoming_filenames) > 0:
-            current_filenames = incoming_filenames[0:4]
-            incoming_filenames = incoming_filenames[4:]
+            current_filenames = incoming_filenames[0:32]
+            incoming_filenames = incoming_filenames[32:]
             run("echo '%s' > inputs.txt" % (current_filenames.pop(0)))
             for c in current_filenames:
                 run("echo '%s' >> inputs.txt" % (c))
             run("echo 'Processing files:'")
             run("cat inputs.txt")
-            run('python process_incoming_serial.py -i inputs.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"]))
+            skip_conversion = ""
+            if config.get("skip_conversion", False):
+                skip_conversion = "--skip-conversion"
+            print "Processing", len(current_filenames), "inputs,", len(incoming_filenames), "remaining"
+            run('python process_incoming_mp.py -i inputs.txt --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s %s' % (config["aws_key"], config["aws_secret_key"], skip_conversion, config["incoming_bucket"], config["publish_bucket"]))
 
 if len(sys.argv) < 2:
     print "Usage:", sys.argv[0], "/path/to/config_file.json"
@@ -93,6 +88,7 @@ try:
 
     # Can't connect when using known hosts :(
     env.disable_known_hosts = True
+    env.keepalive = 5
 
     if aws_util.wait_for_ssh(config.get("ssl_retries", 3)):
         print "SSH Connection is ready."
@@ -100,9 +96,20 @@ try:
         print "Failed to establish SSH Connection to", instance.id
         sys.exit(2)
 
-    bootstrap_instance(config, instance)
+    if not config.get("skip_bootstrap", False):
+        bootstrap_instance(config, instance)
+    else:
+        # update from github:
+        with cd("/home/" + ssl_user + "/telemetry-server"):
+            run("git pull")
+
     process_incoming(config, instance)
 finally:
     # All done: Terminate this mofo
-    print "Terminating", instance.id
-    conn.terminate_instances(instance_ids=[instance.id])
+    if "instance_id" in config:
+        # It was an already-existing instance, leave it alone
+        print "Not terminating instance", instance.id
+    else:
+        # we created it ourselves, terminate it.
+        print "Terminating", instance.id
+        conn.terminate_instances(instance_ids=[instance.id])

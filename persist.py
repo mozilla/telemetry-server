@@ -32,14 +32,9 @@ class StorageLayout:
         self._schema = schema
         self._basedir = basedir
 
-    def write(self, uuid, obj, dimensions):
-        filename = self._schema.get_filename(self._basedir, dimensions)
-        self.write_filename(uuid, obj, filename)
-
-    def write_invalid(self, uuid, obj, dimensions, err):
-        # TODO: put 'err' into file?
-        filename = self._schema.get_filename_invalid(self._basedir, dimensions)
-        self.write_filename(uuid, obj, filename, err)
+    def write(self, uuid, obj, dimensions, version=1):
+        filename = self._schema.get_filename(self._basedir, dimensions, version)
+        return self.write_filename(uuid, obj, filename)
 
     def clean_newlines(self, value, tag="value"):
         # Clean any newlines (replace with spaces)
@@ -49,7 +44,7 @@ class StorageLayout:
                 value = value.replace(eol, " ")
         return value
 
-    def write_filename(self, uuid, obj, filename, err=None):
+    def write_filename(self, uuid, obj, filename):
         # Working filename is like
         #   a.b.c.log
         # We want to roll this over (and compress) when it reaches a size limit
@@ -65,7 +60,13 @@ class StorageLayout:
 
         dirname = os.path.dirname(filename)
         if not os.path.exists(dirname):
-            os.makedirs(dirname)
+            try:
+                os.makedirs(dirname)
+            except OSError, e:
+                # errno 17 means "directory exists". This is a race condition
+                # in a multi-process environment, and can safely be ignored.
+                if e.errno != 17:
+                    raise
 
         # According to SO, this should be atomic on a well-behaved OS:
         # http://stackoverflow.com/questions/7561663/appending-to-the-end-of-a-file-in-a-concurrent-environment
@@ -75,7 +76,9 @@ class StorageLayout:
 
         logging.debug("Wrote to %s: new size is %d" % (filename, filesize))
         if filesize >= self._max_log_size:
-            self.rotate(filename)
+            return self.rotate(filename)
+        else:
+            return filename
 
     def rotate(self, filename):
         logging.debug("Rotating %s" % (filename))
@@ -86,3 +89,4 @@ class StorageLayout:
         # Note that files are expected to be compressed elsewhere (see compressor.py)
         # The compressed log filenames will be something like
         #   a.b.c.log.3.COMPRESSED_SUFFIX
+        return tmp_name

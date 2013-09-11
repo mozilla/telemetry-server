@@ -23,8 +23,13 @@ def connect(region, aws_key, aws_secret_key):
             aws_secret_access_key=aws_secret_key)
     return conn
 
-def create_instance(config):
-    conn = connect_cfg(config)
+def create_instance(config, aws_key=None, aws_secret_key=None):
+    if aws_key is None:
+        aws_key = config["aws_key"]
+    if aws_secret_key is None:
+        aws_secret_key = config["aws_secret_key"]
+
+    conn = connect(config["region"], aws_key, aws_secret_key)
     itype = config.get("instance_type", "m1.large")
     print "Creating a new instance of type", itype
     # Known images:
