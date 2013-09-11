@@ -53,8 +53,10 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '*                hard    nofile          30000' >> /etc/security/limits.conf")
 
         # Each fabric 'run' starts a separate shell, so the limits above should
-        # be set correctly. But they're not... FIXME
+        # be set correctly. However, we actually need to disconnect from SSH to
+        # get a fresh connection first.
         fabric.network.disconnect_all()
+
         run("echo 'Soft limit:'; ulimit -S -n")
         run("echo 'Hard limit:'; ulimit -H -n")
 
