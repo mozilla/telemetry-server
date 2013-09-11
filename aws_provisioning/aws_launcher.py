@@ -60,6 +60,12 @@ class Launcher(object):
         # specific branch you could do it here.
         pass
 
+    def pre_install(self, instance):
+        pass
+
+    def post_install(self, instance):
+        pass
+
     def create_work_dir(self, instance):
         base_dir = self.config.get("base_dir", "/mnt/telemetry")
         # By default, put work dir in /mnt where there's plenty of space:
@@ -68,12 +74,14 @@ class Launcher(object):
 
     def bootstrap_instance(self, instance):
         # Now configure the instance:
+        self.pre_install(instance)
         self.install_apt_dependencies(instance)
         self.install_python_dependencies(instance)
         self.install_misc_dependencies(instance)
         self.install_telemetry_code(instance)
         self.choose_telemetry_branch(instance)
         self.create_work_dir(instance)
+        self.post_install(instance)
 
     def terminate(self, conn, instance):
         print "Terminating", instance.id

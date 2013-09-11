@@ -8,6 +8,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from aws_launcher import Launcher
 from fabric.api import *
+import fabric.network
 import sys
 
 class TelemetryServerLauncher(Launcher):
@@ -28,10 +29,7 @@ class TelemetryServerLauncher(Launcher):
             run("make")
             sudo("make install")
 
-    def install_misc_dependencies(self, instance):
-        # Install parent dependencies:
-        Launcher.install_misc_dependencies(self, instance)
-
+    def post_install(self, instance):
         # Install some more:
         self.install_nodejs_src()
 
@@ -55,14 +53,15 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '*                hard    nofile          30000' >> /etc/security/limits.conf")
 
         # Each fabric 'run' starts a separate shell, so the limits above should
-        # be set correctly.
+        # be set correctly. But they're not... FIXME
+        fabric.network.disconnect_all()
         run("echo 'Soft limit:'; ulimit -S -n")
         run("echo 'Hard limit:'; ulimit -H -n")
 
     def run(self, instance):
         # TODO: daemonize these with an init script or put into screen session
-        with cd("telemetry-server"):
-            run("node server/server.js server/server_config.json")
+        with cd("telemetry-server/server"):
+            run("node ./server.js ./server_config.json")
 
         # This won't run, since previous will hang.
         print "Telemetry server started"
