@@ -60,7 +60,7 @@ def process_incoming(config, instance):
                 run("echo '%s' >> inputs.txt" % (c))
             run("echo 'Processing files:'")
             run("cat inputs.txt")
-            run('python process_incoming.py -i inputs.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"]))
+            run('python process_incoming_serial.py -i inputs.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s' % (config["aws_key"], config["aws_secret_key"], config["incoming_bucket"], config["publish_bucket"]))
 
 if len(sys.argv) < 2:
     print "Usage:", sys.argv[0], "/path/to/config_file.json"
