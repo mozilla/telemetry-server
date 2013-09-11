@@ -16,8 +16,6 @@ import sys
 import aws_util
 from boto.s3.connection import S3Connection
 
-MAX_INSTANCES=10
-
 def bootstrap_instance(config, instance):
     ssl_user = config.get("ssl_user", "ubuntu")
     ssl_key_path = config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
