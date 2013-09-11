@@ -1,9 +1,14 @@
 import sys, struct, gzip
 import StringIO as StringIO
+import simplejson as json
 
 fin = open(sys.argv[1], "rb")
+parse = False
+if len(sys.argv) > 2 and sys.argv[2] == 'parse':
+    parse = True
 
-record_count = 0;
+record_count = 0
+bad_records = 0
 while True:
     record_count += 1
     # Read 2 * 4 + 8 bytes
@@ -34,5 +39,12 @@ while True:
     else:
         apparent_type = "weird (" + ":".join("{0:x}".format(ord(c)) for c in data[0:5]) + ")"
 
-    print "Record", record_count, path, "data length:", len_data, "timestamp:", timestamp, apparent_type, "data:", data[0:5] + "..."
+    if parse:
+        try:
+            parsed_json = json.loads(data)
+        except:
+            bad_records += 1
+            print "Record", record_count, "failed to parse json"
+    #print "Record", record_count, path, "data length:", len_data, "timestamp:", timestamp, apparent_type, "data:", data[0:5] + "..."
 
+print "Processed", record_count, "records, with", bad_records, "bad records"
