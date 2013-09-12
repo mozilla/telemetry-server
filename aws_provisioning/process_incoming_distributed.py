@@ -61,6 +61,7 @@ class ProcessIncomingLauncher(Launcher):
 
     def process_incoming(self, instance, incoming_filenames):
         incoming_batch_size = self.config.get("incoming_batch_size", 8)
+        home = "/home/" + self.ssl_user
         # TODO: sort the incoming list by time (oldest first)
         with cd(home + "/telemetry-server"):
             while len(incoming_filenames) > 0:
