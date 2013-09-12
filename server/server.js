@@ -1,5 +1,4 @@
 var http = require('http');
-var winston = require('winston');
 var fs = require('fs');
 var os = require('os');
 var url = require('url');
@@ -43,20 +42,32 @@ var timer = setInterval(function(){ rotate_time(); }, max_log_age_ms);
 
 // NOTE: This is for logging request metadata (for monitoring and stats)
 var request_log_file = config.stats_log_file || "/var/log/telemetry/telemetry-server.log";
-var request_log = new (winston.Logger)({
-  transports: [ new (winston.transports.File)({
-    filename: request_log_file,
-    maxsize: config.stats_log_maxsize || 200 * 1024 * 1024,
-    maxFiles: config.stats_log_maxfiles || 20
-  }) ]
-});
 
 function finish(code, request, response, msg, start_time, bytes_stored) {
   var duration = process.hrtime(start_time);
   var duration_ms = duration[0] * 1000 + duration[1] / 1000000;
   response.writeHead(code, {'Content-Type': 'text/plain'});
   response.end(msg);
-  request_log.info(msg, {"url": request.url, "duration_ms": duration_ms, "code": code, "size": bytes_stored});
+  stat = {
+    "url": request.url,
+    "duration_ms": duration_ms,
+    "code": code,
+    "size": bytes_stored,
+    "level": "info",
+    "message": msg,
+    "timestamp": new Date()
+  };
+  log_message = JSON.stringify(stat);
+  // Don't want to do this synchronously, but it seems the most foolproof way.
+  // The async version appears to leak FDs (resulting in EMFILE errors after a
+  // while)
+  // NOTE: if this is changed to use a persistent fd or stream, we need to
+  //       listen for SIGHUP and close the log file so it can be rotated by
+  //       logrotate
+  fs.appendFileSync(request_log_file, log_message + "\n", function (err) {
+    console.log("Failed to log request to " + request_log_file + ": "
+              + log_message + ": " + err.message);
+  });
 }
 
 // We don't want to do this calculation within rotate() because it is also
