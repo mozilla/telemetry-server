@@ -64,10 +64,7 @@ function finish(code, request, response, msg, start_time, bytes_stored) {
   // NOTE: if this is changed to use a persistent fd or stream, we need to
   //       listen for SIGHUP and close the log file so it can be rotated by
   //       logrotate
-  fs.appendFileSync(request_log_file, log_message + "\n", function (err) {
-    console.log("Failed to log request to " + request_log_file + ": "
-              + log_message + ": " + err.message);
-  });
+  fs.appendFileSync(request_log_file, log_message + "\n");
 }
 
 // We don't want to do this calculation within rotate() because it is also
