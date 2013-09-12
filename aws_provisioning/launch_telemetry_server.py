@@ -33,9 +33,6 @@ class TelemetryServerLauncher(Launcher):
         # Install some more:
         self.install_nodejs_src()
 
-        # Install node dependencies:
-        sudo("npm install winston")
-
         # Create log dir (within base_dir, but symlinked to /var/log):
         base_dir = self.config.get("base_dir", "/mnt/telemetry")
         run("mkdir {0}/log".format(base_dir))
