@@ -35,8 +35,9 @@ class TelemetryServerLauncher(Launcher):
 
         # Create log dir (within base_dir, but symlinked to /var/log):
         base_dir = self.config.get("base_dir", "/mnt/telemetry")
-        run("mkdir {0}/log".format(base_dir))
-        sudo("ln -s {0}/log /var/log/telemetry".format(base_dir))
+        log_dir = base_dir + "/log"
+        run("mkdir {0}".format(log_dir))
+        sudo("ln -s {0} /var/log/telemetry".format(log_dir))
 
         # Create data dir:
         run("mkdir {0}/data".format(base_dir))
@@ -56,6 +57,19 @@ class TelemetryServerLauncher(Launcher):
 
         run("echo 'Soft limit:'; ulimit -S -n")
         run("echo 'Hard limit:'; ulimit -H -n")
+
+        # Setup logrotate for the stats log
+        lr_file = "/etc/logrotate.d/telemetry"
+        sudo("echo '/var/log/telemetry/telemetry-server.log {' > {0}".format(lr_file))
+        sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
+        sudo("echo '    rotate 10' >> {0}".format(lr_file))
+        sudo("echo '    daily' >> {0}".format(lr_file))
+        sudo("echo '    compress' >> {0}".format(lr_file))
+        sudo("echo '    missingok' >> {0}".format(lr_file))
+        sudo("echo '    create 640 {1} {1}' >> {0}".format(lr_file, self.ssl_user))
+        with settings(warn_only=True):
+            # This will warn if there's no file there.
+            sudo("logrotate -f /etc/logrotate.d/telemetry")
 
     def run(self, instance):
         # TODO: daemonize these with an init script or put into screen session
