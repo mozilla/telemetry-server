@@ -38,12 +38,28 @@ class ProcessIncomingLauncher(Launcher):
         # Update from github
         with cd(home + "/telemetry-server"):
             run("git pull")
+
         s3conn = S3Connection(self.aws_key, self.aws_secret_key)
         incoming_bucket = s3conn.get_bucket(self.config["incoming_bucket"])
-        incoming_filenames = []
-        for f in incoming_bucket.list():
-            incoming_filenames.append(f.name)
 
+        if self.config.get("loop", False):
+            while True:
+                incoming_filenames = []
+                for f in incoming_bucket.list():
+                    incoming_filenames.append(f.name)
+                if len(incoming_filenames) == 0:
+                    print "No files to process yet. Sleeping for a while..."
+                    # TODO: Terminate 'instance' and fire up a new one when we need it?
+                    time.sleep(60)
+                    continue
+                self.process_incoming(instance, incoming_filenames)
+        else:
+            incoming_filenames = []
+            for f in incoming_bucket.list():
+                incoming_filenames.append(f.name)
+            self.process_incoming(instance, incoming_filenames)
+
+    def process_incoming(self, instance, incoming_filenames):
         incoming_batch_size = self.config.get("incoming_batch_size", 8)
         # TODO: sort the incoming list by time (oldest first)
         with cd(home + "/telemetry-server"):
