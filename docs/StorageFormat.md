@@ -36,11 +36,13 @@ Example
 -------
 
 As an example, we will look at the `DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT`
-Histogram:
+Histogram.
+The allowed lower bounds (ie. keys in the "values" object) for this histogram
+are: 0, 1, 3, 8, 21, 57, 154, 414, 1114, 3000
 
 Original format (minimal):
 ```json
-"DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT":{"log_sum_squares":624.027626294358,"log_sum":873.474196434021,"sum":1279,"values":{"8":0,"3":7,"1":1232,"0":0},"histogram_type":0,"bucket_count":10,"range":[1,3000]}
+"DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT":{"log_sum_squares":624.027626294358,"log_sum":873.474196434021,"sum":1279,"values":{"1114":0,"414":1,"8":0,"3":7,"1":1232,"0":0},"histogram_type":0,"bucket_count":10,"range":[1,3000]}
 ```
 
 Original format (expanded for readability):
@@ -50,7 +52,9 @@ Original format (expanded for readability):
   "log_sum": 873.474196434021,
   "sum": 1279,
   "values": {
-    "8": 0,
+    "1114": 0,
+    "414": 1,
+    "8": 2,
     "3": 7,
     "1": 1232,
     "0": 0
@@ -68,7 +72,7 @@ In the new storage form, this becomes:
 
 Converted format (minimal):
 ```json
-"DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT":[0,1232,0,7,0,0,0,0,0,0,1279,873.474196434021,624.027626294358]
+"DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT":[0,1232,7,2,0,0,0,1,0,0,1279,873.474196434021,624.027626294358]
 ```
 
 Converted format (expanded):
@@ -76,12 +80,12 @@ Converted format (expanded):
 "DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT": [
   0,                    // Bucket 0
   1232,                 // Bucket 1
-  0,                    // Bucket 2
-  7,                    // Bucket 3
+  7,                    // Bucket 2
+  2,                    // Bucket 3
   0,                    // .
   0,                    // .
   0,                    // .
-  0,                    
+  1,                    // Bucket 7
   0,                    
   0,                    // Bucket N
   1279,                 // sum
