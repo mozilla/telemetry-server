@@ -59,13 +59,14 @@ class TelemetryServerLauncher(Launcher):
 
         # Setup logrotate for the stats log
         lr_file = "/etc/logrotate.d/telemetry"
-        sudo("echo '/var/log/telemetry/telemetry-server.log {' > {0}".format(lr_file))
+        sudo("echo '/var/log/telemetry/telemetry-server.log {' > " + lr_file)
         sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
         sudo("echo '    rotate 10' >> {0}".format(lr_file))
         sudo("echo '    daily' >> {0}".format(lr_file))
         sudo("echo '    compress' >> {0}".format(lr_file))
         sudo("echo '    missingok' >> {0}".format(lr_file))
         sudo("echo '    create 640 {1} {1}' >> {0}".format(lr_file, self.ssl_user))
+        sudo("echo '}' >> " + lr_file)
         with settings(warn_only=True):
             # This will warn if there's no file there.
             sudo("logrotate -f /etc/logrotate.d/telemetry")
