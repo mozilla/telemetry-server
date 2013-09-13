@@ -65,6 +65,7 @@ class ProcessIncomingLauncher(Launcher):
         with cd(home + "/telemetry-server"):
             while len(incoming_filenames) > 0:
                 current_filenames = incoming_filenames[0:incoming_batch_size]
+                num_inputs = len(current_filenames)
                 incoming_filenames = incoming_filenames[incoming_batch_size:]
                 run("echo '%s' > inputs.txt" % (current_filenames.pop(0)))
                 for c in current_filenames:
@@ -74,7 +75,7 @@ class ProcessIncomingLauncher(Launcher):
                 skip_conversion = ""
                 if self.config.get("skip_conversion", False):
                     skip_conversion = "--skip-conversion"
-                print "Processing", len(current_filenames), "inputs,", len(incoming_filenames), "remaining"
+                print "Processing", num_inputs, "inputs,", len(incoming_filenames), "remaining"
                 run('python process_incoming_mp.py -i inputs.txt --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s %s' % (self.aws_key, self.aws_secret_key, skip_conversion, self.config["incoming_bucket"], self.config["publish_bucket"]))
 
 def main():
