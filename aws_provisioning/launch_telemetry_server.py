@@ -71,21 +71,46 @@ class TelemetryServerLauncher(Launcher):
             # This will warn if there's no file there.
             sudo("logrotate -f /etc/logrotate.d/telemetry")
 
-    def run(self, instance):
-        # TODO: daemonize these with an init script or put into screen session
-        with cd("telemetry-server/server"):
-            run("node ./server.js ./server_config.json")
+        # Create startup scripts:
+        c_file = "/etc/init/telemetry-server.conf"
+        sudo("echo 'script' > " + c_file)
+        sudo("echo '    setuid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo '    setgid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo '    cd /home/{1}/telemetry-server/server' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo '    /usr/bin/node ./server.js ./server_config.json >> /var/log/telemetry/telemetry-server.out' >> {0}".format(c_file))
+        sudo("echo 'end script' >> {0}".format(c_file))
+        sudo("echo 'respawn' >> {0}".format(c_file))
 
-        # This won't run, since previous will hang.
+        c_file = "/etc/init/telemetry-export.conf"
+        sudo("echo 'script' > " + c_file)
+        sudo("echo '    setuid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo '    setgid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo '    cd /home/{1}/telemetry-server' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo \"    /usr/bin/python ./export.py -d {1}/data -p '^telemetry.log.*[.]finished$' -k '{2}' -s '{3}' -b '{4}' --remove-files --loop >> /var/log/telemetry/telemetry-export.out\" >> {0}".format(c_file, base_dir, self.aws_key, self.aws_secret_key, self.config.get("incoming_bucket", "telemetry-incoming")))
+        sudo("echo 'end script' >> {0}".format(c_file))
+        sudo("echo 'respawn' >> {0}".format(c_file))
+
+        c_file = "/etc/init/telemetry-incoming.conf"
+        sudo("echo 'script' > " + c_file)
+        sudo("echo '    setuid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo '    setgid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo '    cd /home/{1}/telemetry-server/aws_provisioning' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo \"    /usr/bin/python process_incoming_distributed.py -k '{1}' -s '{2}' ./aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file))
+        sudo("echo 'end script' >> {0}".format(c_file))
+        sudo("echo 'respawn' >> {0}".format(c_file))
+
+    def run(self, instance):
+        # Start up HTTP server
+        sudo("start telemetry-server")
         print "Telemetry server started"
 
         # Start up exporter
-        with cd("telemetry-server"):
-            run("./export.py -d {0}/data -p '^telemetry.log.*[.]finished$' -k '{1}' -s '{2}' -b '{3}' --remove-files --loop".format(base_dir, self.aws_key, self.aws_secret_key, self.config.get("incoming_bucket", "telemetry-incoming")))
+        sudo("start telemetry-export")
+        print "Telemetry export started"
         
         # Start up 'process incoming'
-        with cd("telemetry-server/aws_provisioning"):
-            run("python process_incoming_distributed.py aws_incoming.cc2.8xlarge.json | tee -a process_incoming.log")
+        sudo("start telemetry-incoming")
+        print "Telemetry incoming started"
 
 def main():
     try:
