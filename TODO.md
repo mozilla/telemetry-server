@@ -1,18 +1,9 @@
 TODO
 ====
 
-- [P1] Error handling in pipe-based compressor
-- [P1] Add a server unique identifier to the log file names so that we can run
-       many server nodes, or possibly just add a UUID to the filename instead
-       of .3.log, .4.log, etc.
-- [PX] Have "process incoming" accept a list of filenames
-- [PX] Have the "process incoming launcher" specify a list of files to process
-- [PX] Verify each step of process_incoming.py, make sure that if we have any
-       failures, we do not end up publishing partial results
+- [PX] Verify each step of process_incoming_mp.py, make sure that if we have
+       any failures, we do not end up publishing partial results
 - [P2] Add "number of records" to exported filenames
-- [P2] Add "storage version" to exported filenames
-- [P2] nginx: Check into load-balancing
-- [P2] nginx: Accept gzip-encoded submissions
 - [P2] Figure out idle-daily de-duplication
 - [P2] Supply the correct Histograms.json spec for each record to the Mapper
 - [P2] MapReduce: make sure to create all the mapper_x_y files (since we might
@@ -25,17 +16,14 @@ TODO
   -  retention period
   -  investigate [S3's Lifecycle policy][7] (send to glacier, eventually
      expire)
-- [P3] Have the "archive" job write bad input records to the invalid_data dir
+- [P3] Have the "process_incoming" job write bad input records back to S3
 - [P3] Create AMI images for bootstrapped server and mapreduce nodes
-- [P3] Check if the compressor (and exporter) cron job is already running, and
-       if so don't start another instance.
 - [P3] Stream data from S3 for MapReduce instead of downloading first
 - [P3] Investigate using Amazon ElasticMapReduce for MR jobs (instead of
        fetching and running locally)
 - [P3] Add timeout/retry around fetching Histograms.json from hg.mozilla.org
 - [P3] Add many tests
-- [P3] Add runtime performance metrics using [scales][1] and on-demand perf
-       tests using [cProfile][3]
+- [P3] Add runtime performance metrics
 - [P3] Add proper [logging][2]
 - [P3] Ensure things are in order to accept Addon Histograms, such as
        from [pdf.js][5]
