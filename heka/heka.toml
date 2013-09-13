@@ -1,0 +1,56 @@
+[hekad]
+maxprocs = 4
+base_dir = "."
+
+[TelemetryInput]
+type = "LogfileInput"
+logfile = "/var/log/telemetry/telemetry-server.log"
+decoders = ["TelemetryDecoder"]
+seek_journal_name = "telemetry.journal"
+use_seek_journal = true 
+
+[TelemetryDecoder]
+type = "PayloadJsonDecoder"
+timestamp_layout = "2006-01-02T15:04:05.999Z"
+
+#{"url":"/submit/telemetry/60dfb8c5-9966-4fd8-9b82-3a5ec2ac3d6a/saved-session/Firefox/23.0.1/release/20130814063812","duration_ms":0.547324,"code":200,"size":4819,"level":"info","message":"OK","timestamp":"2013-09-10T20:43:17.217Z"}
+
+[TelemetryDecoder.json_map]
+Timestamp = "$.timestamp"
+Severity = "$.level"
+url = "$.url"
+duration = "$.duration_ms"
+code = "$.code"
+size = "$.size"
+message = "$.message"
+
+[TelemetryDecoder.severity_map]
+debug = 1
+warning = 2
+info = 3
+
+[TelemetryDecoder.message_fields]
+Type = "TelemetryLog"
+Payload = ""
+url = "%url%"
+duration|ms = "%duration%"
+code = "%code%"
+size|B = "%size%"
+message = "%message%"
+
+[TelemetryFilter]
+type = "SandboxFilter"
+message_matcher = "Type == 'TelemetryLog'"
+ticker_interval = 60
+script_type = "lua"
+filename = "telemetry.lua"
+preserve_data = true
+memory_limit = 1000000 
+instruction_limit = 1000
+output_limit = 64000
+
+[Dashboard]
+type = "DashboardOutput"
+address = "0.0.0.0:4352"
+ticker_interval = 5
+working_directory = "dashboard"
