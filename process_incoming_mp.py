@@ -482,8 +482,13 @@ def main():
     num_cpus = multiprocessing.cpu_count()
 
     start = datetime.now()
-    conn = S3Connection(args.aws_key, args.aws_secret_key)
-    incoming_bucket = conn.get_bucket(args.incoming_bucket)
+    conn = None
+    incoming_bucket = None
+
+    if not args.dry_run:
+        conn = S3Connection(args.aws_key, args.aws_secret_key)
+        incoming_bucket = conn.get_bucket(args.incoming_bucket)
+
     incoming_filenames = []
     if args.input_files:
         print "Fetching file list from file", args.input_files
