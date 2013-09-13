@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # encoding: utf-8
-"""
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at http://mozilla.org/MPL/2.0/.
-"""
 
-## Example usage:
-# head -25 input.txt | python benchmark_server.py "ec2-54-212-85-66.us-west-2.compute.amazonaws.com" -b 0 -p 1 --dry-run --parse-dims
-# cat /mnt/bench3.dims.txt | python benchmark_server.py "ec2-54-212-85-66.us-west-2.compute.amazonaws.com" -b 0 -p 8 --parse-dims
-# head -n 1000 input.txt | python benchmark_server.py -b 20 -p 4 --verbose --dry-run
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+"""Example usage:
+head -25 input.txt | python benchmark_server.py "ec2-54-212-85-66.us-west-2.compute.amazonaws.com" -b 0 -p 1 --dry-run --parse-dims
+cat /mnt/bench3.dims.txt | python benchmark_server.py "ec2-54-212-85-66.us-west-2.compute.amazonaws.com" -b 0 -p 8 --parse-dims
+head -n 1000 input.txt | python benchmark_server.py -b 20 -p 4 --verbose --dry-run
+"""
 
 import argparse
 import sys

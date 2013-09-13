@@ -1,19 +1,13 @@
-"""
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at http://mozilla.org/MPL/2.0/.
-"""
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-###########################################################################
-# Use this script to validate, convert, and compress raw telemetry
-# log files.
-#
-# A list of files to be compressed is read from stdin.
-#
-# Example:
-#  python get_compressibles.py /path/to/telemetry | python compressor.py
-#
-###########################################################################
+"""Use this script to validate, convert, and compress raw telemetry log files.
+A list of files to be compressed is read from stdin.
+
+Example:
+  python get_compressibles.py /path/to/telemetry | python compressor.py
+"""
 
 import sys, os, re, glob
 import logging
