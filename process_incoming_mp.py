@@ -349,6 +349,10 @@ class ExportCompressedStep(PipeStep):
         self.s3f_cmd = [S3FUNNEL_PATH, self.aws_bucket_name, "put",
                 "-a", self.aws_key, "-s", self.aws_secret_key, "-t",
                 str(self.batch_size), "--put-only-new", "--put-full-path"]
+        if self.dry_run:
+            self.conn = None
+            self.bucket = None
+            return
         self.conn = S3Connection(self.aws_key, self.aws_secret_key)
         self.bucket = self.conn.get_bucket(self.aws_bucket_name)
 
