@@ -84,7 +84,7 @@ class Converter:
             #   - skip this histogram
             pass
 
-        for k in ("sum", "log_sum", "log_sum_squares"):
+        for k in ("sum", "log_sum", "log_sum_squares", "sum_squares_lo", "sum_squares_hi"):
             rewritten.append(val.get(k, -1))
         return rewritten
 

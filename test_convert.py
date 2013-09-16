@@ -63,8 +63,8 @@ try:
     print json.dumps(histograms)
     print "To output:"
     print json.dumps(rewritten)
-    assert rewritten["STARTUP_CRASH_DETECTED"] == [1, 0, 0, 0, -1, -1]
-    assert rewritten["DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT"] == [0,1232,7,2,0,0,0,1,0,0,1279,873.474196434021,624.027626294358]
+    assert rewritten["STARTUP_CRASH_DETECTED"] == [1, 0, 0, 0, -1, -1, 0, 0]
+    assert rewritten["DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT"] == [0,1232,7,2,0,0,0,1,0,0,1279,873.474196434021,624.027626294358,-1,-1]
 finally:
     shutil.rmtree(cache_dir)
     pass
