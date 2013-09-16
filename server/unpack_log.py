@@ -14,11 +14,11 @@ if len(sys.argv) > 2 and sys.argv[2] == 'parse':
 record_count = 0
 bad_records = 0
 while True:
-    record_count += 1
     # Read 2 * 4 + 8 bytes
     lengths = fin.read(16)
     if lengths == '':
         break
+    record_count += 1
     # The "<" is to force it to read as Little-endian to match the way it's
     # written. This is the "native" way in linux too, but might as well make
     # sure we read it back the same way.
@@ -46,9 +46,9 @@ while True:
     if parse:
         try:
             parsed_json = json.loads(data)
-        except:
+        except Exception, e:
             bad_records += 1
-            print "Record", record_count, "failed to parse json"
+            print "Record", record_count, "failed to parse json:", e
     #print "Record", record_count, path, "data length:", len_data, "timestamp:", timestamp, apparent_type, "data:", data[0:5] + "..."
 
 print "Processed", record_count, "records, with", bad_records, "bad records"
