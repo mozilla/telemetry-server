@@ -30,8 +30,7 @@ class BadPayloadError(Exception):
 class Converter:
     """A class for converting incoming payloads to a more compact form"""
     VERSION_UNCONVERTED = 1
-    VERSION_MISSING_HI_LO = 2
-    VERSION_CONVERTED = 3
+    VERSION_CONVERTED = 2
 
     def __init__(self, cache, schema):
         self._histocache = {}
