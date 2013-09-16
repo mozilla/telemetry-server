@@ -1,0 +1,21 @@
+{
+  "ssl_user": "ubuntu",
+  "ssl_key_name": "mreid",
+  "ssl_key_path": "~/.ssh/aws/mreid.pem",
+  "ssl_retries": 10,
+  "incoming_bucket": "mreid-telemetry-incoming-test",
+  "incoming_batch_size": 4,
+  "publish_bucket": "mreid-telemetry-published-test",
+  "image": "ami-76831f46",
+  "skip_conversion": false,
+  "loop": true,
+  "instance_type": "t1.micro",
+  "security_groups": ["telemetry"],
+  "region": "us-west-2",
+  "placement": "us-west-2c",
+  "name": "mreid-telemetry-process-incoming-test",
+  "default_tags": {
+    "Owner": "mreid",
+    "Application": "telemetry-server"
+  }
+}

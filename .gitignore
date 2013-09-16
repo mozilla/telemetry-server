@@ -7,4 +7,3 @@
 data/
 histogram_cache/
 histogram_tools.py
-telemetry_server_config.json
