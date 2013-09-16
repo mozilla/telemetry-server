@@ -30,7 +30,8 @@ class BadPayloadError(Exception):
 class Converter:
     """A class for converting incoming payloads to a more compact form"""
     VERSION_UNCONVERTED = 1
-    VERSION_CONVERTED = 2
+    VERSION_MISSING_HI_LO = 2
+    VERSION_CONVERTED = 3
 
     def __init__(self, cache, schema):
         self._histocache = {}
@@ -84,7 +85,7 @@ class Converter:
             #   - skip this histogram
             pass
 
-        for k in ("sum", "log_sum", "log_sum_squares"):
+        for k in ("sum", "log_sum", "log_sum_squares", "sum_squares_lo", "sum_squares_hi"):
             rewritten.append(val.get(k, -1))
         return rewritten
 

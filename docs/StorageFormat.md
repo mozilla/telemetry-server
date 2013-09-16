@@ -25,7 +25,7 @@ we will use that instead, but the improved readability of the name makes it a
 preferable key.
 
 The new Value for a Histogram will be calculated as an array containing:
-`[bucket0, bucket1, ..., bucketN, sum, log_sum, log_sum_squares]`
+`[bucket0, bucket1, ..., bucketN, sum, log_sum, log_sum_squares, sum_squares_lo, sum_squares_hi]`
 
 Having the metadata fields (sum, log_sum, etc) at the end of the array has the
 advantage that buckets are located at the expected offset in the array, and
@@ -72,7 +72,7 @@ In the new storage form, this becomes:
 
 Converted format (minimal):
 ```json
-"DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT":[0,1232,7,2,0,0,0,1,0,0,1279,873.474196434021,624.027626294358]
+"DOM_TIMERS_FIRED_PER_NATIVE_TIMEOUT":[0,1232,7,2,0,0,0,1,0,0,1279,873.474196434021,624.027626294358,-1,-1]
 ```
 
 Converted format (expanded):
@@ -90,7 +90,9 @@ Converted format (expanded):
   0,                    // Bucket N
   1279,                 // sum
   873.474196434021,     // log_sum
-  624.027626294358      // log_sum_squares
+  624.027626294358,     // log_sum_squares
+  -1,                   // sum_squares_lo
+  -1                    // sum_squares_hi
 ]
 ```
 
