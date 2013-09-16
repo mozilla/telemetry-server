@@ -16,13 +16,13 @@ class TelemetryServerLauncher(Launcher):
     def install_nodejs_bin(self):
         node_version = self.nodejs_version()
         run("wget http://nodejs.org/dist/v{0}/node-v{0}-linux-x64.tar.gz".format(node_version))
-        run("tar xzvf node-v{0}-linux-x64.tar.gz".format(node_version))
+        run("tar xzf node-v{0}-linux-x64.tar.gz".format(node_version))
         sudo("mv node-v{0}-linux-x64 /usr/local".format(node_version))
 
     def install_nodejs_src(self):
         node_version = self.nodejs_version()
         run("wget http://nodejs.org/dist/v{0}/node-v{0}.tar.gz".format(node_version))
-        run("tar xzvf node-v{0}.tar.gz".format(node_version))
+        run("tar xzf node-v{0}.tar.gz".format(node_version))
         with cd("node-v{0}".format(node_version)):
             run("./configure")
             run("make")
@@ -72,30 +72,35 @@ class TelemetryServerLauncher(Launcher):
             sudo("logrotate -f /etc/logrotate.d/telemetry")
 
         # Create startup scripts:
+        code_base = "/home/" + self.ssl_user + "/telemetry-server"
         c_file = "/etc/init/telemetry-server.conf"
-        sudo("echo 'script' > " + c_file)
-        sudo("echo '    setuid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo '    setgid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo '    cd /home/{1}/telemetry-server/server' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo '    /usr/bin/node ./server.js ./server_config.json >> /var/log/telemetry/telemetry-server.out' >> {0}".format(c_file))
+        sudo("echo 'setuid {1}' > {0}".format(c_file, self.ssl_user))
+        sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo 'script' >> " + c_file)
+        sudo("echo '    cd {1}/server' >> {0}".format(c_file, code_base))
+        sudo("echo '    /usr/local/bin/node ./server.js ./server_config.json >> /var/log/telemetry/telemetry-server.out' >> {0}".format(c_file))
         sudo("echo 'end script' >> {0}".format(c_file))
         sudo("echo 'respawn' >> {0}".format(c_file))
 
         c_file = "/etc/init/telemetry-export.conf"
-        sudo("echo 'script' > " + c_file)
-        sudo("echo '    setuid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo '    setgid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo '    cd /home/{1}/telemetry-server' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo 'setuid {1}' > {0}".format(c_file, self.ssl_user))
+        sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo 'script' >> " + c_file)
+        sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
         sudo("echo \"    /usr/bin/python ./export.py -d {1}/data -p '^telemetry.log.*[.]finished$' -k '{2}' -s '{3}' -b '{4}' --remove-files --loop >> /var/log/telemetry/telemetry-export.out\" >> {0}".format(c_file, base_dir, self.aws_key, self.aws_secret_key, self.config.get("incoming_bucket", "telemetry-incoming")))
         sudo("echo 'end script' >> {0}".format(c_file))
         sudo("echo 'respawn' >> {0}".format(c_file))
 
+        # Install a specific aws_incoming.json to use
+        process_incoming_config = self.config.get("process_incoming_config", "aws_incoming.json")
+        put(process_incoming_config, code_base + "/aws_provisioning/aws_incoming.json")
+
         c_file = "/etc/init/telemetry-incoming.conf"
-        sudo("echo 'script' > " + c_file)
-        sudo("echo '    setuid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo '    setgid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo '    cd /home/{1}/telemetry-server/aws_provisioning' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo \"    /usr/bin/python process_incoming_distributed.py -k '{1}' -s '{2}' ./aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file))
+        sudo("echo 'setuid {1}' > {0}".format(c_file, self.ssl_user))
+        sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo 'script' >> " + c_file)
+        sudo("echo '    cd {1}/aws_provisioning' >> {0}".format(c_file, code_base))
+        sudo("echo \"    /usr/bin/python process_incoming_distributed.py -k '{1}' -s '{2}' ./aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
         sudo("echo 'end script' >> {0}".format(c_file))
         sudo("echo 'respawn' >> {0}".format(c_file))
 
