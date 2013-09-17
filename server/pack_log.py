@@ -22,8 +22,8 @@ while True:
     # The "<" is to force it to read as Little-endian to match the way it's
     # written. This is the "native" way in linux too, but might as well make
     # sure we read it back the same way.
-    # Write 2 * 4 + 8 bytes
-    packed = struct.pack("<IIQ", len(path), len(data), int(round(time.time() * 1000)))
+    # Write 1 + 2 + 4 + 8 bytes
+    packed = struct.pack("<BHIQ", 0x1e, len(path), len(data), int(round(time.time() * 1000)))
     fout.write(packed)
     fout.write(path)
     fout.write(data)

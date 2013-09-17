@@ -7,6 +7,7 @@ var fs = require('fs');
 var os = require('os');
 var url = require('url');
 
+var log_version = "v1";
 var config = {};
 if (process.argv.length > 2) {
   // Attempt to read server config from the first argument
@@ -103,7 +104,7 @@ function rotate() {
 
 function unique_name(name) {
   // Could use UUID or something, but pid + timestamp should suffice.
-  return log_path + "/" + name + "." + os.hostname() + "." + process.pid + "." + new Date().getTime();
+  return log_path + "/" + name + "." + log_version + "." + os.hostname() + "." + process.pid + "." + new Date().getTime();
 }
 
 function postRequest(request, response, process_time, callback) {
@@ -138,18 +139,20 @@ function postRequest(request, response, process_time, callback) {
     // don't want clients to retry these either.
     return finish(202, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes", process_time, 0);
   }
-  var data_offset = 16; // 4 path + 4 data + 8 timestamp
+  var data_offset = 15; // 1 sep + 2 path + 4 data + 8 timestamp
   var buffer_length = path_length + data_length + data_offset;
   var buf = new Buffer(buffer_length);
 
   //console.log("Received " + data_length + " on " + url_path + " at " + request_time);
 
   // Write the preamble so we can read the pieces back out:
-  // 4 bytes to indicate path length
-  // 4 bytes to indicate data length
-  // 8 bytes to indicate request timestamp (epoch) split into two 4-byte writes
-  buf.writeUInt32LE(path_length, 0);
-  buf.writeUInt32LE(data_length, 4);
+  // 1 byte record separator 0x1e (so we can find our spot if we encounter a corrupted record)
+  // 2 byte uint to indicate path length
+  // 4 byte uint to indicate data length
+  // 8 byte uint to indicate request timestamp (epoch) split into two 4-byte writes
+  buf.writeUInt8(0x1e, 0);
+  buf.writeUInt16LE(path_length, 1);
+  buf.writeUInt32LE(data_length, 3);
 
   // Blast the lack of 64 bit int support :(
   // Standard bitwise operations treat numbers as 32-bit integers, so we have
@@ -157,8 +160,8 @@ function postRequest(request, response, process_time, callback) {
   // up to 2^53 so timestamps are safe for approximately a bazillion years.
   // This produces the equivalent of a single little-endian 64-bit value (and
   // can be read back out that way by other code).
-  buf.writeUInt32LE(request_time % 0x100000000, 8);
-  buf.writeUInt32LE(Math.floor(request_time / 0x100000000), 12);
+  buf.writeUInt32LE(request_time % 0x100000000, 7);
+  buf.writeUInt32LE(Math.floor(request_time / 0x100000000), 11);
 
   // now write the path:
   buf.write(url_path, data_offset);

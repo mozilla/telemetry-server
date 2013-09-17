@@ -97,19 +97,9 @@ function processData(curr_req) {
   stats.sent++;
 }
 
-// in v0.10 this data comes from the SlabAllocator, and we don't want
-// to hold onto a large chunk of memory, so we're going to copy it out
-function dupChunk(buf, start, end) {
-  if (end - start < 0)
-    throw new RangeError('end - start < 0');
-
-  var new_buf = new Buffer(end - start);
-  buf.copy(new_buf, 0, start, end);
-  return new_buf;
-}
-
 function blank_request() {
   return {
+    separator: -1,
     path_len: -1,
     data_len: -1,
     timestamp: -1,
@@ -147,17 +137,27 @@ var server = net.createServer(function (socket) {
       }, 1000);
     }
     while (data.length > 0) {
+      // Seek to a record separator.
+      for (var n = 0; current_request.separator < 0 && n < data.length; n++) {
+        if (data.readUInt8(n) == 0x1e) {
+          debug("Found separator at " + n);
+          current_request.separator = 0x1e;
+          data = data.slice(n + 1);
+        } else {
+          debug("Didn't find a record separator, skipping byte " + n);
+        }
+      }
+
       if (current_request.path_len < 0) {
-        if (data.length >= 4) {
-          current_request.path_len = data.readUInt32LE(0);
+        if (data.length >= 2) {
+          current_request.path_len = data.readUInt16LE(0);
           debug("Got path length: " + current_request.path_len);
           if (current_request.path_len > 1024) {
             debug("Warning: path length was " + current_request.path_len);
             // TODO: close socket since path is BS
           }
-          data = data.slice(4);
+          data = data.slice(2);
         } else {
-          // TODO: dupChunk?
           partials.push(data);
           return;
         }
