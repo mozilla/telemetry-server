@@ -4,25 +4,11 @@ Telemetry Server
 Server components to receive, validate, convert, store, and process Telemetry
 data from the [Mozilla Firefox](http://www.mozilla.org) browser.
 
-Talk to us on `irc.mozilla.org` in the `#telemetry` channel.
+Talk to us on `irc.mozilla.org` in the `#telemetry` channel, or visit the
+[Project Wiki][3] for more information.
 
-Roadmap
-=======
+See the [TODO list](TODO.md) for some outstanding tasks.
 
-### Next / In Progress:
-See the [TODO list](TODO.md)
-
-### Completed:
-1. Nail down the new [storage format][1] based on [Bug 856263][4]
-2. Define [on-disk storage structure][2] based on the [telemetry-reboot][5]
-   etherpad
-3. Build a [converter](convert.py) to take existing data as input and output
-   in the new format + structure
-4. [Plumb converter into the current pipeline][7] (Bagheera -> Kafka ->
-   converter -> format.v2)
-5. Build [MapReduce framework][6] to take [new format][1] + [structure][2] as
-   input and output data as required by the [telemetry-frontend][3]
-6. Build replacement frontend acquisition pipeline (HTTP -> persister -> format.v2)
 
 Storage Format
 -----------------
@@ -66,14 +52,16 @@ When everything is ready and productionized, we will route the client (Firefox) 
 Code Overview
 =============
 
-`server.py`
+These are the important parts of the Telemetry Server architecture.
+
+`server/server.js`
 -----------
-Contains the prototype http server for receiving payloads. The `submit`
-function is where the interesting things happen.
+Contains the Node.js HTTP server for receiving payloads. The server's job is
+simply to write incoming submissions to disk as quickly as possible.
 
 It accepts single submissions using the same type of URLs supported by
-[Bagheera][7], and also has endpoints for batch submission (which improves
-throughput for the production -> prototype relay).
+[Bagheera][7], and expects (but doesn't require) the [partition information][9]
+to be submitted as part of the URL.
 
 `convert.py`
 ------------
@@ -81,9 +69,15 @@ Contains the `Converter` class, which is used to convert a JSON payload from
 the raw form submitted by Firefox to the more compact [storage format][1] for
 on-disk storage and processing.
 
-You can run the main method in this file to process data exported from the
-old telemetry backend (via pig, jydoop, etc), or you can use the `Converter`
-class to convert data in a more fine-grained way.
+You can run the main method in this file to process a given data file (the
+expected format is one record per line, each line containing an id followed by
+a tab character, followed by a json string).
+
+You can also use the `Converter` class to convert data in a more flexible way.
+
+`export.py`
+-----------
+Contains code to export data to Amazon S3.
 
 `persist.py`
 ------------
@@ -102,23 +96,33 @@ cached locally on disk and in-memory as revisions are requested.
 Contains the `TelemetrySchema` class, which encapsulates logic used by the
 StorageLayout and MapReduce code.
 
+`process_incoming_mp.py`
+------------------------
+Contains the multi-process version of the data-transformation code. This is
+used to download incoming data (as received by the HTTP server), validate and
+convert it, then publish the results back to S3.
+
 `job.py`
 --------
 Contains the [MapReduce][6] code. This is the interface for running jobs on
 Telemetry data. There are example job scripts and input filters in the
 `examples/` directory.
 
-`compressor.py`
----------------
-Contains code to compress and rotate raw data files. Suitable for running from
-`cron`.
+`aws_provisioning/*`
+-----------------------
+Contains scripts to provision and launch various kinds of cloud services. This
+includes launching a telemetry server node, a MapReduce job, or a node to
+process incoming data.
+
+`heka/*`
+--------
+Contains the configuration used by [Heka][4] to process server logs.
 
 [1]: docs/StorageFormat.md "Storage Format"
 [2]: docs/StorageLayout.md "On-disk Storage Layout"
-[3]: https://github.com/tarasglek/telemetry-frontend "Telemetry Frontend"
-[4]: https://bugzilla.mozilla.org/show_bug.cgi?id=856263 "Bug 856263"
-[5]: https://etherpad.mozilla.org/telemetry-reboot "Telemetry Reboot"
+[3]: https://wiki.mozilla.org/Telemetry/Reboot "Telemetry Reboot wiki"
+[4]: http://hekad.readthedocs.org/ "Heka"
 [6]: docs/MapReduce.md "Telemetry MapReduce Framework"
 [7]: docs/BagheeraIntegration.md "Integration with Bagheera"
 [8]: server/server.js "Telemetry Server"
-
+[9]: https://bugzilla.mozilla.org/show_bug.cgi?id=860846 "Bug 860846"
