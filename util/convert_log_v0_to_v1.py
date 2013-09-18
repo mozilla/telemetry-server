@@ -2,8 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import sys, struct, gzip, time
-import StringIO as StringIO
+import sys, struct
 
 fin = open(sys.argv[1], "rb")
 fout = open(sys.argv[2], "wb")
