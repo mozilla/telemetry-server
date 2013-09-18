@@ -13,16 +13,31 @@ if len(sys.argv) > 2 and sys.argv[2] == 'parse':
 
 record_count = 0
 bad_records = 0
+bytes_skipped = 0
+total_bytes_skipped = 0
 while True:
-    # Read 2 * 4 + 8 bytes
-    lengths = fin.read(16)
+    # Read 1 byte record separator (and keep reading until we get one)
+    separator = fin.read(1)
+    if separator == '':
+        break
+    if ord(separator[0]) != 0x1e:
+        bytes_skipped += 1
+        continue
+    # We got our record separator as expected.
+    if bytes_skipped > 0:
+        print "Skipped", bytes_skipped, "bytes after record", record_count, "to find a valid separator"
+        total_bytes_skipped += bytes_skipped
+        bytes_skipped = 0
+
+    # Read 2 + 4 + 8 = 14 bytes
+    lengths = fin.read(14)
     if lengths == '':
         break
     record_count += 1
     # The "<" is to force it to read as Little-endian to match the way it's
     # written. This is the "native" way in linux too, but might as well make
     # sure we read it back the same way.
-    len_path, len_data, timestamp = struct.unpack("<IIQ", lengths)
+    len_path, len_data, timestamp = struct.unpack("<HIQ", lengths)
     path = fin.read(len_path)
     data = fin.read(len_data)
     apparent_type = "unknown"
@@ -51,4 +66,8 @@ while True:
             print "Record", record_count, "failed to parse json:", e
     #print "Record", record_count, path, "data length:", len_data, "timestamp:", timestamp, apparent_type, "data:", data[0:5] + "..."
 
-print "Processed", record_count, "records, with", bad_records, "bad records"
+
+if bytes_skipped > 0:
+    print "Skipped", bytes_skipped, "at the end of the file to find a valid separator"
+    total_bytes_skipped += bytes_skipped
+print "Processed", record_count, "records, with", bad_records, "bad records, and skipped", total_bytes_skipped, "bytes of corruption"

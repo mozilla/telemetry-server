@@ -157,45 +157,24 @@ class ReadRawStep(PipeStep):
     def handle(self, raw_file):
         print self.label, "reading", raw_file
         try:
-            fin = open(raw_file, "rb")
-            # Counts for the current file:
             record_count = 0
             bytes_read = 0
-
             start = datetime.now()
-            while True:
-                # Read two 4-byte values and one 8-byte value
-                lengths = fin.read(16)
-                if lengths == '':
-                    break
+            for len_path, len_data, timestamp, path, data, err in fileutil.unpack(raw_file):
                 record_count += 1
                 self.records_read += 1
-                len_path, len_data, timestamp = struct.unpack("<IIQ", lengths)
+                if err:
+                    print self.label, "ERROR: Found corrupted data for record", record_count, "in", raw_file, "path:", path, "Error:", err
+                    self.bad_records += 1
+                    continue
 
                 # Incoming timestamps are in milliseconds, so convert to POSIX first
                 # (ie. seconds)
                 submission_date = date.fromtimestamp(timestamp / 1000).strftime("%Y%m%d")
-                path = unicode(fin.read(len_path), errors="replace")
+                path = unicode(path, errors="replace")
                 #print "Path for record", record_count, path, "length of data:", len_data
 
-                # Detect and handle gzipped data.
-                data = fin.read(len_data)
-                if ord(data[0]) == 0x1f and ord(data[1]) == 0x8b:
-                    # Data is gzipped, uncompress it:
-                    try:
-                        # Note: from brief testing, cStringIO doesn't appear to be any
-                        #       faster. In fact, it seems slightly slower than StringIO.
-                        data_reader = StringIO.StringIO(data)
-                        uncompressor = gzip.GzipFile(fileobj=data_reader, mode="r")
-                        data = unicode(uncompressor.read(), errors="replace")
-                        uncompressor.close()
-                        data_reader.close()
-                    except Exception, e:
-                        # Corrupted data, let's skip this record.
-                        print self.label, "ERROR: Found corrupted data for record", record_count, "in", raw_file, "path:", path
-                        self.bad_records += 1
-                        continue
-                elif data[0] != "{":
+                if data[0] != "{":
                     # Data looks weird, should be JSON.
                     print self.label, "Warning: Found unexpected data for record", record_count, "in", raw_file, "path:", path, "data:"
                     print data
@@ -203,13 +182,13 @@ class ReadRawStep(PipeStep):
                     # Raw JSON, make sure we treat it as unicode.
                     data = unicode(data, errors="replace")
 
-                current_bytes = 8 + len_path + len_data
+                current_bytes = len_path + len_data + fileutil.RECORD_PREAMBLE_LENGTH
                 bytes_read += current_bytes
                 self.bytes_read += current_bytes
                 path_components = path.split("/")
                 if len(path_components) != self.expected_dim_count:
-                    # We're going to pop the ID off, but we'll also add the submission,
-                    # so it evens out.
+                    # We're going to pop the ID off, but we'll also add the
+                    # submission date, so it evens out.
                     print self.label, "Found an invalid path in record", record_count, path
                     continue
 

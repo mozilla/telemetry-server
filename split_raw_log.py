@@ -8,6 +8,7 @@ from persist import StorageLayout
 from telemetry_schema import TelemetrySchema
 from datetime import date, datetime
 import util.timer as timer
+import util.files as fileutil
 
 filename_timestamp_pattern = re.compile("^telemetry.log.([0-9]+).([0-9]+)(.finished)?$")
 
@@ -34,47 +35,30 @@ def main():
         os.makedirs(args.output_dir)
 
     record_count = 0;
-    fin = open(args.input_file, "rb")
-
+    bad_record_count = 0;
     bytes_read = 0
     start = datetime.now()
-    while True:
+    for len_path, len_data, timestamp, path, data, err in fileutil.unpack(args.input_file):
         record_count += 1
-        # Read two 4-byte values and one 8-byte value
-        lengths = fin.read(16)
-        if lengths == '':
-            break
-        len_path, len_data, timestamp = struct.unpack("<IIQ", lengths)
-
+        if err:
+            bad_record_count += 1
+            continue
         # Incoming timestamps are in milliseconds, so convert to POSIX first
         # (ie. seconds)
         submission_date = date.fromtimestamp(timestamp / 1000).strftime("%Y%m%d")
-        path = unicode(fin.read(len_path), errors="replace")
-        #print "Path for record", record_count, path, "length of data:", len_data
+        # Deal with unicode
+        path = unicode(path, errors="replace")
+        data = unicode(data, errors="replace")
 
-        # Detect and handle gzipped data.
-        data = fin.read(len_data)
-        try:
-            # Note: from brief testing, cStringIO doesn't appear to be any
-            #       faster. In fact, it seems slightly slower than StringIO.
-            data_reader = StringIO.StringIO(data)
-            uncompressor = gzip.GzipFile(fileobj=data_reader, mode="r")
-            data = unicode(uncompressor.read(), errors="replace")
-            uncompressor.close()
-            data_reader.close()
-        except Exception, e:
-            #print e
-            # Use the string as-is
-            data = unicode(data, errors="replace")
-
-        bytes_read += 8 + len_path + len_data
+        bytes_read += len_path + len_data + fileutil.RECORD_PREAMBLE_LENGTH
         #print "Path for record", record_count, path, "length of data:", len_data, "data:", data[0:5] + "..."
 
         path_components = path.split("/")
         if len(path_components) != expected_dim_count:
-            # We're going to pop the ID off, but we'll also add the submission,
-            # so it evens out.
+            # We're going to pop the ID off, but we'll also add the submission
+            # date, so it evens out.
             print "Found an invalid path in record", record_count, path
+            bad_record_count += 1
             continue
 
         key = path_components.pop(0)
@@ -89,7 +73,7 @@ def main():
         storage.write(key, data, dimensions)
     duration = timer.delta_sec(start)
     mb_read = bytes_read / 1024.0 / 1024.0
-    print "Read %.2fMB in %.2fs (%.2fMB/s)" % (mb_read, duration, mb_read / duration)
+    print "Read %.2fMB in %.2fs (%.2fMB/s), %d of %d records were bad" % (mb_read, duration, mb_read / duration, bad_record_count, record_count)
     return 0
 
 if __name__ == "__main__":
