@@ -107,6 +107,16 @@ function unique_name(name) {
   return log_path + "/" + name + "." + log_version + "." + os.hostname() + "." + process.pid + "." + new Date().getTime();
 }
 
+function getRequest(request, response, process_time, callback) {
+  if (request.method != 'GET') {
+    return finish(405, request, response, "Wrong request type", process_time, 0);
+  }
+  if (request.url == '/status') {
+    callback();
+  }
+  return finish(404, request, response, "Not Found", process_time, 0);
+}
+
 function postRequest(request, response, process_time, callback) {
   var request_time = new Date().getTime();
   var data_length = parseInt(request.headers["content-length"]);
@@ -205,9 +215,15 @@ function postRequest(request, response, process_time, callback) {
 function run_server(port) {
   http.createServer(function(request, response) {
     var start_time = process.hrtime();
-    postRequest(request, response, start_time, function(bytes_written) {
-      finish(200, request, response, 'OK', start_time, bytes_written);
-    });
+    if (request.method == "POST") {
+      postRequest(request, response, start_time, function(bytes_written) {
+        finish(200, request, response, 'OK', start_time, bytes_written);
+      });
+    } else {
+      getRequest(request, response, start_time, function() {
+        finish(200, request, response, 'OK', start_time, 0);
+      });
+    }
   }).listen(port);
   console.log("Process " + process.pid + " Listening on port " + port);
 }
