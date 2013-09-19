@@ -139,6 +139,18 @@ class Launcher(object):
         pass
 
 
+# This class does only the basics, and expects an image pre-configured with
+# the basic dependencies already installed (such as "ami-76831f46").
+class SimpleLauncher(Launcher):
+    def install_apt_dependencies(self, instance):
+        pass
+
+    def install_python_dependencies(self, instance):
+        pass
+
+    def install_misc_dependencies(self, instance):
+        pass
+
 def main():
     try:
         launcher = Launcher()

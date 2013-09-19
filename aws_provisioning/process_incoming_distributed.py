@@ -14,19 +14,17 @@ from fabric.exceptions import NetworkError
 import sys
 import aws_util
 from boto.s3.connection import S3Connection
-from aws_launcher import Launcher
+from aws_launcher import SimpleLauncher
 
 
-class ProcessIncomingLauncher(Launcher):
-    def bootstrap_instance(self, instance):
+class ProcessIncomingLauncher(SimpleLauncher):
+    def post_install(self, instance):
         # NOTE: This code assumes we're launching from the pre-bootstrapped AMI
         #       image that contains s3funnel, lzma, etc (ami-76831f46)
         #       If that's not the case, then the generic Launcher bootstrap
         #       should be run on this instance first.
-        self.create_work_dir(instance)
-        run("mkdir -p {0}/work {0}/processed".format(self.config.get("base_dir", "/mnt/telemetry")))
-
-        self.install_telemetry_code(instance)
+        with cd(self.config.get("base_dir", "/mnt/telemetry")):
+            run("mkdir work processed")
         home = "/home/" + self.ssl_user
         with cd(home + "/telemetry-server"):
             run("bash get_histogram_tools.sh")
