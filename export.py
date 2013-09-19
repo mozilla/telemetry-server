@@ -61,8 +61,16 @@ class Exporter:
                 total_size += size
 
                 # f is the key name - it does not include the full path to the
-                # data dir.
-                key = bucket.get_key(f)
+                # data dir. Try to fetch it a couple of times
+                for i in range(3):
+                    key = bucket.get_key(f)
+                    if key is not None:
+                        break
+                if key is None:
+                    print "ERROR: Failed to fetch key:", f
+                    result = -2
+                    continue
+
                 # Strip quotes from md5
                 remote_md5 = key.etag[1:-1]
                 if md5 != remote_md5:
