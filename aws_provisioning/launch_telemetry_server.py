@@ -113,9 +113,12 @@ class TelemetryServerLauncher(Launcher):
         sudo("start telemetry-export")
         print "Telemetry export started"
         
-        # Start up 'process incoming'
-        sudo("start telemetry-incoming")
-        print "Telemetry incoming started"
+        # Start up 'process incoming' only on the primary node
+        if self.config.get("primary_server", False):
+            sudo("start telemetry-incoming")
+            print "Telemetry incoming started"
+        else:
+            print "Not starting telemetry-incoming since this is not a primary server"
 
 def main():
     try:
