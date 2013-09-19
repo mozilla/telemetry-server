@@ -326,9 +326,9 @@ class Mapper:
                 try:
                     key, value = line.split("\t", 1)
                     mapfunc(key, input_file["dimensions"], value, context)
-                except ValueError:
+                except ValueError, e:
                     # TODO: increment "bad line" metrics.
-                    print "Bad line:", input_file["name"], ":", line_num
+                    print "Bad line:", input_file["name"], ":", line_num, e
             input_file["handle"].close()
             if "raw_handle" in input_file:
                 input_file["raw_handle"].close()
