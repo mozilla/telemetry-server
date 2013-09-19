@@ -312,18 +312,14 @@ class Mapper:
             print "No map function!!!"
             sys.exit(1)
 
-        # Pre-open all the files.  This should protect against the case where a
-        # ".compressme" file disappears during processing.
-        # TODO: Stream/decompress them directly.
+        # TODO: Stream/decompress the files directly.
         for input_file in inputs:
             try:
                 self.open_input_file(input_file)
             except:
                 print "Error opening", input_file["name"], "(skipping)"
                 traceback.print_exc(file=sys.stderr)
-
-        # now do another pass to actually process the files.
-        for input_file in inputs:
+                continue
             line_num = 0
             for line in input_file["handle"]:
                 line_num += 1
@@ -336,7 +332,6 @@ class Mapper:
             input_file["handle"].close()
             if "raw_handle" in input_file:
                 input_file["raw_handle"].close()
-            # TODO: close raw_handle too?
         context.finish()
 
     def open_input_file(self, input_file):
