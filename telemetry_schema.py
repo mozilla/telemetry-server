@@ -14,7 +14,6 @@ class TelemetrySchema:
     def __init__(self, spec):
         self._spec = spec
         self._dimensions = self._spec["dimensions"]
-        self._include_invalid = self._spec.get("include_invalid", False)
 
     def safe_filename(self, value):
         return re.sub(r'[^a-zA-Z0-9_/.]', "_", value)

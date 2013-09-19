@@ -110,7 +110,7 @@ class Job:
 
     def mapreduce(self):
         # Find files matching specified input filter
-        files = self.local_files()
+        files = self.get_filtered_files(self._input_dir)
         remote_files = self.get_filtered_files_s3()
 
         file_count = len(files) + len(remote_files)
@@ -175,14 +175,6 @@ class Job:
                     os.remove(mfile)
                 else:
                     print "Warning: Could not find", mfile
-
-    def local_files(self):
-        out_files = self.get_filtered_files(self._input_dir)
-        if self._input_filter._include_invalid:
-            invalid_dir = os.path.join(self._input_dir, TelemetrySchema.INVALID_DIR)
-            #print "Looking for invalid data in", invalid_dir
-            out_files += self.get_filtered_files(invalid_dir)
-        return out_files
 
     # Split up the input files into groups of approximately-equal on-disk size.
     def partition(self, files, remote_files):
@@ -266,9 +258,6 @@ class Job:
         return out_files
 
     def filter_includes(self, level, value):
-        # Filter out 'invalid' data.  It is included explicitly if needed.
-        if level == 0 and value == TelemetrySchema.INVALID_DIR:
-            return False
         allowed_values = self._allowed_values[level]
         return self._input_filter.is_allowed(value, allowed_values)
 
