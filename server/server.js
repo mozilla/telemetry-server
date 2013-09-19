@@ -113,6 +113,7 @@ function getRequest(request, response, process_time, callback) {
   }
   if (request.url == '/status') {
     callback();
+    return;
   }
   return finish(404, request, response, "Not Found", process_time, 0);
 }
