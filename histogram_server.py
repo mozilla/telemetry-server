@@ -24,10 +24,12 @@ MINIMAL_JSON=True
 HIST_QUERY_OFFSET=len(HIST_PATH) + 1
 revision_cache = RevisionCache("./histogram_cache", "hg.mozilla.org")
 
-def send_HEAD(s, code):
+def send_HEAD(s, code, message=None):
     s.send_response(code)
     s.send_header("Content-type", "text/plain")
     s.end_headers()
+    if message is not None:
+        s.wfile.write(message)
 
 def ranges_from_histograms(histograms):
     all_histograms = OrderedDict()
@@ -75,29 +77,24 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_GET(s):
         if not s.path.startswith(HIST_VALID_PREFIX):
-            send_HEAD(s, 404)
-            s.wfile.write("Not Found")
-            return
+            return send_HEAD(s, 404, "Not Found")
         
         params = urlparse.parse_qs(s.path[HIST_QUERY_OFFSET:])
+        if REVISION_FIELD not in params:
+            return send_HEAD(s, 400, "Must provide a revision URL")
         revisions = params[REVISION_FIELD]
-        if len(revisions) != 1:
-            send_HEAD(s, 400)
-            s.wfile.write("Must provide a revision URL")
-            return
+        if len(revisions) < 1:
+            return send_HEAD(s, 400, "Must provide a revision URL")
+        # Use the first one, ignore any others.
         revision = revisions[0]
-        # TODO: get revision from cache
+        # Get revision from cache
         try:
             histograms = revision_cache.get_histograms_for_revision(revision, False)
         except Exception, e:
-            send_HEAD(s, 500)
-            s.wfile.write(e.message)
-            return
+            return send_HEAD(s, 500, e.message)
 
         if histograms is None:
-            send_HEAD(s, 404)
-            s.wfile.write("Not Found: " + str(revision))
-            return
+            return send_HEAD(s, 404, "Not Found: " + str(revision))
 
         # Convert to bucket ranges
         ranges = ranges_from_histograms(histograms)
