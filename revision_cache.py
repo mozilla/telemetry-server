@@ -104,6 +104,7 @@ class RevisionCache:
             self.save_to_cache(repo, revision, histograms_json)
         except:
             # TODO: better error handling
+            # TODO: cache 404s so we don't keep trying them
             sys.stderr.write("INFO: failed to load '%s' from server\n" % url)
         return histograms
 

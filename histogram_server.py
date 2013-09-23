@@ -82,8 +82,8 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         params = urlparse.parse_qs(s.path[HIST_QUERY_OFFSET:])
         revisions = params[REVISION_FIELD]
         if len(revisions) != 1:
-            send_HEAD(s, 500)
-            s.wfile.write("WAT")
+            send_HEAD(s, 400)
+            s.wfile.write("Must provide a revision URL")
             return
         revision = revisions[0]
         # TODO: get revision from cache
@@ -94,9 +94,14 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             s.wfile.write(e.message)
             return
 
-        # TODO: convert to trink format
+        if histograms is None:
+            send_HEAD(s, 404)
+            s.wfile.write("Not Found: " + str(revision))
+            return
+
+        # Convert to bucket ranges
         ranges = ranges_from_histograms(histograms)
-        # TODO: write it.
+        # Write out bucket ranges
         send_HEAD(s, 200)
         s.wfile.write(ranges)
 
