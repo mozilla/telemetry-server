@@ -146,8 +146,8 @@ function postRequest(request, response, process_time, callback) {
   }
   var path_length = Buffer.byteLength(url_path);
   if (path_length > max_path_length) {
-    // As with the content-length above, we would normally return 413, but we
-    // don't want clients to retry these either.
+    // Similar to the content-length above, we would normally return 414, but
+    // we don't want clients to retry these either.
     return finish(202, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes", process_time, 0);
   }
   var data_offset = 15; // 1 sep + 2 path + 4 data + 8 timestamp
