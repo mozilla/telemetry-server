@@ -1,11 +1,12 @@
 [hekad]
 maxprocs = 4
 base_dir = "."
+max_timer_inject = 100
 
 [TelemetryInput]
 type = "LogfileInput"
 logfile = "/var/log/telemetry/telemetry-server.log"
-decoders = ["TelemetryDecoder"]
+decoder = "TelemetryDecoder"
 seek_journal_name = "telemetry.journal"
 use_seek_journal = true 
 
@@ -48,6 +49,28 @@ preserve_data = true
 memory_limit = 1000000 
 instruction_limit = 1000
 output_limit = 64000
+
+[TelemetryChannel]
+type = "SandboxFilter"
+message_matcher = "Type == 'TelemetryLog'"
+ticker_interval = 60
+script_type = "lua"
+filename = "telemetry_channel.lua"
+preserve_data = true
+memory_limit = 8000000 
+instruction_limit = 1000
+output_limit = 64000
+
+#[TelemetryChannel60Days]
+#type = "SandboxFilter"
+#message_matcher = "Type == 'TelemetryLog'"
+#ticker_interval = 60
+#script_type = "lua"
+#filename = "telemetry_channel_60days.lua"
+#preserve_data = true
+#memory_limit = 8000000 
+#instruction_limit = 1000
+#output_limit = 64000
 
 [Dashboard]
 type = "DashboardOutput"
