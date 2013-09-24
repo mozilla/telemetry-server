@@ -16,12 +16,16 @@ except ImportError:
 startup_histogram_re = re.compile("SQLITE|HTTP|SPDY|CACHE|DNS")
 
 HIST_PATH="/histograms"
+HIST_BUCKET_PATH="/histogram_buckets"
 REVISION_FIELD="revision"
 HIST_VALID_PREFIX=HIST_PATH + "?" + REVISION_FIELD + "="
+HIST_BUCKET_VALID_PREFIX=HIST_BUCKET_PATH + "?" + REVISION_FIELD + "="
 MINIMAL_JSON=True
 
 # + 1 to skip the "?"
 HIST_QUERY_OFFSET=len(HIST_PATH) + 1
+HIST_BUCKET_QUERY_OFFSET=len(HIST_BUCKET_PATH) + 1
+
 revision_cache = RevisionCache("./histogram_cache", "hg.mozilla.org")
 
 def send_HEAD(s, code, message=None):
@@ -76,31 +80,41 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         send_HEAD(s, 200)
 
     def do_GET(s):
-        if not s.path.startswith(HIST_VALID_PREFIX):
+        if s.path.startswith(HIST_VALID_PREFIX):
+            send_histograms(s, s.path[HIST_QUERY_OFFSET:], False)
+        elif s.path.startswith(HIST_BUCKET_VALID_PREFIX):
+            send_histograms(s, s.path[HIST_BUCKET_QUERY_OFFSET:], True)
+        else:
             return send_HEAD(s, 404, "Not Found")
-        
-        params = urlparse.parse_qs(s.path[HIST_QUERY_OFFSET:])
-        if REVISION_FIELD not in params:
-            return send_HEAD(s, 400, "Must provide a revision URL")
-        revisions = params[REVISION_FIELD]
-        if len(revisions) < 1:
-            return send_HEAD(s, 400, "Must provide a revision URL")
-        # Use the first one, ignore any others.
-        revision = revisions[0]
-        # Get revision from cache
-        try:
-            histograms = revision_cache.get_histograms_for_revision(revision, False)
-        except Exception, e:
-            return send_HEAD(s, 500, e.message)
 
-        if histograms is None:
-            return send_HEAD(s, 404, "Not Found: " + str(revision))
+def send_histograms(s, query_string, get_buckets):
+    params = urlparse.parse_qs(query_string)
+    if REVISION_FIELD not in params:
+        return send_HEAD(s, 400, "Must provide a revision URL")
+    revisions = params[REVISION_FIELD]
+    if len(revisions) < 1:
+        return send_HEAD(s, 400, "Must provide a revision URL")
+    # Use the first one, ignore any others.
+    revision = revisions[0]
+    # Get revision from cache
+    try:
+        histograms = revision_cache.get_histograms_for_revision(revision, False)
+    except Exception, e:
+        return send_HEAD(s, 500, e.message)
 
+    if histograms is None:
+        return send_HEAD(s, 404, "Not Found: " + str(revision))
+
+    if get_buckets:
         # Convert to bucket ranges
         ranges = ranges_from_histograms(histograms)
         # Write out bucket ranges
         send_HEAD(s, 200)
         s.wfile.write(ranges)
+    else:
+        # Send raw Histograms.json
+        send_HEAD(s, 200)
+        s.wfile.write(histograms)
 
 if __name__ == '__main__':
     httpd = BaseHTTPServer.HTTPServer(("localhost", 9898), MyHandler)
