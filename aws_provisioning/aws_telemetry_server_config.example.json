@@ -4,7 +4,7 @@
   "ssl_key_path": "~/.ssh/aws/mreid.pem",
   "ssl_retries": 10,
   "base_dir": "/mnt/telemetry",
-  "instance_type": "t1.micro",
+  "instance_type": "m1.xlarge",
   "image": "ami-bf1d8a8f",
   "security_groups": ["telemetry"],
   "region": "us-west-2",
@@ -17,5 +17,11 @@
     "Owner": "mreid",
     "Application": "telemetry-server"
   },
-  "skip_termination": true
+  "skip_termination": true,
+  "ephemeral_map": {
+    "/dev/sdb": "ephemeral0",
+    "/dev/sdc": "ephemeral1",
+    "/dev/sdd": "ephemeral2",
+    "/dev/sde": "ephemeral3"
+  }
 }

@@ -32,9 +32,27 @@ class Launcher(object):
         parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
         return parser
 
+    def configure_raid(self, instance):
+        if "ephemeral_map" in self.config:
+            # Following advice from here:
+            # http://www.gabrielweinberg.com/blog/2011/05/raid0-ephemeral-storage-on-aws-ec2.html
+            raid_devices = self.config["ephemeral_map"].keys()
+            raid_devices.sort()
+            dev_list = " ".join(raid_devices)
+            # by default one of the ephemeral devices gets mounted on /mnt
+            sudo("umount /mnt")
+            sudo("yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices={0} {1}".format(len(raid_devices), dev_list))
+            sudo("echo 'DEVICE {0}' >> /etc/mdadm/mdadm.conf".format(dev_list))
+            sudo("mdadm --detail --scan >> /etc/mdadm/mdadm.conf")
+
+            # The "-T largefile" is to speed up the inode table creation. We
+            # will mostly be reading and writing files >1MB.
+            sudo("mkfs.ext3 -T largefile /dev/md0")
+            sudo("mount /dev/md0 /mnt")
+
     def install_apt_dependencies(self, instance):
         print "Installing apt dependencies"
-        aws_util.install_packages("git python-pip build-essential python-dev xz-utils")
+        aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm")
 
     def install_python_dependencies(self, instance):
         print "Installing python dependencies"
@@ -74,6 +92,7 @@ class Launcher(object):
     def bootstrap_instance(self, instance):
         # Now configure the instance:
         self.pre_install(instance)
+        self.configure_raid(instance)
         self.install_apt_dependencies(instance)
         self.install_python_dependencies(instance)
         self.install_misc_dependencies(instance)
