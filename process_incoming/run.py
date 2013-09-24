@@ -80,6 +80,21 @@ class InterruptibleWorker():
     def shutdown(self):
         pass
 
+    def claim_first_file(self, source_dir, dest_dir):
+        for (path, dirs, files) in os.walk(source_dir):
+            for f in files:
+                try:
+                    # We may fail when another process is competing to claim it
+                    os.rename(os.path.join(source_dir, f), os.path.join(dest_dir, f))
+                    return f
+                except OSError, e:
+                    if e.errno == 2:
+                        self.log("Failed to claim '" + f + "'. Someone else got it first")
+                    else:
+                        raise
+        return None
+
+
 class DownloaderStep(InterruptibleWorker):
     def run(self):
         # While there are X < num_workers files in "incoming/", download one
@@ -141,7 +156,7 @@ class WorkerStep(InterruptibleWorker):
         # TODO: while there are files in <work>/incoming, move one of them to
         #       <work>/workers/i/input, process it, then delete it.
         while True:
-            filename = self.claim_incoming_file(self.incoming_dir, self.worker_input_dir)
+            filename = self.claim_first_file(self.incoming_dir, self.worker_input_dir)
             if filename is None:
                 self.log("No files to claim... Sleeping")
                 time.sleep(10)
@@ -149,20 +164,6 @@ class WorkerStep(InterruptibleWorker):
                 self.log("Working on file: " + filename)
                 # TODO: process it.
                 time.sleep(5)
-
-    def claim_incoming_file(self, source_dir, dest_dir):
-        for (path, dirs, files) in os.walk(source_dir):
-            for f in files:
-                try:
-                    # We may fail when another process is competing to claim it
-                    os.rename(os.path.join(source_dir, f), os.path.join(dest_dir, f))
-                    return f
-                except OSError, e:
-                    if e.errno == 2:
-                        print "Failed to claim", f, "Someone else got it first.", e
-                    else:
-                        raise
-        return None
 
     def shutdown(self):
         # TODO: close all files and compressor contexts, compress any
