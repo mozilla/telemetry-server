@@ -3,6 +3,12 @@ Architecture for Processing Incoming Data
 
 Let `N` denote the number of CPU cores available on the processing machine.
 
+The overall process will be co-ordinated using queues:
+* Ready to Process
+* Crashy inputs
+* Completed inputs
+* ...
+
 The `Server` Process:
 ---------------------
 *  Create following folders on same storage device
@@ -10,10 +16,11 @@ The `Server` Process:
     * `upload/`       for files ready for upload
     * `uploading/`    for files being uploaded
     * `incoming/`     for incoming files that have been downloaded
+    * `workers/`      for per-worker files
 *  Start `N / 2` instances of the `Download` process
 *  Start `N / 2` instances of the `Upload` process
 *  For `i = 0` to `N` do:
-    * Create folders `work-i/`, `input-i/`, `log-i/`
+    * Create folders `workers/i/work/`, `workers/i/input/`, `workers/i/log/`
     * Start `Worker` process (given it a reference to `i`)
 
 The `Download` Process:

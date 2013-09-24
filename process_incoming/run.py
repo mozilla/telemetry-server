@@ -47,6 +47,11 @@ class InterruptibleWorker():
         self.num = num
         self.num_workers = num_workers
         self.args = args
+        self.work_dir = self.args.work_dir
+        self.incoming_dir = os.path.join(self.work_dir, "incoming")
+        self.downloading_dir = os.path.join(self.work_dir, "downloading")
+        self.uploading_dir = os.path.join(self.work_dir, "uploading")
+        self.upload_pending_dir = os.path.join(self.work_dir, "upload_pending")
 
         # Add a small delay to encourage workers not to step on each other.
         sleepy = random.uniform(0.0, 0.1)
@@ -77,11 +82,42 @@ class InterruptibleWorker():
 
 class DownloaderStep(InterruptibleWorker):
     def run(self):
-        # TODO: while there are X < num_workers files in "incoming/", download
-        #       one.
+        # While there are X < num_workers files in "incoming/", download one
+        # to "downloading/" then move it to "incoming/"
         while True:
-            self.log("Sleeping")
-            time.sleep(60)
+            num_incoming = self.count_incoming(self.incoming_dir)
+            if num_incoming < self.num_workers:
+                self.download_one(self.downloading_dir, self.incoming_dir)
+            else:
+                self.log("There are already " + str(num_incoming) + " incoming... Sleeping")
+                time.sleep(10)
+
+    def count_incoming(self, incoming_dir):
+        for (path, dirs, files) in os.walk(incoming_dir):
+            # We don't need to recurse - files go straight into the base dir.
+            return len(files)
+
+    def download_one(self, downloading_dir, incoming_dir):
+        available_file = self.get_available_filename()
+        if available_file is None:
+            self.log("There were no available files... Sleeping")
+            time.sleep(5)
+            return
+        downloadable = os.path.join(downloading_dir, available_file)
+        # TODO: get it from S3
+        dfile = open(downloadable, "a")
+        dfile.write("hello")
+        dfile.close()
+        self.finalize_downloaded(downloading_dir, incoming_dir, available_file)
+
+    def get_available_filename(self):
+        # TODO: consult the "available files" queue for a filename
+        return "incoming." + uuid.uuid4().hex
+
+    def finalize_downloaded(self, downloading_dir, incoming_dir, filename):
+        source = os.path.join(downloading_dir, filename)
+        dest = os.path.join(incoming_dir, filename)
+        os.rename(source, dest)
 
 class UploaderStep(InterruptibleWorker):
     def run(self):
@@ -97,12 +133,36 @@ class UploaderStep(InterruptibleWorker):
 
 
 class WorkerStep(InterruptibleWorker):
+    def setup(self):
+        self.worker_base = os.path.join(self.args.work_dir, "workers", str(self.num))
+        self.worker_input_dir = os.path.join(self.worker_base, "input")
+
     def run(self):
         # TODO: while there are files in <work>/incoming, move one of them to
         #       <work>/workers/i/input, process it, then delete it.
         while True:
-            self.log("Sleeping")
-            time.sleep(60)
+            filename = self.claim_incoming_file(self.incoming_dir, self.worker_input_dir)
+            if filename is None:
+                self.log("No files to claim... Sleeping")
+                time.sleep(10)
+            else:
+                self.log("Working on file: " + filename)
+                # TODO: process it.
+                time.sleep(5)
+
+    def claim_incoming_file(self, source_dir, dest_dir):
+        for (path, dirs, files) in os.walk(source_dir):
+            for f in files:
+                try:
+                    # We may fail when another process is competing to claim it
+                    os.rename(os.path.join(source_dir, f), os.path.join(dest_dir, f))
+                    return f
+                except OSError, e:
+                    if e.errno == 2:
+                        print "Failed to claim", f, "Someone else got it first.", e
+                    else:
+                        raise
+        return None
 
     def shutdown(self):
         # TODO: close all files and compressor contexts, compress any
