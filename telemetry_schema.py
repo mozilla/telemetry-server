@@ -87,8 +87,6 @@ class TelemetrySchema:
         return self.get_current_file(basedir, clean_dims, submission_date, version)
 
     def get_current_file(self, basedir, dims, submission_date, version=1):
-        # TODO: get files in order, find newest non-full one
-        # use hex digits for seqnum
         dirname = os.path.join(*dims)
         return ".".join((os.path.join(basedir, self.safe_filename(dirname)), submission_date, "v" + str(version), "log"))
 
