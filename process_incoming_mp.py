@@ -401,6 +401,14 @@ class ExportCompressedStep(PipeStep):
         if len(self.batch) >= self.batch_size:
             success = self.retry_export_batch(self.base_dir, self.conn, self.bucket, self.batch)
             if success:
+                # Delete local files once they've been uploaded successfully.
+                if not self.dry_run:
+                    for b in self.batch:
+                        try:
+                            os.remove(os.path.join(self.base_dir, b))
+                            print self.label, "Removed uploaded file", b
+                        except Exception, e:
+                            print self.label, "Failed to remove uploaded file", b
                 self.batch = []
             else:
                 print self.label, "ERROR: failed to upload a batch:", ",".join(self.batch)
