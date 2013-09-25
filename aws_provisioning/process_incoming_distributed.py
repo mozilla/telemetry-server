@@ -18,6 +18,9 @@ from aws_launcher import SimpleLauncher
 
 
 class ProcessIncomingLauncher(SimpleLauncher):
+    def pre_install(self, instance):
+        aws_util.install_packages("mdadm")
+
     def post_install(self, instance):
         # NOTE: This code assumes we're launching from the pre-bootstrapped AMI
         #       image that contains s3funnel, lzma, etc (ami-76831f46)
