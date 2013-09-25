@@ -19,9 +19,9 @@
   },
   "skip_termination": true,
   "ephemeral_map": {
-    "/dev/sdb": "ephemeral0",
-    "/dev/sdc": "ephemeral1",
-    "/dev/sdd": "ephemeral2",
-    "/dev/sde": "ephemeral3"
+    "/dev/xvdb": "ephemeral0",
+    "/dev/xvdc": "ephemeral1",
+    "/dev/xvdd": "ephemeral2",
+    "/dev/xvde": "ephemeral3"
   }
 }

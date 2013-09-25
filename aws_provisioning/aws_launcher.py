@@ -92,8 +92,8 @@ class Launcher(object):
     def bootstrap_instance(self, instance):
         # Now configure the instance:
         self.pre_install(instance)
-        self.configure_raid(instance)
         self.install_apt_dependencies(instance)
+        self.configure_raid(instance)
         self.install_python_dependencies(instance)
         self.install_misc_dependencies(instance)
         self.install_telemetry_code(instance)
