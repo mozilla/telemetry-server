@@ -96,7 +96,7 @@ def install_packages(packages):
     with settings(warn_only=True):
         for i in range(1,20):
             sudo("apt-get update")
-            result = sudo(" ".join(('apt-get --yes install', packages)))
+            result = sudo(" ".join(('export DEBIAN_FRONTEND=noninteractive; apt-get --yes install', packages)))
             if result.succeeded:
                 break
             print "apt-get attempt", i, "failed, retrying in 2s"
