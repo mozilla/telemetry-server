@@ -191,7 +191,6 @@ function postRequest(request, response, process_time, callback) {
     fs.appendFile(log_file, buf, function (err) {
       if (err) {
         console.log("Error appending to log file: " + err);
-        // TODO: what about log_size?
         // Since we can't easily recover from a partially written record, we
         // start a new file in case of error.
         log_file = unique_name(log_base);
