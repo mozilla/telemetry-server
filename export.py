@@ -15,6 +15,8 @@ from datetime import datetime
 import util.files as fileutil
 import subprocess
 from boto.s3.connection import S3Connection
+from boto.sqs.connection import SQSConnection
+from boto.sqs.message import Message
 from boto.exception import S3ResponseError
 import util.timer as timer
 
@@ -27,14 +29,16 @@ class Exporter:
     # Minimum size in bytes (to support skipping truncated files)
     MIN_UPLOADABLE_SIZE = 50
 
-    def __init__(self, bucket, aws_key, aws_secret_key, batch_size, pattern, keep_backups=False, remove_files=True):
+    def __init__(self, bucket, aws_key, aws_secret_key, batch_size, pattern, queue=None, keep_backups=False, remove_files=True):
         self.bucket = bucket
+        self.queue = queue
         self.aws_key = aws_key
         self.aws_secret_key = aws_secret_key
         self.batch_size = batch_size
         self.pattern = pattern
         self.remove_files = remove_files
         self.keep_backups = keep_backups
+        self.q_incoming = None
         self.s3f_cmd = [Exporter.S3F_PATH, bucket, "put", "-a", aws_key,
                 "-s", aws_secret_key, "-t", str(Exporter.S3F_THREADS),
                 "--put-only-new", "--put-full-path"]
@@ -95,12 +99,39 @@ class Exporter:
                     else:
                         h = open(full_filename, "w")
                         h.close()
+                    # Send a message to SQS
+                    self.enqueue_incoming(f)
         else:
             print "Failed to upload one or more files in the current batch. Error code was", result
 
         total_mb = float(total_size) / 1024.0 / 1024.0
         print "Transferred %.2fMB in %.2fs (%.2fMB/s)" % (total_mb, sec, total_mb / sec)
         return result
+
+    def enqueue_incoming(self, filename):
+        if self.queue is None:
+            return
+
+        if self.q_incoming is None:
+            # Get a connection to the Queue if needed.
+            conn = SQSConnection(self.aws_key, self.aws_secret_key)
+
+            # This gets the queue if it already exists, otherwise creates it
+            # using the supplied default timeout (in seconds).
+            self.q_incoming = conn.create_queue(self.queue, 90 * 60)
+
+        m = Message()
+        m.set_body(filename)
+
+        # Retry several times:
+        for i in range(10):
+            try:
+                status = self.q_incoming.write(m)
+                if status:
+                    print "Successfully enqueued", filename
+                    break
+            except Exception, e:
+                print "Failed to enqueue:", filename, "Error:", e
 
     def batches(self, batch_size, one_list):
         split = []
@@ -183,6 +214,7 @@ def main(argv=None):
     parser.add_argument("-d", "--data-dir", help="Path to the root of the telemetry data", required=True)
     parser.add_argument("-p", "--file-pattern", help="Filenames must match this regular expression to be uploaded", default=Exporter.UPLOADABLE_PATTERN)
     parser.add_argument("-b", "--bucket", help="S3 Bucket name", required=True)
+    parser.add_argument("-q", "--queue", help="SQS Queue name")
     parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
     parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
     parser.add_argument("-l", "--loop", help="Run in a loop and keep watching for more files to export", action="store_true")
@@ -209,7 +241,7 @@ def main(argv=None):
         print "ERROR: invalid file pattern:", args.file_pattern, " (must be a valid regex)"
         return 3
 
-    exporter = Exporter(args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern, args.keep_backups, args.remove_files)
+    exporter = Exporter(args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern, args.queue, args.keep_backups, args.remove_files)
 
     if not args.loop:
         return exporter.export(args.data_dir, exporter.find_uploadables(args.data_dir))
