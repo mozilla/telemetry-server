@@ -23,7 +23,7 @@ import util.files as fileutil
 from convert import Converter, BadPayloadError
 from revision_cache import RevisionCache
 from persist import StorageLayout
-import aws_provisioning.aws_util as aws_util
+import boto.sqs
 
 S3FUNNEL_PATH = "/usr/local/bin/s3funnel"
 def fetch_s3_files(incoming_files, fetch_cwd, bucket, aws_key, aws_secret_key):
@@ -484,7 +484,9 @@ def main():
         if args.dry_run:
             print "Dry run mode... can't read from the queue without messing things up..."
         else:
-            q_conn = aws_util.connect_sqs(args.aws_region, args.aws_key, args.aws_secret_key)
+            q_conn = boto.sqs.connect_to_region(args.aws_region,
+                    aws_access_key_id=args.aws_key,
+                    aws_secret_access_key=args.aws_secret_key)
             incoming_queue = q_conn.get_queue(args.queue)
             if incoming_queue is None:
                 print "Error: could not get queue", args.queue
