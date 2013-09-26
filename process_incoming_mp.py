@@ -498,7 +498,7 @@ def main():
                     possible_filename = m.get_body()
                     key = incoming_bucket.get_key(possible_filename)
                     if key is None:
-                        print "Could not find queued filename in bucket", args.incoming_bucket, ":", args.queue
+                        print "Could not find queued filename in bucket", args.incoming_bucket, ":", possible_filename
                         # try to delete it:
                         incoming_queue.delete_message(m)
                     else:
