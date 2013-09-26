@@ -15,10 +15,10 @@ from datetime import datetime
 import util.files as fileutil
 import subprocess
 from boto.s3.connection import S3Connection
-from boto.sqs.connection import SQSConnection
 from boto.sqs.message import Message
 from boto.exception import S3ResponseError
 import util.timer as timer
+import aws_provisioning.aws_util as aws_util
 
 
 class Exporter:
@@ -29,11 +29,12 @@ class Exporter:
     # Minimum size in bytes (to support skipping truncated files)
     MIN_UPLOADABLE_SIZE = 50
 
-    def __init__(self, bucket, aws_key, aws_secret_key, batch_size, pattern, queue=None, keep_backups=False, remove_files=True):
+    def __init__(self, bucket, aws_key, aws_secret_key, aws_region, batch_size, pattern, queue=None, keep_backups=False, remove_files=True):
         self.bucket = bucket
         self.queue = queue
         self.aws_key = aws_key
         self.aws_secret_key = aws_secret_key
+        self.aws_region = aws_region
         self.batch_size = batch_size
         self.pattern = pattern
         self.remove_files = remove_files
@@ -114,7 +115,7 @@ class Exporter:
 
         if self.q_incoming is None:
             # Get a connection to the Queue if needed.
-            conn = SQSConnection(self.aws_key, self.aws_secret_key)
+            conn = aws_util.connect_sqs(self.aws_region, self.aws_key, self.aws_secret_key)
 
             # This gets the queue if it already exists, otherwise creates it
             # using the supplied default timeout (in seconds).
@@ -217,6 +218,7 @@ def main(argv=None):
     parser.add_argument("-q", "--queue", help="SQS Queue name")
     parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
     parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
+    parser.add_argument("-r", "--aws-region", help="AWS Region", default="us-west-2")
     parser.add_argument("-l", "--loop", help="Run in a loop and keep watching for more files to export", action="store_true")
     parser.add_argument("--remove-files", help="Remove files after successfully uploading (default is to truncate them)", action="store_true")
     parser.add_argument("--keep-backups", help="Keep original files after uploading (rename them to X.uploaded)", action="store_true")
@@ -241,7 +243,7 @@ def main(argv=None):
         print "ERROR: invalid file pattern:", args.file_pattern, " (must be a valid regex)"
         return 3
 
-    exporter = Exporter(args.bucket, args.aws_key, args.aws_secret_key, args.batch_size, pattern, args.queue, args.keep_backups, args.remove_files)
+    exporter = Exporter(args.bucket, args.aws_key, args.aws_secret_key, args.aws_region, args.batch_size, pattern, args.queue, args.keep_backups, args.remove_files)
 
     if not args.loop:
         return exporter.export(args.data_dir, exporter.find_uploadables(args.data_dir))
