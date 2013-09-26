@@ -7,6 +7,7 @@
 
 import time, os
 import boto.ec2
+import boto.sqs
 from boto.ec2.blockdevicemapping import BlockDeviceType
 from boto.ec2.blockdevicemapping import BlockDeviceMapping
 from fabric.api import *
@@ -20,6 +21,17 @@ def connect_cfg(config):
 def connect(region, aws_key, aws_secret_key):
     # Use AWS keys from config
     conn = boto.ec2.connect_to_region(region,
+            aws_access_key_id=aws_key,
+            aws_secret_access_key=aws_secret_key)
+    return conn
+
+def connect_sqs_cfg(config):
+    return connect_sqs(config["region"],
+                   config["aws_key"],
+                   config["aws_secret_key"])
+
+def connect_sqs(region, aws_key, aws_secret_key):
+    conn = boto.sqs.connect_to_region(region,
             aws_access_key_id=aws_key,
             aws_secret_access_key=aws_secret_key)
     return conn
