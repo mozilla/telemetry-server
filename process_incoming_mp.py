@@ -264,8 +264,6 @@ class CompressCompletedStep(PipeStep):
     def setup(self):
         self.compress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.COMPRESSION_ARGS
 
-    # TODO: override the timeouts, since we want to wait a lot longer for
-    #       compressible logs to appear.
     def handle(self, record):
         filename = record
         base_ends = filename.find(".log") + 4
@@ -497,8 +495,15 @@ def main():
                 messages = incoming_queue.get_messages(num_cpus - len(incoming_filenames))
                 for m in messages:
                     # TODO: Make sure this file exists in S3 first?
-                    incoming_filenames.append(m.get_body())
-                    incoming_queue_messages.append(m)
+                    possible_filename = m.get_body()
+                    key = incoming_bucket.get_key(possible_filename)
+                    if key is None:
+                        print "Could not find queued filename in bucket", args.incoming_bucket, ":", args.queue
+                        # try to delete it:
+                        incoming_queue.delete_message(m)
+                    else:
+                        incoming_filenames.append(possible_filename)
+                        incoming_queue_messages.append(m)
                 if len(messages) == 0 or len(incoming_filenames) >= num_cpus:
                     break
     elif args.input_files:
