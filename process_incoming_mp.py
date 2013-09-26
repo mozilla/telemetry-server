@@ -7,24 +7,20 @@
 
 import argparse
 import uuid
-import time
 import multiprocessing
 from multiprocessing import Process, Queue
 import Queue as Q
 import simplejson as json
-import imp
 import sys
 import os
 from datetime import date, datetime
-from multiprocessing import Process
 from telemetry_schema import TelemetrySchema
-from persist import StorageLayout
 import subprocess
-from subprocess import Popen, PIPE
+from subprocess import Popen
 from boto.s3.connection import S3Connection
+from boto.sqs.connection import SQSConnection
 import util.timer as timer
 import util.files as fileutil
-import struct, gzip, StringIO
 from convert import Converter, BadPayloadError
 from revision_cache import RevisionCache
 from persist import StorageLayout
@@ -445,6 +441,7 @@ def main():
     parser.add_argument("-o", "--output-dir", help="Base dir to store processed data", required=True)
     parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
     parser.add_argument("-b", "--bad-data-log", help="Save bad records to this file")
+    parser.add_argument("-q", "--queue", help="SQS Queue name to poll for incoming data")
     parser.add_argument("-c", "--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
@@ -475,13 +472,36 @@ def main():
     start = datetime.now()
     conn = None
     incoming_bucket = None
+    incoming_queue = None
+    incoming_queue_messages = []
 
     if not args.dry_run:
         conn = S3Connection(args.aws_key, args.aws_secret_key)
         incoming_bucket = conn.get_bucket(args.incoming_bucket)
 
     incoming_filenames = []
-    if args.input_files:
+    if args.queue is not None:
+        print "Fetching file list from queue", args.queue
+        if args.dry_run:
+            print "Dry run mode... can't read from the queue without messing things up..."
+        else:
+            q_conn = SQSConnection(args.aws_key, args.aws_secret_key)
+            incoming_queue = q_conn.get_queue(args.queue)
+            if incoming_queue is None:
+                print "Error: could not get queue", args.queue
+                return -2
+            # Sometimes we don't get all the messages, even if more are
+            # available, so keep trying until we have enough (or there aren't
+            # any left)
+            for i in range(num_cpus):
+                messages = incoming_queue.get_messages(num_cpus - len(incoming_filenames))
+                for m in messages:
+                    # TODO: Make sure this file exists in S3 first?
+                    incoming_filenames.append(m.get_body())
+                    incoming_queue_messages.append(m)
+                if len(messages) == 0 or len(incoming_filenames) >= num_cpus:
+                    break
+    elif args.input_files:
         print "Fetching file list from file", args.input_files
         incoming_filenames = [ l.strip() for l in args.input_files.readlines() ]
     else:
@@ -490,9 +510,13 @@ def main():
             incoming_filenames.append(f.name)
     print "Done"
 
+    if len(incoming_filenames) == 0:
+        print "Nothing to do!"
+        return 0
+
     for f in incoming_filenames:
         print "  ", f
-    
+
     print "Verifying that we can write to", args.publish_bucket
     if args.dry_run:
         print "Dry run mode: don't care!"
@@ -528,8 +552,6 @@ def main():
 
     completed_files = Queue()
     compressed_files = Queue()
-
-    # TODO: uploaded_files, failed_files?
 
     # Begin reading raw input
     raw_readers = start_workers(num_cpus, "Reader", ReadRawStep, raw_files,
@@ -576,6 +598,19 @@ def main():
             # Delete file locally too.
             os.remove(os.path.join(args.work_dir, f))
     print "Done"
+
+    if len(incoming_queue_messages) > 0:
+        print "Removing processed messages from SQS..."
+        for m in incoming_queue_messages:
+            if args.dry_run:
+                print "  Dry run, so not really deleting", m.get_body()
+            else:
+                print "  Deleting", m.get_body()
+                if incoming_queue.delete_message(m):
+                    print "  Message deleted successfully"
+                else:
+                    print "  Failed to delete message :("
+        print "Done"
 
     duration = timer.delta_sec(start)
     print "All done in %.2fs (%.2fs excluding download time)" % (duration, timer.delta_sec(after_download))
