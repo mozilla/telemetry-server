@@ -18,7 +18,7 @@ from boto.s3.connection import S3Connection
 from boto.sqs.message import Message
 from boto.exception import S3ResponseError
 import util.timer as timer
-import aws_provisioning.aws_util as aws_util
+import boto.sqs
 
 
 class Exporter:
@@ -115,7 +115,9 @@ class Exporter:
 
         if self.q_incoming is None:
             # Get a connection to the Queue if needed.
-            conn = aws_util.connect_sqs(self.aws_region, self.aws_key, self.aws_secret_key)
+            conn = boto.sqs.connect_to_region(self.aws_region,
+                    aws_access_key_id=self.aws_key,
+                    aws_secret_access_key=self.aws_secret_key)
 
             # This gets the queue if it already exists, otherwise creates it
             # using the supplied default timeout (in seconds).
