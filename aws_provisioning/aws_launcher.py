@@ -24,12 +24,15 @@ class Launcher(object):
         self.aws_secret_key = args.aws_secret_key
         self.ssl_user = self.config.get("ssl_user", "ubuntu")
         self.ssl_key_path = self.config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
+        if args.instance_name is not None:
+            self.config["name"] = args.instance_name
 
     def get_arg_parser(self):
         parser = argparse.ArgumentParser(description='Launch AWS EC2 instances')
         parser.add_argument("config", help="JSON File contianing configuration", type=file)
         parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
         parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
+        parser.add_argument("-n", "--instance-name", help="Overrides the 'name' specified in the configuration file")
         return parser
 
     def configure_raid(self, instance):
@@ -56,7 +59,7 @@ class Launcher(object):
 
     def install_python_dependencies(self, instance):
         print "Installing python dependencies"
-        sudo('pip install simplejson boto')
+        sudo('pip install simplejson boto fabric')
 
     def install_misc_dependencies(self, instance):
         print "Installing other dependencies"
