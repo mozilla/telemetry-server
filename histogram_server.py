@@ -26,6 +26,8 @@ MINIMAL_JSON=True
 HIST_QUERY_OFFSET=len(HIST_PATH) + 1
 HIST_BUCKET_QUERY_OFFSET=len(HIST_BUCKET_PATH) + 1
 
+SERVER_PORT=9898
+
 revision_cache = RevisionCache("./histogram_cache", "hg.mozilla.org")
 
 def send_HEAD(s, code, message=None):
@@ -117,8 +119,9 @@ def send_histograms(s, query_string, get_buckets):
         s.wfile.write(histograms)
 
 if __name__ == '__main__':
-    httpd = BaseHTTPServer.HTTPServer(("localhost", 9898), MyHandler)
+    httpd = BaseHTTPServer.HTTPServer(("localhost", SERVER_PORT), MyHandler)
     try:
+        print "Server running on port", SERVER_PORT
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
