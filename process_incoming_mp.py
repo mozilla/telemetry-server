@@ -18,6 +18,7 @@ from telemetry_schema import TelemetrySchema
 import subprocess
 from subprocess import Popen
 from boto.s3.connection import S3Connection
+from boto.exception import S3ResponseError
 import util.timer as timer
 import util.files as fileutil
 from convert import Converter, BadPayloadError
