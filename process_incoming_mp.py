@@ -294,10 +294,15 @@ class CompressCompletedStep(PipeStep):
         #       warn of a deadlock, so we use communicate() instead.
         p_compress.communicate()
 
-        raw_mb = float(f_raw.tell()) / 1024.0 / 1024.0
-        comp_mb = float(f_comp.tell()) / 1024.0 / 1024.0
+        raw_bytes = f_raw.tell()
+        comp_bytes = f_comp.tell()
+        raw_mb = float(raw_bytes) / 1024.0 / 1024.0
+        comp_mb = float(comp_bytes) / 1024.0 / 1024.0
         f_raw.close()
         f_comp.close()
+
+        self.bytes_read += raw_bytes
+        self.bytes_written += comp_bytes
 
         # Remove raw file
         os.remove(tmp_name)
