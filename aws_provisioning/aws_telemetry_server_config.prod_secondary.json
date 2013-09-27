@@ -1,0 +1,22 @@
+{
+  "ssl_user": "ubuntu",
+  "ssl_key_name": "mreid",
+  "ssl_key_path": "~/.ssh/aws/mreid.pem",
+  "ssl_retries": 10,
+  "base_dir": "/mnt/telemetry",
+  "instance_type": "t1.micro",
+  "image": "ami-bf1d8a8f",
+  "security_groups": ["telemetry"],
+  "region": "us-west-2",
+  "placement": "us-west-2c",
+  "shutdown_behavior": "stop",
+  "name": "telemetry-server-v1-secondary-1",
+  "incoming_bucket": "telemetry-incoming-v1",
+  "process_incoming_config": "./aws_incoming.prod.json",
+  "primary_server": false,
+  "default_tags": {
+    "Owner": "mreid",
+    "Application": "telemetry-server"
+  },
+  "skip_termination": true
+}

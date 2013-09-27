@@ -12,12 +12,18 @@ import sys
 
 class TelemetryServerLauncher(Launcher):
     def nodejs_version(self):
-        return "0.10.18"
+        return "0.10.19"
+
     def install_nodejs_bin(self):
         node_version = self.nodejs_version()
         run("wget http://nodejs.org/dist/v{0}/node-v{0}-linux-x64.tar.gz".format(node_version))
         run("tar xzf node-v{0}-linux-x64.tar.gz".format(node_version))
-        sudo("mv node-v{0}-linux-x64 /usr/local".format(node_version))
+        sudo("mv node-v{0}-linux-x64 /usr/local/".format(node_version))
+        sudo("ln -s /usr/local/node-v{0}-linux-x64 /usr/local/node".format(node_version))
+        sudo("ln -s /usr/local/node/bin/node /usr/local/bin/node")
+        sudo("ln -s /usr/local/node/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm")
+        run("node version")
+        run("npm version")
 
     def install_nodejs_src(self):
         node_version = self.nodejs_version()
@@ -28,9 +34,18 @@ class TelemetryServerLauncher(Launcher):
             run("make")
             sudo("make install")
 
+    def heka_pkg_name(self):
+        return "heka-0_4_0-linux-amd64.deb"
+
+    def install_heka(self):
+        heka_pkg = self.heka_pkg_name()
+        run("wget http://people.mozilla.org/~mreid/{0}".format(heka_pkg))
+        sudo("dpkg -i {0}".format(heka_pkg))
+
     def post_install(self, instance):
         # Install some more:
-        self.install_nodejs_src()
+        self.install_nodejs_bin()
+        self.install_heka()
 
         # Create log dir (within base_dir, but symlinked to /var/log):
         base_dir = self.config.get("base_dir", "/mnt/telemetry")
@@ -100,7 +115,18 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
         sudo("echo 'script' >> " + c_file)
         sudo("echo '    cd {1}/aws_provisioning' >> {0}".format(c_file, code_base))
-        sudo("echo \"    /usr/bin/python process_incoming_distributed.py -k '{1}' -s '{2}' ./aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
+        # Use unbuffered output (-u) so we can see things in the log
+        # immediately.
+        sudo("echo \"    /usr/bin/python -u process_incoming_queue.py -k '{1}' -s '{2}' ./aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
+        sudo("echo 'end script' >> {0}".format(c_file))
+        sudo("echo 'respawn' >> {0}".format(c_file))
+
+        c_file = "/etc/init/telemetry-heka.conf"
+        sudo("echo 'setuid {1}' > {0}".format(c_file, self.ssl_user))
+        sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
+        sudo("echo 'script' >> " + c_file)
+        sudo("echo '    cd {1}/heka >> {0}".format(c_file, code_base))
+        sudo("echo \"    /usr/bin/hekad -config heka.toml >> /var/log/telemetry/telemetry-heka.out\" >> {0}".format(c_file))
         sudo("echo 'end script' >> {0}".format(c_file))
         sudo("echo 'respawn' >> {0}".format(c_file))
 
@@ -119,6 +145,10 @@ class TelemetryServerLauncher(Launcher):
             print "Telemetry incoming started"
         else:
             print "Not starting telemetry-incoming since this is not a primary server"
+
+        # Start up heka
+        sudo("start telemetry-heka")
+        print "Heka daemon started"
 
 def main():
     try:
