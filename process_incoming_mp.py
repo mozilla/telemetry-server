@@ -540,7 +540,7 @@ def main():
             print "Looks good!"
         except S3ResponseError:
             print "Bucket", args.publish_bucket, "not found.  Attempting to create it."
-            publish_bucket = conn.create_bucket(publish_bucket)
+            publish_bucket = conn.create_bucket(args.publish_bucket)
 
     result = 0
     print "Downloading", len(incoming_filenames), "files..."
