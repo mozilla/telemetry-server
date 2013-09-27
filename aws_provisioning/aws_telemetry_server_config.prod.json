@@ -12,6 +12,7 @@
   "shutdown_behavior": "stop",
   "name": "telemetry-server-v1-primary-1",
   "incoming_bucket": "telemetry-incoming-v1",
+  "incoming_queue": "telemetry-incoming-v1",
   "process_incoming_config": "./aws_incoming.prod.json",
   "primary_server": true,
   "default_tags": {

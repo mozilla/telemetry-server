@@ -22,8 +22,8 @@ class TelemetryServerLauncher(Launcher):
         sudo("ln -s /usr/local/node-v{0}-linux-x64 /usr/local/node".format(node_version))
         sudo("ln -s /usr/local/node/bin/node /usr/local/bin/node")
         sudo("ln -s /usr/local/node/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm")
-        run("node version")
-        run("npm version")
+        run("node --version")
+        run("npm --version")
 
     def install_nodejs_src(self):
         node_version = self.nodejs_version()
@@ -41,6 +41,15 @@ class TelemetryServerLauncher(Launcher):
         heka_pkg = self.heka_pkg_name()
         run("wget http://people.mozilla.org/~mreid/{0}".format(heka_pkg))
         sudo("dpkg -i {0}".format(heka_pkg))
+
+    def start_suid_script(self, c_file, username):
+        sudo("echo 'setuid {1}' > {0}".format(c_file, username))
+        sudo("echo 'setgid {1}' >> {0}".format(c_file, username))
+        sudo("echo 'script' >> " + c_file)
+
+    def end_suid_script(self, c_file):
+        sudo("echo 'end script' >> {0}".format(c_file))
+        sudo("echo 'respawn' >> {0}".format(c_file))
 
     def post_install(self, instance):
         # Install some more:
@@ -89,46 +98,34 @@ class TelemetryServerLauncher(Launcher):
         # Create startup scripts:
         code_base = "/home/" + self.ssl_user + "/telemetry-server"
         c_file = "/etc/init/telemetry-server.conf"
-        sudo("echo 'setuid {1}' > {0}".format(c_file, self.ssl_user))
-        sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo 'script' >> " + c_file)
+        self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}/server' >> {0}".format(c_file, code_base))
         sudo("echo '    /usr/local/bin/node ./server.js ./server_config.json >> /var/log/telemetry/telemetry-server.out' >> {0}".format(c_file))
-        sudo("echo 'end script' >> {0}".format(c_file))
-        sudo("echo 'respawn' >> {0}".format(c_file))
+        self.end_suid_script(c_file)
 
         c_file = "/etc/init/telemetry-export.conf"
-        sudo("echo 'setuid {1}' > {0}".format(c_file, self.ssl_user))
-        sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo 'script' >> " + c_file)
+        self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
         sudo("echo \"    /usr/bin/python ./export.py -d {1}/data -p '^telemetry.log.*[.]finished$' -k '{2}' -s '{3}' -r '{4}' -b '{5}' -q '{6}' --remove-files --loop >> /var/log/telemetry/telemetry-export.out\" >> {0}".format(c_file, base_dir, self.aws_key, self.aws_secret_key, self.config["region"], self.config.get("incoming_bucket", "telemetry-incoming"), self.config.get("incoming_queue", "telemetry-incoming")))
-        sudo("echo 'end script' >> {0}".format(c_file))
-        sudo("echo 'respawn' >> {0}".format(c_file))
+        self.end_suid_script(c_file)
 
         # Install a specific aws_incoming.json to use
         process_incoming_config = self.config.get("process_incoming_config", "aws_incoming.json")
         put(process_incoming_config, code_base + "/aws_provisioning/aws_incoming.json")
 
         c_file = "/etc/init/telemetry-incoming.conf"
-        sudo("echo 'setuid {1}' > {0}".format(c_file, self.ssl_user))
-        sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo 'script' >> " + c_file)
+        self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}/aws_provisioning' >> {0}".format(c_file, code_base))
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
         sudo("echo \"    /usr/bin/python -u process_incoming_queue.py -k '{1}' -s '{2}' ./aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
-        sudo("echo 'end script' >> {0}".format(c_file))
-        sudo("echo 'respawn' >> {0}".format(c_file))
+        self.end_suid_script(c_file)
 
         c_file = "/etc/init/telemetry-heka.conf"
-        sudo("echo 'setuid {1}' > {0}".format(c_file, self.ssl_user))
-        sudo("echo 'setgid {1}' >> {0}".format(c_file, self.ssl_user))
-        sudo("echo 'script' >> " + c_file)
-        sudo("echo '    cd {1}/heka >> {0}".format(c_file, code_base))
+        self.start_suid_script(c_file, self.ssl_user)
+        sudo("echo '    cd {1}/heka' >> {0}".format(c_file, code_base))
         sudo("echo \"    /usr/bin/hekad -config heka.toml >> /var/log/telemetry/telemetry-heka.out\" >> {0}".format(c_file))
-        sudo("echo 'end script' >> {0}".format(c_file))
-        sudo("echo 'respawn' >> {0}".format(c_file))
+        self.end_suid_script(c_file)
 
     def run(self, instance):
         # Start up HTTP server
