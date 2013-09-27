@@ -8,7 +8,7 @@
 import time
 from fabric.api import *
 import sys
-from boto.sqs.connection import SQSConnection
+import aws_util
 from process_incoming_distributed import ProcessIncomingLauncher
 
 
@@ -20,7 +20,7 @@ class ProcessIncomingQueueLauncher(ProcessIncomingLauncher):
         with cd(home + "/telemetry-server"):
             run("git pull")
 
-        q_conn = SQSConnection(self.aws_key, self.aws_secret_key)
+        q_conn = aws_util.connect_sqs(self.config["region"], self.aws_key, self.aws_secret_key)
         incoming_queue = q_conn.get_queue(self.config["incoming_queue"])
 
         if self.config.get("loop", False):
@@ -41,7 +41,7 @@ class ProcessIncomingQueueLauncher(ProcessIncomingLauncher):
             if self.config.get("skip_conversion", False):
                 skip_conversion = "--skip-conversion"
             print "Processing incoming queue:", self.config["incoming_queue"]
-            run('python process_incoming_mp.py --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json -q "%s" %s %s %s' % (self.aws_key, self.aws_secret_key, self.config["incoming_queue"], skip_conversion, self.config["incoming_bucket"], self.config["publish_bucket"]))
+            run('python process_incoming_mp.py --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -r "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json -q "%s" %s %s %s' % (self.aws_key, self.aws_secret_key, self.config["region"], self.config["incoming_queue"], skip_conversion, self.config["incoming_bucket"], self.config["publish_bucket"]))
 
 def main():
     try:
