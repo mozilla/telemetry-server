@@ -2,8 +2,8 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-local rows = 1440
-local sec_per_row = 60
+local rows = read_config("rows")
+local sec_per_row = read_config("sec_per_row")
 
 all = circular_buffer.new(rows, 2, sec_per_row)
 local REQUESTS      = all:set_header(1, "Requests")
