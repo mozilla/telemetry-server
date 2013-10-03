@@ -96,6 +96,11 @@ class RevisionCache:
         try:
             response = urllib2.urlopen(url)
             histograms_json = response.read()
+            # Bug 920169 - replace calculated values/constants with their
+            #              actual values:
+            histograms_json = histograms_json.replace('"JS::gcreason::NUM_TELEMETRY_REASONS"', "101")
+            histograms_json = histograms_json.replace('"mozilla::StartupTimeline::MAX_EVENT_ID"', "12")
+            histograms_json = histograms_json.replace('"80 + 1"', "81")
             if parse:
                 histograms = json.loads(histograms_json)
                 # TODO: validate the resulting obj.
