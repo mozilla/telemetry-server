@@ -90,7 +90,7 @@ function rotate_time() {
 }
 
 function rotate() {
-  console.log("Rotating " + log_file + " after " + log_size + " bytes");
+  console.log(new Date().toISOString() + ": Rotating " + log_file + " after " + log_size + " bytes");
   fs.rename(log_file, log_file + ".finished", function (err) {
     if (err) {
       console.log("Error rotating " + log_file + " (" + log_size + "): " + err);
@@ -241,8 +241,13 @@ if (cluster.isMaster) {
   }
 
   cluster.on('exit', function(worker, code, signal) {
-    console.log('Worker ' + worker.process.pid + ' died');
-    // TODO: start another one?
+    console.log('Worker ' + worker.process.pid + ' died. Starting a new worker.');
+    // Start another one:
+    cluster.fork();
+    // TODO: See how long the child actually stayed alive. We don't want to
+    //       fork continuously, so if the child processes are dying right away
+    //       we should abort the master (and have the server respawned
+    //       externally).
   });
 } else {
   // Finalize current log files on exit.
