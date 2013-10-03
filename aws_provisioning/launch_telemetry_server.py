@@ -9,6 +9,7 @@ from aws_launcher import Launcher
 from fabric.api import *
 import fabric.network
 import sys
+import traceback
 
 class TelemetryServerLauncher(Launcher):
     def nodejs_version(self):
@@ -106,7 +107,7 @@ class TelemetryServerLauncher(Launcher):
         c_file = "/etc/init/telemetry-export.conf"
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
-        sudo("echo \"    /usr/bin/python ./export.py -d {1}/data -p '^telemetry.log.*[.]finished$' -k '{2}' -s '{3}' -r '{4}' -b '{5}' -q '{6}' --remove-files --loop >> /var/log/telemetry/telemetry-export.out\" >> {0}".format(c_file, base_dir, self.aws_key, self.aws_secret_key, self.config["region"], self.config.get("incoming_bucket", "telemetry-incoming"), self.config.get("incoming_queue", "telemetry-incoming")))
+        sudo("echo \"    /usr/bin/python -u ./export.py -d {1}/data -p '^telemetry.log.*[.]finished$' -k '{2}' -s '{3}' -r '{4}' -b '{5}' -q '{6}' --remove-files --loop >> /var/log/telemetry/telemetry-export.out\" >> {0}".format(c_file, base_dir, self.aws_key, self.aws_secret_key, self.config["region"], self.config.get("incoming_bucket", "telemetry-incoming"), self.config.get("incoming_queue", "telemetry-incoming")))
         self.end_suid_script(c_file)
 
         # Install a specific aws_incoming.json to use
@@ -152,7 +153,9 @@ def main():
         launcher = TelemetryServerLauncher()
         launcher.go()
         return 0
-    except:
+    except Exception, e:
+        print "Error:", e
+        traceback.print_exc()
         return 1
 
 if __name__ == "__main__":

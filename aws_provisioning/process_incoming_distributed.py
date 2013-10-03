@@ -15,6 +15,7 @@ import sys
 import aws_util
 from boto.s3.connection import S3Connection
 from aws_launcher import SimpleLauncher
+import traceback
 
 
 class ProcessIncomingLauncher(SimpleLauncher):
@@ -84,7 +85,9 @@ def main():
         launcher = ProcessIncomingLauncher()
         launcher.go()
         return 0
-    except:
+    except Exception, e:
+        print "Error:", e
+        traceback.print_exc()
         return 1
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from fabric.api import *
 import sys
 import aws_util
 from process_incoming_distributed import ProcessIncomingLauncher
+import traceback
 
 
 class ProcessIncomingQueueLauncher(ProcessIncomingLauncher):
@@ -48,7 +49,9 @@ def main():
         launcher = ProcessIncomingQueueLauncher()
         launcher.go()
         return 0
-    except:
+    except Exception, e:
+        print "Error:", e
+        traceback.print_exc()
         return 1
 
 if __name__ == "__main__":

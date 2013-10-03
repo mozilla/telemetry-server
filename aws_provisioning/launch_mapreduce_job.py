@@ -14,6 +14,7 @@ from fabric.exceptions import NetworkError
 import sys
 import aws_util
 from aws_launcher import SimpleLauncher
+import traceback
 
 class MapReduceLauncher(SimpleLauncher):
     def post_install(self, instance):
@@ -50,7 +51,9 @@ def main():
         launcher = MapReduceLauncher()
         launcher.go()
         return 0
-    except:
+    except Exception, e:
+        print "Error:", e
+        traceback.print_exc()
         return 1
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from fabric.api import *
 from fabric.exceptions import NetworkError
 import sys
 import aws_util
+import traceback
 
 class Launcher(object):
     def __init__(self):
@@ -178,7 +179,9 @@ def main():
         launcher = Launcher()
         launcher.go()
         return 0
-    except:
+    except Exception, e:
+        print "Error:", e
+        traceback.print_exc()
         return 1
 
 if __name__ == "__main__":
