@@ -85,7 +85,7 @@ class StorageLayout:
         # rename current file
         tmp_name = "%s.%d.%f%s" % (filename, os.getpid(), time.time(), self.PENDING_COMPRESSION_SUFFIX)
         os.rename(filename, tmp_name)
-        # Note that files are expected to be compressed elsewhere (see compressor.py)
+        # Note that files are expected to be compressed elsewhere
         # The compressed log filenames will be something like
         #   a.b.c.log.3.COMPRESSED_SUFFIX
         return tmp_name

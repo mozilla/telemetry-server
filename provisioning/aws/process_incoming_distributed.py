@@ -30,7 +30,7 @@ class ProcessIncomingLauncher(SimpleLauncher):
         with cd(self.config.get("base_dir", "/mnt/telemetry")):
             run("mkdir work processed")
         home = "/home/" + self.ssl_user
-        with cd(home + "/telemetry-server"):
+        with cd(home + "/telemetry-server/util"):
             run("bash get_histogram_tools.sh")
 
     def run(self, instance):

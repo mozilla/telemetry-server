@@ -62,7 +62,7 @@ def split_raw_logs(files, output_dir, schema_file):
 
 def convert_split_logs(output_dir):
    print "Converting logs in", output_dir
-   # TODO: force it to archive all log files, not just ones up to yesterday (in get_compressibles.py)
+   # TODO: force it to archive all log files, not just ones up to yesterday
    convert_cmd = ["/bin/bash", "util/archive_logs.sh", ".", output_dir]
    return subprocess.call(convert_cmd)
 
