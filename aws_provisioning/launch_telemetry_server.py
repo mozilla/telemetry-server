@@ -127,6 +127,7 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '    cd {1}/heka' >> {0}".format(c_file, code_base))
         sudo("echo \"    /usr/bin/hekad -config heka.toml >> /var/log/telemetry/telemetry-heka.out\" >> {0}".format(c_file))
         self.end_suid_script(c_file)
+        sudo("echo 'kill signal INT' >> {0}".format(c_file))
 
     def run(self, instance):
         # Start up HTTP server
