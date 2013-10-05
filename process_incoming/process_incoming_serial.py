@@ -14,12 +14,12 @@ import marshal
 import traceback
 from datetime import datetime
 from multiprocessing import Process
-from telemetry_schema import TelemetrySchema
-from persist import StorageLayout
+from telemetry.telemetry_schema import TelemetrySchema
+from telemetry.persist import StorageLayout
 import subprocess
 from subprocess import Popen, PIPE
 from boto.s3.connection import S3Connection
-import util.timer as timer
+import telemetry.util.timer as timer
 
 
 def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
@@ -48,7 +48,7 @@ def fetch_s3_files(files, fetch_cwd, bucket_name, aws_key, aws_secret_key):
 def split_raw_logs(files, output_dir, schema_file):
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
-    split_cmd = ["python", "split_raw_log.py"]
+    split_cmd = ["python", "telemetry/util/split_raw_log.py"]
     split_cmd.append("-o")
     split_cmd.append(output_dir)
     split_cmd.append("-t")
@@ -67,7 +67,7 @@ def convert_split_logs(output_dir):
    return subprocess.call(convert_cmd)
 
 def export_converted_logs(output_dir, bucket_name, aws_key, aws_secret_key):
-    export_cmd = ["python", "export.py", "-d", output_dir, "-k", aws_key, "-s", aws_secret_key, "-b", bucket_name]
+    export_cmd = ["python", "telemetry/util/export.py", "-d", output_dir, "-k", aws_key, "-s", aws_secret_key, "-b", bucket_name]
     return subprocess.call(export_cmd)
 
 
