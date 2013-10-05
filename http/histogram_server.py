@@ -1,8 +1,8 @@
 import BaseHTTPServer
 import re
 import urlparse
-from revision_cache import RevisionCache
-import histogram_tools
+from telemetry.revision_cache import RevisionCache
+import telemetry.histogram_tools
 import simplejson as json
 # For compatibility with python 2.6
 try:

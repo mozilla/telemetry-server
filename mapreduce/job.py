@@ -14,8 +14,8 @@ import marshal
 import traceback
 from datetime import datetime
 from multiprocessing import Process
-from telemetry_schema import TelemetrySchema
-from persist import StorageLayout
+from telemetry.telemetry_schema import TelemetrySchema
+from telemetry.persist import StorageLayout
 import subprocess
 from subprocess import Popen, PIPE
 from boto.s3.connection import S3Connection
