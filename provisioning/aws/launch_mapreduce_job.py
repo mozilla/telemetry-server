@@ -39,7 +39,7 @@ class MapReduceLauncher(SimpleLauncher):
             input_filter_path = "/".join((job_dir, os.path.basename(input_filter)))
             output_path = "/".join((job_dir, "output.txt"))
             job_args = (job_script_path, input_filter_path, data_dir, work_dir, output_path, self.aws_key, self.aws_secret_key, mr_cfg["data_bucket"])
-            run('python job.py %s --input-filter %s --data-dir %s --work-dir %s --output %s --aws-key "%s" --aws-secret-key "%s" --bucket "%s"' % job_args)
+            run('python -m mapreduce.job %s --input-filter %s --data-dir %s --work-dir %s --output %s --aws-key "%s" --aws-secret-key "%s" --bucket "%s"' % job_args)
             # TODO: consult "output_compression"
             run("lzma " + output_path)
             # TODO: upload job/output.txt.lzma to S3 output_bucket.output_filename

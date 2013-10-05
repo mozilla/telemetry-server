@@ -78,7 +78,7 @@ class ProcessIncomingLauncher(SimpleLauncher):
                 if self.config.get("skip_conversion", False):
                     skip_conversion = "--skip-conversion"
                 print "Processing", num_inputs, "inputs,", len(incoming_filenames), "remaining"
-                run('python process_incoming_mp.py -i inputs.txt --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s %s' % (self.aws_key, self.aws_secret_key, skip_conversion, self.config["incoming_bucket"], self.config["publish_bucket"]))
+                run('python -m process_incoming.process_incoming_mp -i inputs.txt --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json %s %s %s' % (self.aws_key, self.aws_secret_key, skip_conversion, self.config["incoming_bucket"], self.config["publish_bucket"]))
 
 def main():
     try:
