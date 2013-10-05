@@ -14,16 +14,16 @@ import simplejson as json
 import sys
 import os
 from datetime import date, datetime
-from telemetry_schema import TelemetrySchema
+from telemetry.telemetry_schema import TelemetrySchema
 import subprocess
 from subprocess import Popen
 from boto.s3.connection import S3Connection
 from boto.exception import S3ResponseError
-import util.timer as timer
-import util.files as fileutil
-from convert import Converter, BadPayloadError
-from revision_cache import RevisionCache
-from persist import StorageLayout
+import telemetry.util.timer as timer
+import telemetry.util.files as fileutil
+from telemetry.convert import Converter, BadPayloadError
+from telemetry.revision_cache import RevisionCache
+from telemetry.persist import StorageLayout
 import boto.sqs
 
 S3FUNNEL_PATH = "/usr/local/bin/s3funnel"
