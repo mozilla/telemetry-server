@@ -25,6 +25,7 @@ from convert import Converter, BadPayloadError
 from revision_cache import RevisionCache
 from persist import StorageLayout
 import boto.sqs
+import traceback
 
 S3FUNNEL_PATH = "/usr/local/bin/s3funnel"
 def fetch_s3_files(incoming_files, fetch_cwd, bucket, aws_key, aws_secret_key):
@@ -164,6 +165,10 @@ class ReadRawStep(PipeStep):
                     print self.label, "ERROR: Found corrupted data for record", record_count, "in", raw_file, "path:", path, "Error:", err
                     self.bad_records += 1
                     continue
+                if len(data) == 0:
+                    print self.label, "ERROR: Found empty data for record", record_count, "in", raw_file, "path:", path
+                    self.bad_records += 1
+                    continue
 
                 # Incoming timestamps are in milliseconds, so convert to POSIX first
                 # (ie. seconds)
@@ -225,6 +230,7 @@ class ReadRawStep(PipeStep):
                 except BadPayloadError, e:
                     self.write_bad_record(key, dims, data, e.msg, "Bad Payload:")
                 except Exception, e:
+                    traceback.print_exc()
                     err_message = str(e)
 
                     # We don't need to write these bad records out - we know
@@ -248,6 +254,7 @@ class ReadRawStep(PipeStep):
         except Exception, e:
             # Corrupted data, let's skip this record.
             print self.label, "- Error reading raw data from ", raw_file, e
+            traceback.print_exc()
 
     def write_bad_record(self, key, dims, data, error, message=None):
         self.bad_records += 1
