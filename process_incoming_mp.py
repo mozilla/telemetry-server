@@ -230,7 +230,6 @@ class ReadRawStep(PipeStep):
                 except BadPayloadError, e:
                     self.write_bad_record(key, dims, data, e.msg, "Bad Payload:")
                 except Exception, e:
-                    traceback.print_exc()
                     err_message = str(e)
 
                     # We don't need to write these bad records out - we know
@@ -238,6 +237,8 @@ class ReadRawStep(PipeStep):
                     if err_message != "Missing in payload: info.revision":
                         # TODO: recognize other common failure modes and handle them gracefully.
                         self.write_bad_record(key, dims, data, err_message, "Conversion Error:")
+                    else:
+                        traceback.print_exc()
 
                 if self.print_stats:
                     this_update = datetime.now()
