@@ -237,7 +237,6 @@ class ReadRawStep(PipeStep):
                     if err_message != "Missing in payload: info.revision":
                         # TODO: recognize other common failure modes and handle them gracefully.
                         self.write_bad_record(key, dims, data, err_message, "Conversion Error:")
-                    else:
                         traceback.print_exc()
 
                 if self.print_stats:
