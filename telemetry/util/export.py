@@ -10,14 +10,14 @@ import re
 import os
 import sys
 import time
-from persist import StorageLayout
+from telemetry.persist import StorageLayout
 from datetime import datetime
-import util.files as fileutil
+import telemetry.util.files as fileutil
+import telemetry.util.timer as timer
 import subprocess
 from boto.s3.connection import S3Connection
 from boto.sqs.message import Message
 from boto.exception import S3ResponseError
-import util.timer as timer
 import boto.sqs
 
 

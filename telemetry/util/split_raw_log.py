@@ -4,11 +4,11 @@
 
 import sys, struct, re, os, argparse, gzip, StringIO
 import simplejson as json
-from persist import StorageLayout
-from telemetry_schema import TelemetrySchema
+from telemetry.persist import StorageLayout
+from telemetry.telemetry_schema import TelemetrySchema
 from datetime import date, datetime
-import util.timer as timer
-import util.files as fileutil
+import telemetry.util.timer as timer
+import telemetry.util.files as fileutil
 
 filename_timestamp_pattern = re.compile("^telemetry.log.([0-9]+).([0-9]+)(.finished)?$")
 
