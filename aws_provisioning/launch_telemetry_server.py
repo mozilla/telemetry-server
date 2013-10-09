@@ -46,6 +46,9 @@ class TelemetryServerLauncher(Launcher):
     def start_suid_script(self, c_file, username):
         sudo("echo 'setuid {1}' > {0}".format(c_file, username))
         sudo("echo 'setgid {1}' >> {0}".format(c_file, username))
+        # Set the ulimit for # open files in the upstart scripts (since the
+        # ones set in limits.conf don't seem to apply here)
+        sudo("echo 'limit nofile 10000 40000' >> " + c_file)
         sudo("echo 'script' >> " + c_file)
 
     def end_suid_script(self, c_file):
