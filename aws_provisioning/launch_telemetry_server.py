@@ -55,6 +55,22 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'end script' >> {0}".format(c_file))
         sudo("echo 'respawn' >> {0}".format(c_file))
 
+    def create_logrotate_config(self, lr_file, target_log, create=True):
+        sudo("echo '{1} {' > {0}".format(lr_file, target_log))
+        sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
+        sudo("echo '    rotate 10' >> {0}".format(lr_file))
+        sudo("echo '    daily' >> {0}".format(lr_file))
+        sudo("echo '    compress' >> {0}".format(lr_file))
+        sudo("echo '    missingok' >> {0}".format(lr_file))
+        if create:
+            sudo("echo '    create 640 {1} {1}' >> {0}".format(lr_file, self.ssl_user))
+        else:
+            sudo("echo '    copytruncate' >> {0}".format(lr_file))
+        sudo("echo '}' >> " + lr_file)
+        with settings(warn_only=True):
+            # This will warn if there's no file there.
+            sudo("logrotate -f {0}".format(lr_file))
+
     def post_install(self, instance):
         # Install some more:
         self.install_nodejs_bin()
@@ -85,19 +101,11 @@ class TelemetryServerLauncher(Launcher):
         run("echo 'Soft limit:'; ulimit -S -n")
         run("echo 'Hard limit:'; ulimit -H -n")
 
-        # Setup logrotate for the stats log
-        lr_file = "/etc/logrotate.d/telemetry"
-        sudo("echo '/var/log/telemetry/telemetry-server.log {' > " + lr_file)
-        sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
-        sudo("echo '    rotate 10' >> {0}".format(lr_file))
-        sudo("echo '    daily' >> {0}".format(lr_file))
-        sudo("echo '    compress' >> {0}".format(lr_file))
-        sudo("echo '    missingok' >> {0}".format(lr_file))
-        sudo("echo '    create 640 {1} {1}' >> {0}".format(lr_file, self.ssl_user))
-        sudo("echo '}' >> " + lr_file)
-        with settings(warn_only=True):
-            # This will warn if there's no file there.
-            sudo("logrotate -f /etc/logrotate.d/telemetry")
+        # Setup logrotate for the stats log and process-incoming log
+        self.create_logrotate_config("/etc/logrotate.d/telemetry",
+                "/var/log/telemetry/telemetry-server.log")
+        self.create_logrotate_config("/etc/logrotate.d/telemetry-incoming",
+                "/var/log/telemetry/telemetry-incoming.out", False)
 
         # Create startup scripts:
         code_base = "/home/" + self.ssl_user + "/telemetry-server"
@@ -140,7 +148,7 @@ class TelemetryServerLauncher(Launcher):
         # Start up exporter
         sudo("start telemetry-export")
         print "Telemetry export started"
-        
+
         # Start up 'process incoming' only on the primary node
         if self.config.get("primary_server", False):
             sudo("start telemetry-incoming")
