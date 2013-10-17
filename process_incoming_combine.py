@@ -132,9 +132,32 @@ class Combiner:
 
     def download(self, files, base_dir):
         print "Downloading"
+        activity = {"state": "START", "activity": "DOWNLOAD", "files": [ s.name for s in files] }
+        self.log_activity(activity)
+        for f in files:
+            print "Getting", f.name
+            local_filename = os.path.join(base_dir, f.name)
+            local_dir = os.path.dirname(local_filename)
+            if not os.path.exists(local_dir):
+                os.makedirs(local_dir)
+            f.get_contents_to_filename(local_filename)
+        activity["state"] = "FINISH"
+        self.log_activity(activity)
 
     def concat(self, partition, files, base_dir, out_dir):
         print "Concatenating"
+        tmp_file = os.path.join(out_dir, partition + ".temp")
+        tmp_dir = os.path.dirname(tmp_file)
+        print "Concatenating", len(files), "into", tmp_file
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir)
+        for f in files:
+            print "lzma -d {0} >> {1}".format(f.name, tmp_file)
+
+        # Get md5sum of tmp_file
+        # rename it to partition.log.<md5sum>
+        # lzma -0 {0}
+        large_file = partition + ".log." + "TODO:md5sum" + ".lzma"
         return files[0].name
 
     def combine(self, partition, smalls, max_size, work_dir, output_dir):
