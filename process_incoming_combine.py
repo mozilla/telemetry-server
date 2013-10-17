@@ -146,19 +146,34 @@ class Combiner:
 
     def concat(self, partition, files, base_dir, out_dir):
         print "Concatenating"
-        tmp_file = os.path.join(out_dir, partition + ".temp")
-        tmp_dir = os.path.dirname(tmp_file)
-        print "Concatenating", len(files), "into", tmp_file
+        tmp_name = os.path.join(out_dir, partition + ".temp")
+        tmp_dir = os.path.dirname(tmp_name)
+        tmp_file = open(tmp_name, "a")
+        print "Concatenating", len(files), "into", tmp_name
         if not os.path.exists(tmp_dir):
             os.makedirs(tmp_dir)
+        decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
         for f in files:
-            print "lzma -d {0} >> {1}".format(f.name, tmp_file)
+            print "Appending", f.name
+            full_name = os.path.join(base_dir, f.name)
+            result = subprocess.call(decompress_cmd + [full_name], stdout=tmp_file)
+            if result != 0:
+                print "ERROR"
+                # TODO: throw
+        tmp_file.close()
 
-        # Get md5sum of tmp_file
+        # Get md5sum of tmp_name
+        checksum, size = fileutil.md5file(tmp_name)
+        large_file = partition + ".log." + checksum
+        # TODO: should we checksum before or after compressing?
         # rename it to partition.log.<md5sum>
-        # lzma -0 {0}
-        large_file = partition + ".log." + "TODO:md5sum" + ".lzma"
-        return files[0].name
+        print "Renaming", tmp_name, "to", large_file
+        full_large_file = os.path.join(out_dir, large_file)
+        os.rename(tmp_name, full_large_file)
+        compress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.COMPRESSION_ARGS + [full_large_file]
+        result = subprocess.call(compress_cmd)
+
+        return large_file + StorageLayout.COMPRESSED_SUFFIX
 
     def combine(self, partition, smalls, max_size, work_dir, output_dir):
         larges = []
