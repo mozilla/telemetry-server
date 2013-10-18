@@ -63,8 +63,14 @@ class Combiner:
         log_file = open(self.log, "r")
         recent_activities = []
         # TODO: handle json-parsing exceptions
+        corrupt_count = 0
         for line in log_file.readlines():
-            activity = json.loads(line)
+            try:
+                activity = json.loads(line)
+            except json.decoder.JSONDecodeError, e:
+                print "Found a corrupt log line:", line.strip()
+                activity = {"activity": "CORRUPT"}
+                corrupt_count += 1
             if activity["activity"] == "PUBLISH":
                 last_pub_activity = activity
             if activity["activity"] == "DELETE" or activity["activity"] == "COMBINE":
@@ -78,7 +84,17 @@ class Combiner:
             print "No activities to recover from"
             return True
             
-        last_activity = recent_activities[-1]
+        last_activity = recent_activities.pop()
+        while last_activity["activity"] == "CORRUPT" and len(recent_activities) > 0:
+            last_activity = recent_activities.pop()
+
+        if last_activity["activity"] == "CORRUPT":
+            # By now we've seen MAX_ACTIVITIES corrupt log entries in a row,
+            # we can be pretty sure the log is completely useless.
+            print "Found", corrupt_count, "corrupted log entries. Aborting recovery."
+            # TODO: throw error?
+            return False
+
         # Find what we were up to
         print "We stopped after", last_activity["state"], last_activity["activity"]
 
@@ -172,10 +188,10 @@ class Combiner:
         self.log_activity(activity)
         tmp_name = os.path.join(out_dir, partition + ".temp")
         tmp_dir = os.path.dirname(tmp_name)
-        tmp_file = open(tmp_name, "a")
-        print "Concatenating", len(files), "into", tmp_name
         if not os.path.exists(tmp_dir):
             os.makedirs(tmp_dir)
+        tmp_file = open(tmp_name, "a")
+        print "Concatenating", len(files), "into", tmp_name
         decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
         for f in files:
             print "Appending", f.name
