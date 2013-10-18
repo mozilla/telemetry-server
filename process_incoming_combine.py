@@ -372,7 +372,8 @@ def main():
         if args.dry_run:
             print "If this wasn't a dry run, we'd be deleting the log file after a successful recovery"
         else:
-            os.remove(activity_log_file)
+            if os.path.exists(activity_log_file):
+                os.remove(activity_log_file)
     else:
         print "Recovery failed... aborting"
         # TODO: email the (compressed) activity log, upload it to S3, or
