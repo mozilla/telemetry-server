@@ -42,17 +42,17 @@ class Combiner:
             fout.write(json.dumps(activity, separators=(u',', u':')) + u"\n")
 
     def recover(self, source_bucket, dest_bucket):
-        # TODO
-        # Read through the log
+        # Read through the log's activities
         print "Reading log", self.log
         if not os.path.exists(self.log):
             print "No log file present. Recovery not needed."
-            return
+            return True
 
         last_publishables = None
         last_deletables = None
         log_file = open(self.log, "r")
         recent_activities = []
+        # TODO: handle json-parsing exceptions
         for line in log_file.readlines():
             activity = json.loads(line)
             if activity["activity"] == "PUBLISH":
@@ -146,6 +146,8 @@ class Combiner:
 
     def concat(self, partition, files, base_dir, out_dir):
         print "Concatenating"
+        activity = {"state": "START", "activity": "CONCAT", "files": [ s.name for s in files] }
+        self.log_activity(activity)
         tmp_name = os.path.join(out_dir, partition + ".temp")
         tmp_dir = os.path.dirname(tmp_name)
         tmp_file = open(tmp_name, "a")
@@ -162,17 +164,20 @@ class Combiner:
                 # TODO: throw
         tmp_file.close()
 
-        # Get md5sum of tmp_name
+        # Get md5sum of tmp_name (raw uncompressed contents)
+        # We checksum before compression in order to get a stable value even if
+        # we change compression algorithms. Also, the final file's md5 is
+        # already available as the 'etag' in S3.
         checksum, size = fileutil.md5file(tmp_name)
         large_file = partition + ".log." + checksum
-        # TODO: should we checksum before or after compressing?
-        # rename it to partition.log.<md5sum>
         print "Renaming", tmp_name, "to", large_file
         full_large_file = os.path.join(out_dir, large_file)
         os.rename(tmp_name, full_large_file)
         compress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.COMPRESSION_ARGS + [full_large_file]
         result = subprocess.call(compress_cmd)
 
+        activity["state"] = "FINISH"
+        self.log_activity(activity)
         return large_file + StorageLayout.COMPRESSED_SUFFIX
 
     def combine(self, partition, smalls, max_size, work_dir, output_dir):
