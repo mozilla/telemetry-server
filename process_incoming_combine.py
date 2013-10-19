@@ -393,7 +393,6 @@ def main():
             continue
         print "Uploading", len(larges), "files to replace", len(smalls), "small ones."
         combiner.upload(larges, dest_bucket, args.output_dir)
-        combiner.local_delete(larges, args.output_dir)
 
         # Delete values from large_map (to avoid deleting items skipped during
         # combine)
@@ -403,10 +402,14 @@ def main():
         if len(smalls_to_delete) > 0:
             print "Deleting", len(smalls_to_delete), "small files."
             small_names = [ s.name for s in smalls_to_delete ]
+            print "Deleting", smalls_to_delete
             combiner.delete(small_names, source_bucket, args.work_dir)
             combiner.local_delete(small_names, args.work_dir)
         else:
             print "Nothing to delete for", partition
+
+        # Do important stuff first, delete locally at the end.
+        combiner.local_delete(larges, args.output_dir)
 
     duration = timer.delta_sec(start)
     print "All done in %.2fs" % (duration)
