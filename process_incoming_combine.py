@@ -239,6 +239,8 @@ class Combiner:
                 size = 0
                 larges.append(current)
                 current = []
+        # Don't "combine" groups of one item. leave these alone.
+        # TODO: if source_bucket != dest_bucket, we should keep these.
         if len(current) > 1:
             larges.append(current)
 
@@ -386,14 +388,24 @@ def main():
         smalls = combinees[partition]
         large_map = combiner.combine(partition, smalls, args.max_output_size, args.work_dir, args.output_dir)
         larges = sorted(large_map.keys())
+        if len(larges) == 0:
+            print "Didn't find anything to combine for partition", partition
+            continue
         print "Uploading", len(larges), "files to replace", len(smalls), "small ones."
         combiner.upload(larges, dest_bucket, args.output_dir)
         combiner.local_delete(larges, args.output_dir)
 
-        print "Deleting", len(smalls), "small files."
-        small_names = [ s.name for s in smalls ]
-        combiner.delete(small_names, source_bucket, args.work_dir)
-        combiner.local_delete(small_names, args.work_dir)
+        # Delete values from large_map (to avoid deleting items skipped during
+        # combine)
+        smalls_to_delete = []
+        for large in larges:
+            smalls_to_delete.append(large_map[large])
+        if len(smalls_to_delete) > 0:
+            print "Deleting", len(smalls_to_delete), "small files."
+            combiner.delete(smalls_to_delete, source_bucket, args.work_dir)
+            combiner.local_delete(smalls_to_delete, args.work_dir)
+        else:
+            print "Nothing to delete for", partition
 
     duration = timer.delta_sec(start)
     print "All done in %.2fs" % (duration)
