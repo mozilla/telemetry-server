@@ -402,8 +402,9 @@ def main():
             smalls_to_delete.append(large_map[large])
         if len(smalls_to_delete) > 0:
             print "Deleting", len(smalls_to_delete), "small files."
-            combiner.delete(smalls_to_delete, source_bucket, args.work_dir)
-            combiner.local_delete(smalls_to_delete, args.work_dir)
+            small_names = [ s.name for s in smalls_to_delete ]
+            combiner.delete(small_names, source_bucket, args.work_dir)
+            combiner.local_delete(small_names, args.work_dir)
         else:
             print "Nothing to delete for", partition
 
