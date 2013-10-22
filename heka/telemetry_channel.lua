@@ -4,12 +4,20 @@
 
 local rows = read_config("rows")
 local sec_per_row = read_config("sec_per_row")
-
-all = circular_buffer.new(rows, 2, sec_per_row)
-local REQUESTS      = all:set_header(1, "Requests")
-local TOTAL_SIZE    = all:set_header(2, "Total Size", "KiB")
+local REQUESTS    = 1
+local TOTAL_SIZE  = 2
 
 channels = {}
+
+local function add_channel(channel)
+    channels[channel] = circular_buffer.new(rows, 2, sec_per_row, true)
+    local c = channels[channel]
+    c:set_header(REQUESTS, "Requests") 
+    c:set_header(TOTAL_SIZE, "Total Size", "KiB")
+    return c
+end
+
+local all = add_channel("ALL")
 
 function process_message ()
     local ts = read_message("Timestamp")
@@ -33,10 +41,7 @@ function process_message ()
 
     local c = channels[channel]
     if not c then
-        channels[channel] = circular_buffer.new(rows, 2, sec_per_row)
-        c = channels[channel]
-        c:set_header(1, "Requests") 
-        c:set_header(2, "Total Size", "KiB")   
+        c = add_channel(channel)
     end
     c:add(ts, REQUESTS, 1)
     c:add(ts, TOTAL_SIZE, rs)
@@ -45,10 +50,8 @@ function process_message ()
 end
 
 function timer_event(ns)
-    output(all)
-    inject_message("cbuf", "ALL")
     for k, v in pairs(channels) do
-        output(v)
-        inject_message("cbuf", k)
+        inject_message(v:format("cbuf"), k)
+        inject_message(v:format("cbufd"), k)
     end
 end

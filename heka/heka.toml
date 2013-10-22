@@ -2,6 +2,7 @@
 maxprocs = 4
 base_dir = "."
 max_timer_inject = 100
+max_process_duration = 500000
 
 [ProtobufDecoder]
 pool_size = 1
@@ -15,22 +16,22 @@ encoding_name = "JSON"
 type = "TcpInput"
 parser_type = "message.proto"
 decoder = "ProtobufDecoder"
-address = "0.0.0.0:5565"
+address = ":5565"
 	[TCP:5565.signer.telemetry_0]
-	hmac_key = "TODO change on deploy"
+	hmac_key = "TODO change on deploy" # TODO update on deploy
 
 [TelemetrySandboxManager]
 type = "SandboxManagerFilter"
 message_signer = "telemetry"
 message_matcher = "Type == 'heka.control.sandbox'"
-working_directory = "./sandbox"
+working_directory = "sandbox"
 max_filters = 100
 
 [TelemetryServerInput]
 type = "LogfileInput"
 logfile = "/var/log/telemetry/telemetry-server.log"
 decoder = "TelemetryServerDecoder"
-seek_journal_name = "telemetry.journal"
+seek_journal_name = "telemetry-server.journal"
 use_seek_journal = true 
 
 [TelemetryServerDecoder]
@@ -63,7 +64,7 @@ code = "%code%"
 size|B = "%size%"
 message = "%message%"
 
-[Telemetry]
+[TelemetryFilter]
 type = "SandboxFilter"
 message_matcher = "Type == 'TelemetryServerLog'"
 ticker_interval = 60
@@ -96,7 +97,7 @@ ticker_interval = 60
 script_type = "lua"
 filename = "telemetry_channel.lua"
 preserve_data = true
-memory_limit = 8000000 
+memory_limit = 8000000
 instruction_limit = 1000
 output_limit = 64000
 
@@ -106,6 +107,12 @@ sec_per_row = 3600
 
 [Dashboard]
 type = "DashboardOutput"
-address = "0.0.0.0:4352"
+address = ":4352"
 ticker_interval = 60
 working_directory = "dashboard"
+
+[AMQPOutput]
+url = "amqp://guest:guest@10.250.68.186"
+exchange = "testout"
+exchangeType = "fanout"
+message_matcher =  "Type == 'heka.sandbox-output' && Fields[payload_type] == 'cbufd'"
