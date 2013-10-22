@@ -6,27 +6,16 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-import uuid
-import multiprocessing
-from multiprocessing import Process, Queue
-import Queue as Q
 import simplejson as json
 import sys
 import os
 import io
 from datetime import date, datetime
-from telemetry_schema import TelemetrySchema
 import subprocess
-from subprocess import Popen
 from boto.s3.connection import S3Connection
-from boto.exception import S3ResponseError
 import util.timer as timer
 import util.files as fileutil
-from convert import Converter, BadPayloadError
-from revision_cache import RevisionCache
 from persist import StorageLayout
-import boto.sqs
-import traceback
 from boto.s3.key import Key
 
 
