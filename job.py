@@ -200,10 +200,9 @@ class Job:
             conn = S3Connection(self._aws_key, self._aws_secret_key)
             bucket = conn.get_bucket(self._bucket_name)
             for r in remote_files:
-                key = bucket.lookup(r)
-                size = key.size
-                dims = self._input_filter.get_dimensions(".", r)
-                remote = {"type": "remote", "name": r, "size": size, "dimensions": dims}
+                size = r.size
+                dims = self._input_filter.get_dimensions(".", r.name)
+                remote = {"type": "remote", "name": r.name, "size": size, "dimensions": dims}
                 #print "putting", remote, "into partition", min_idx
                 partitions[min_idx].append(remote)
                 sums[min_idx] += size
@@ -240,10 +239,14 @@ class Job:
             conn = S3Connection(self._aws_key, self._aws_secret_key)
             bucket = conn.get_bucket(self._bucket_name)
 
+            count = 0
             # TODO: potential optimization - if our input filter is reasonably
             #       restrictive an/or our list of keys is very long, it may be
             #       a win to use the "prefix" and "delimiter" params.
             for f in bucket.list():
+                count += 1
+                if count % 1000 == 0:
+                    print "Listed", count, "so far"
                 dims = self._input_filter.get_dimensions(".", f.name)
                 #print f.name, "->", ",".join(dims)
                 include = True
@@ -252,9 +255,9 @@ class Job:
                         include = False
                         break
                 if include:
-                    out_files.append(f.name)
+                    out_files.append(f)
             conn.close()
-            print "Done!"
+            print "Done! Fetched", len(out_files), "files"
         return out_files
 
     def filter_includes(self, level, value):
