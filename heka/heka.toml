@@ -108,7 +108,7 @@ sec_per_row = 3600
 [Dashboard]
 type = "DashboardOutput"
 address = ":4352"
-ticker_interval = 60
+ticker_interval = 10
 working_directory = "dashboard"
 
 [AMQPOutput]

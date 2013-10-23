@@ -17,7 +17,7 @@ local function add_channel(channel)
     return c
 end
 
-local all = add_channel("ALL")
+all = add_channel("ALL")
 
 function process_message ()
     local ts = read_message("Timestamp")
