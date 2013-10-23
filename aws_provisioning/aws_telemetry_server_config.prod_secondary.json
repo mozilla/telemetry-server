@@ -5,7 +5,7 @@
   "ssl_retries": 10,
   "base_dir": "/mnt/telemetry",
   "instance_type": "t1.micro",
-  "image": "ami-bf1d8a8f",
+  "image": "ami-ace67f9c",
   "security_groups": ["telemetry"],
   "region": "us-west-2",
   "placement": "us-west-2c",
