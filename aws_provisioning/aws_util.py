@@ -47,7 +47,12 @@ def create_instance(config, aws_key=None, aws_secret_key=None):
     print "Creating a new instance of type", itype
     # Known images:
     # ami-bf1d8a8f == Ubuntu 13.04
-    # ami-76831f46 == telemetry-base (based on Ubuntu 13.04 with dependencies already installed)
+    # ami-ace67f9c == Ubuntu 13.10
+    # ami-76831f46 == telemetry-base - based on Ubuntu 13.04 with dependencies
+    #                 already installed
+    # ami-260c9516 == telemetry-server - Based on Ubuntu 13.10, everything is
+    #                 ready to go, server  will be auto-started on boot. Does
+    #                 NOT auto-start process-incoming.
 
     # See if ephemerals have been specified
     mapping = None
