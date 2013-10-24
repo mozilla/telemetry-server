@@ -8,10 +8,6 @@ max_process_duration = 500000
 pool_size = 1
 encoding_name = "PROTOCOL_BUFFER"
 
-[JsonDecoder]
-pool_size = 1
-encoding_name = "JSON"
-
 [TCP:5565]
 type = "TcpInput"
 parser_type = "message.proto"
