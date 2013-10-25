@@ -1,0 +1,284 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  This deploys a service that allows users to spawn EC2 instances that they can
+  use to analysis telemetry published data bucket.
+
+################################################################################
+
+Parameters:
+
+  serverInstanceType:
+    Description:              Server instance type
+    Type:                     String
+    Default:                  m1.small
+    AllowedValues:
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+      - m2.xlarge
+      - m2.2xlarge
+      - m2.4xlarge
+      - c1.medium
+      - c1.xlarge
+    ConstraintDescription:    must be a valid EC2 instance type.
+
+  # Currently, we just setup to consume from load balancer configured with
+  # SSL certificate and DNS else where...telemetry-dash-lb
+  LoadBalancer:
+    Description:              Load balancer setup with the correct DNS
+    Type:                     String
+    Default:                  telemetry-dash-lb
+
+  #REMARK: We should consider removing keyName as it shouldn't be possible to
+  #        ssh in to the server instance
+  keyName:
+    Description:              Name of key pair for SSH
+    Type:                     String
+    Default:                  jonasfj
+
+  serverSecret:
+    Description:              Secret key for signing cookies on the server
+    Type:                     String
+
+  sourcesBucket:
+    Description:              Bucket containing sources and templates
+    Type:                     String
+    Default:                   jonasfj-telemetry-code
+
+  sourcesVersion:
+    Description:              Version of sources to load from sources bucket
+    Type:                     String
+    Default:                  '1'
+
+################################################################################
+
+Mappings:
+
+  # A map from region to 64 bit Ubuntu 13.04 backed by instance storage
+  # We use instance storage to avoid stability issues with EBS also we don't
+  # have to pay for IO. We'll initialize these with CloudInit, later.
+  # See: http://cloud-images.ubuntu.com/locator/ec2/
+  regionToAMI:
+    ap-northeast-1:           {AMI: ami-7f41da7e}
+    ap-southeast-1:           {AMI: ami-3af8b268}
+    ap-southeast-2:           {AMI: ami-a5960a9f}
+    eu-west-1:                {AMI: ami-2adc3c5d}
+    sa-east-1:                {AMI: ami-f1dd7bec}
+    us-east-1:                {AMI: ami-3d257954}
+    us-west-1:                {AMI: ami-20e5d265}
+    us-west-2:                {AMI: ami-2460f914}
+
+################################################################################
+
+Resources:
+
+  temporaryBucket:
+    Type:                     AWS::S3::Bucket
+    DeletionPolicy:           Delete
+    Properties:
+      AccessControl:          Private
+
+  # Security group for service server, http and ssh (well, disable ssh later)
+  serverSecurityGroup:
+    Type:                     AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:       telemetry-analysis debug service security group
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
+
+  # IAM role for service server
+  serverInstanceIAMRole:
+    Type:                     AWS::IAM::Role
+    DependsOn:
+      - temporaryBucket
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect:           Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path:                   /telemetry/analysis/debug-service/
+      Policies:
+        - PolicyName:         startDebugInstancesPolicy
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 'ec2:RunInstances'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:TerminateInstances'
+                  - '*'     # this is definitely suboptimal, but it works
+                Resource:     '*' # I think this works, probably not best :)
+        - PolicyName:         putObjectTemporaryBucketPolicy
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:PutObject'
+                Resource:
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: temporaryBucket}, '/*']]}
+        - PolicyName:         getObjectSourcesBucketPolicy
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - {'Fn::Join': ["", [
+                      'arn:aws:s3:::',
+                      {Ref: sourcesBucket},
+                      '/v', {Ref: sourcesVersion}, '/telemetry-analysis-debug-service.tar.gz'
+                    ]]}
+
+  # IAM instance profile granting serverInstanceIAMRole to service server
+  serverInstanceProfile:
+    Type:                     AWS::IAM::InstanceProfile
+    DependsOn:
+      - serverInstanceIAMRole
+    Properties:
+      Path:                   /telemetry/analysis/debug-service/
+      Roles:
+        - {Ref: serverInstanceIAMRole}
+
+  serverLaunchConfig:
+    Type:                     AWS::AutoScaling::LaunchConfiguration
+    DependsOn:
+      - serverInstanceProfile
+      - serverSecurityGroup
+      - workerInstanceProfile
+      - debugInstanceSecurityGroup
+    Metadata:
+      Comment:                telemetry-analysis-debug-service
+    Properties:
+      KeyName:                {Ref: keyName}
+      ImageId:                {'Fn::FindInMap': [
+                                    'regionToAMI',
+                                    {Ref: 'AWS::Region'},
+                                    'AMI'
+                              ]}
+      InstanceType:           {Ref: serverInstanceType}
+      IamInstanceProfile:     {Ref: serverInstanceProfile}
+      SecurityGroups:
+        - {Ref: serverSecurityGroup}
+      UserData:               {'Fn::Base64': {'Fn::Join': ['', [
+              "#!/bin/bash\n",
+              "sudo apt-get -y install python-pip git python-dateutil python-dev nginx\n",
+              "sudo pip install --upgrade boto flask flask-login uwsgi\n",
+              "sudo pip install git+https://github.com/garbados/flask-browserid.git\n",
+              "cd /home/ubuntu\n",
+              "python - << END\n",
+              "from boto.s3 import connect_to_region\n",
+              "s3 = connect_to_region('", {Ref: 'AWS::Region'} ,"')\n",
+              "b = s3.get_bucket('", {Ref: sourcesBucket}, "', validate = False)\n",
+              "k = b.get_key('v", {Ref: sourcesVersion}, "/telemetry-analysis-debug-service.tar.gz')\n",
+              "k.get_contents_to_filename('sources.tar.gz')\n",
+              "END\n",
+              "tar -xzf sources.tar.gz\n",
+              "sudo echo '42 * * * * ubuntu /home/ubuntu/terminate-expired-instances.py' >> /etc/crontab\n",
+              "echo '' >> config.py\n",
+              "echo \"SECRET_KEY = '", {Ref: serverSecret} , "'\" >> config.py\n",
+              "echo \"AWS_REGION = '", {Ref: 'AWS::Region'} , "'\" >> config.py\n",
+              "echo \"SECURITY_GROUPS = ['", {Ref: debugInstanceSecurityGroup} , "']\" >> config.py\n",
+              "echo \"INSTANCE_PROFILE = '", {Ref: workerInstanceProfile} , "'\" >> config.py\n",
+              "echo \"TEMPORARY_BUCKET = '", {Ref: temporaryBucket} , "'\" >> config.py\n",
+              "echo \"DEBUG = True\" >> config.py\n",
+              "sudo echo 'server {' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo echo '        listen 80;' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo echo '        server_name debugservice;' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo echo '        location / { try_files $uri @debugservice; }' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo echo '        location @debugservice {' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo echo '                include uwsgi_params;' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo echo '                uwsgi_pass unix:/tmp/uwsgi.sock;' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo echo '        }' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo echo '}' >> /etc/nginx/sites-enabled/debug-service\n",
+              "sudo service nginx restart\n",
+              "sudo -u ubuntu uwsgi --plugins python --chmod-socket=666 -s /tmp/uwsgi.sock --logto /tmp/debug-service.log -w server:app\n"
+            ]
+          ]
+        }
+      }
+
+  serverAutoScaleGroup:
+    Type:                       AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - serverLaunchConfig
+    Properties:
+      AvailabilityZones:        {'Fn::GetAZs': ''}
+      LaunchConfigurationName:  {Ref: serverLaunchConfig}
+      MinSize:                  1
+      MaxSize:                  1
+      LoadBalancerNames:
+        - {Ref: LoadBalancer}
+
+################################################################################
+
+  # Security group for debug instances, this should be s3 and ssh only
+  debugInstanceSecurityGroup:
+    Type:                     AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:       telemetry-analysis debug instance security group
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
+
+  # IAM role for analysis debug instances
+  debugInstanceIAMRole:
+    Type:                     AWS::IAM::Role
+    DependsOn:
+      - temporaryBucket
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect:           Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path:                   /telemetry/analysis/debug-instance/
+      Policies:
+        # Grant list access to telemetry-published-v1
+        - PolicyName:         telemetryPublishedDebugAccess
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:ListBucket'
+                Resource:
+                  - 'arn:aws:s3:::telemetry-published-v1'
+        # Grant read access to telemetry-published-v1
+        - PolicyName:         telemetryPublishedDebugAccess
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - 'arn:aws:s3:::telemetry-published-v1/*'
+        # Grant access to read from temporary bucket, we store SSH keys here
+        - PolicyName:         getObjectTemporaryBucketPolicy
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:     {'Fn::Join': ["", [
+                                'arn:aws:s3:::',
+                                {Ref: temporaryBucket},
+                                '/*'
+                              ]]}
+
+  # IAM instance profile granting debugInstanceIAMRole to debug instances
+  workerInstanceProfile:
+    Type:                     AWS::IAM::InstanceProfile
+    DependsOn:
+      - debugInstanceIAMRole
+    Properties:
+      Path:                   /telemetry/analysis/debug-instance/
+      Roles:
+        - {Ref: debugInstanceIAMRole}
