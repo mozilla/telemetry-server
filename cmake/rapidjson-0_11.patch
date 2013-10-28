@@ -1,0 +1,98 @@
+--- rapidjson.orig/include/rapidjson/writer.h	2012-11-14 10:58:42.000000000 -0800
++++ rapidjson-0_11/include/rapidjson/writer.h	2013-10-03 06:43:04.231205273 -0700
+@@ -4,6 +4,7 @@
+ #include "rapidjson.h"
+ #include "internal/stack.h"
+ #include "internal/strfunc.h"
++#include <climits>
+ #include <cstdio>	// snprintf() or _sprintf_s()
+ #include <new>		// placement new
+ 
+@@ -156,18 +157,78 @@
+ 		} while (p != buffer);
+ 	}
+ 
+-	//! \todo Optimization with custom double-to-string converter.
+-	void WriteDouble(double d) {
+-		char buffer[100];
++        void WriteLargeDouble(double d) {
++                char buffer[100];
+ #if _MSC_VER
+-		int ret = sprintf_s(buffer, sizeof(buffer), "%g", d);
++                int ret = sprintf_s(buffer, sizeof(buffer), "%g", d);
+ #else
+-		int ret = snprintf(buffer, sizeof(buffer), "%g", d);
++                int ret = snprintf(buffer, sizeof(buffer), "%g", d);
+ #endif
+-		RAPIDJSON_ASSERT(ret >= 1);
+-		for (int i = 0; i < ret; i++)
+-			stream_.Put(buffer[i]);
+-	}
++                RAPIDJSON_ASSERT(ret >= 1);
++                for (int i = 0; i < ret; i++)
++                        stream_.Put(buffer[i]);
++        }
++
++        void WriteDouble(double d) {
++                if (d > INT_MAX) {
++			WriteLargeDouble(d);
++			return;
++                }
++
++                const int precision = 8;
++                const unsigned magnitude = 100000000;
++                char buffer[20];
++                char* p = buffer;
++
++                if (d < 0) {
++                        stream_.Put('-');
++                        d = -d;
++                }
++
++                int number = static_cast<int>(d);
++                double tmp = (d - number) * magnitude;
++                unsigned fraction = static_cast<unsigned>(tmp);
++                double diff = tmp - fraction;
++
++                if (diff > 0.5) {
++                        ++fraction;
++                        if (fraction >= magnitude) {
++                        fraction = 0;
++                        ++number;
++                        }
++                } else if (diff == 0.5 && ((fraction == 0) || (fraction & 1))) {
++                        // bankers rounding
++                        ++fraction;
++                }
++
++		// output decimal fraction
++		if (fraction != 0) {
++			int nodigits = 1;
++			char c = 0;
++			for (int x = 0; x < precision; ++x) {
++				c = fraction % 10;
++				if (!(c == 0 && nodigits)) {
++					*p++ = c + '0';
++					nodigits = 0;
++				}
++			fraction /= 10;
++			}
++			*p++ = '.';
++		}
++
++                // output number
++                do {
++                        *p++ = (number % 10) + '0';
++                        number /= 10;
++                }
++                while (number > 0);
++
++                do {
++                        --p;
++                        stream_.Put(*p);
++                }
++                while (p != buffer);
++        }
+ 
+ 	void WriteString(const Ch* str, SizeType length)  {
+ 		static const char hexDigits[] = "0123456789ABCDEF";

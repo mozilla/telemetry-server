@@ -1,0 +1,10 @@
+{
+    "heka_server": "localhost:5565",
+    "telemetry_schema": "telemetry_schema.json",
+    "histogram_server": "localhost:9898",
+    "storage_path": "./storage",
+    "upload_path": "./upload",
+    "max_uncompressed": 1048576,
+    "memory_constraint": 1000,
+    "compression_preset": 0
+}
