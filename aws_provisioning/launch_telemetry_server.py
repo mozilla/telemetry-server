@@ -58,7 +58,7 @@ class TelemetryServerLauncher(Launcher):
     def create_logrotate_config(self, lr_file, target_log, create=True):
         sudo("echo '%s {' > %s" % (target_log, lr_file))
         sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
-        sudo("echo '    rotate 10' >> {0}".format(lr_file))
+        sudo("echo '    rotate 5' >> {0}".format(lr_file))
         sudo("echo '    daily' >> {0}".format(lr_file))
         sudo("echo '    compress' >> {0}".format(lr_file))
         sudo("echo '    missingok' >> {0}".format(lr_file))
