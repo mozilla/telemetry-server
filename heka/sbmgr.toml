@@ -1,0 +1,6 @@
+ip_address          = "127.0.0.1:5565"
+[signer]
+    name         = "telemetry"
+    hmac_hash    = "md5"
+    hmac_key     = "TODO change on deploy"
+    version      = 0

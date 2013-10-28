@@ -1,0 +1,28 @@
+{
+  "incoming_bucket": "telemetry-incoming-v1",
+  "incoming_queue": "telemetry-incoming-v1",
+  "incoming_batch_size": 8,
+  "publish_bucket": "telemetry-published-v1",
+  "image": "ami-76831f46",
+  "skip_conversion": false,
+  "loop": true,
+  "instance_type": "c1.xlarge",
+  "ssl_key_name": "mreid",
+  "ssl_key_path": "~/.ssh/aws/mreid.pem",
+  "ssl_retries": 10,
+  "ssl_user": "ubuntu",
+  "security_groups": ["telemetry"],
+  "region": "us-west-2",
+  "placement": "us-west-2c",
+  "name": "telemetry-process-incoming-v1-1",
+  "default_tags": {
+    "Owner": "mreid",
+    "Application": "telemetry-server"
+  },
+  "ephemeral_map": {
+    "/dev/xvdb": "ephemeral0",
+    "/dev/xvdc": "ephemeral1",
+    "/dev/xvdd": "ephemeral2",
+    "/dev/xvde": "ephemeral3"
+  }
+}

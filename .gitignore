@@ -3,6 +3,7 @@
 *.bz2
 *.swp
 *.swo
+*.out
 .idea/
 data/
 histogram_cache/

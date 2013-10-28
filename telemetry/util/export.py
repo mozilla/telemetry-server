@@ -254,7 +254,7 @@ def main(argv=None):
         uploadables = exporter.find_uploadables(args.data_dir)
         if len(uploadables) == 0:
             print "No files to export yet.  Sleeping for a while..."
-            time.sleep(60)
+            time.sleep(10)
             continue
 
         print "Processing", len(uploadables), "uploadables:"

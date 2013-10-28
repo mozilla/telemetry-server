@@ -5,7 +5,7 @@ The basic idea is to partition the data by a number of useful dimensions, then
 use the dimensions to form a directory hierarchy. Finally, the actual
 submissions will be stored in compressed files that may be read and processed
 in parallel. The files in a directory will be split into manageable sized
-pieces. Each line in the file will be of the form <uuid><tab><json>.  See
+pieces. Each line in the file will be of the form `<uuid><tab><json>`.  See
 [StorageFormat](StorageFormat.md) for more details about the contents of the 
 files.
 
@@ -92,7 +92,7 @@ This is the approach that will be used.
 
 ### `telemetry_schema.json`
 
-The schema is defined in [telemetry_schema.json](telemetry_schema.json) and
+The schema is defined in [telemetry_schema.json](../telemetry_schema.json) and
 contains an array of `dimensions` that are used to determine what is allowed
 at each level of the storage hierarchy.  Currently supported values are:
 - String value `*`: allow any value
@@ -108,7 +108,7 @@ that the "long tail" of dimension values does not cause a huge number of small
 files to be created.
 
 Code for handling a schema is found in the `TelemetrySchema` class
-in [telemetry_schema.py](telemetry_schema.py)
+in [telemetry_schema.py](../telemetry_schema.py)
 
 Considered, but unused approaches
 ---------------------------------
