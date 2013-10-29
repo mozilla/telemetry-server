@@ -4,6 +4,5 @@
 *.swp
 *.swo
 .idea/
-data/
 histogram_cache/
 histogram_tools.py
