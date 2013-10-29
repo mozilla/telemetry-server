@@ -40,7 +40,7 @@ Parameters:
   sourcesBucket:
     Description:              Bucket containing sources and templates
     Type:                     String
-    Default:                  telemetry-code
+    Default:                  jonasfj-telemetry-code
 
   sourcesVersion:
     Description:              Version of sources to load from sources bucket
@@ -90,6 +90,8 @@ Resources:
   # IAM role for analysis workers
   workerIAMRole:
     Type:                     AWS::IAM::Role
+    DependsOn:
+      - telemetryAnalysisInput
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -115,53 +117,63 @@ Resources:
                                 {Ref: sourcesVersion},
                                 /analysis-worker.tar.gz
                               ]]}
+        # Grant read access to telemetry-published-v1
+        - PolicyName:         telemetryPublishedAccess
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - 'arn:aws:s3:::telemetry-published-v1/*'
+        - PolicyName:         inputQueueAccess
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 'sqs:*'
+                Resource:
+                  - {'Fn::GetAtt': [telemetryAnalysisInput, Arn]}
+        - PolicyName:         analysisBucketAccess
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:*'
+                Resource:
+                  - 'arn:aws:s3:::telemetry-published-v1'
+                  - 'arn:aws:s3:::telemetry-published-v1/*'
 
   # IAM instance profile granting workerIAMRole to workers
   workerInstanceProfile:
     Type:                     AWS::IAM::InstanceProfile
+    DependsOn:
+      - workerIAMRole
     Properties:
       Path:                   /telemetry/analysis/
       Roles:
-        - workerIAMRole
+        - {Ref: workerIAMRole}
+
+  # Security group for service server, http and ssh (well, disable ssh later)
+  workerSecurityGroup:
+    Type:                     AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:       telemetry-analysis worker security group
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
 
   # Worker launch configuration, decides how a worker is launched.
   workerLaunchConfig:
     Type:                     AWS::AutoScaling::LaunchConfiguration
     DependsOn:
-      - sourcesBucketCfnPolicy
+      - workerInstanceProfile
+      - telemetryAnalysisInput
+      - workerSecurityGroup
     Metadata:
       Comment:                telemetry-analysis worker
-      AWS::CloudFormation::Init:
-        config:
-          sources:
-            /home/ubuntu:     {'Fn::Join': ["",
-                                [
-                                  "http://",
-                                  {Ref: sourcesBucket},
-                                  .s3.amazonaws.com/v,
-                                  {Ref: sourcesVersion},
-                                  /analysis-worker.tar.gz
-                                ]
-                              ]}
-          commands:
-            run:
-              command: {'Fn::Join': [" ", [
-                "python",
-                "manager.py",
-                "-k",
-                {Ref: workerKeys},
-                "-s",
-                {'Fn::GetAtt': [workerKeys, SecretAccessKey]},
-                "-w",
-                ".........",
-                "-q",
-                {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
-              ]]}
-              cwd:            '/home/ubuntu'
-              ignoreErrors:   false
     Properties:
       KeyName:                  {Ref: keyName}
-      SpotPrice:                {Ref: spotPrice}
+      #SpotPrice:                {Ref: spotPrice}
       ImageId:                  {'Fn::FindInMap': [
                                     'regionToAMI',
                                     {Ref: 'AWS::Region'},
@@ -169,30 +181,26 @@ Resources:
                                 ]}
       InstanceType:             {Ref: instanceType}
       IamInstanceProfile:       {Ref: workerInstanceProfile}
-      UserData:                 {'Fn::Base64': {'Fn::Join': ['', [
-              "#!/bin/bash\n",
-              "sudo apt-get -y install python-setuptools\n",
-              "sudo easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
-              "cfn-init ",
-              "  --stack ",       {Ref: 'AWS::StackName'},
-              "  --resource workerLaunchConfig ",
-              "  --access-key ",  {Ref: "cfnKeys"},
-              "  --secret-key ",  {'Fn::GetAtt': [cfnKeys, SecretAccessKey]},
-              "  --region ",      {Ref: 'AWS::Region'}, "\n"
-            ]
-          ]
-        }
-      }
+      SecurityGroups:
+        - {Ref: workerSecurityGroup}
       UserData:       {'Fn::Base64': {'Fn::Join': ['', [
-              "#!/bin/bash -x\n",
-              "sudo apt-get -y python-yaml python-boto xz-utils s3cmd",
-              "cfn-init ",
-              "  --stack ",       {Ref: 'AWS::StackName'},
-              "  --resource workerLaunchConfig ",
-              "  --access-key ",  {Ref: "cfnKeys"},
-              "  --secret-key ",  {'Fn::GetAtt': [cfnKeys, SecretAccessKey]},
-              "  --region ",      {Ref: 'AWS::Region'}, "\n",
-              "cfn-signal -e $? '", {Ref: "MyWaitHandle"}, "'\n"
+              "#!/bin/bash\n",
+              "sudo apt-get -y install python-pip\n",
+              "sudo pip install --upgrade boto\n",
+              "cd /home/ubuntu\n",
+              "python - << END\n",
+              "from boto.s3 import connect_to_region\n",
+              "s3 = connect_to_region('", {Ref: 'AWS::Region'} ,"')\n",
+              "b = s3.get_bucket('", {Ref: sourcesBucket}, "', validate = False)\n",
+              "k = b.get_key('v", {Ref: sourcesVersion}, "/analysis-worker.tar.gz')\n",
+              "k.get_contents_to_filename('sources.tar.gz')\n",
+              "END\n",
+              "tar -xzf sources.tar.gz\n",
+              "mkdir -p /mnt/work/\n",
+              "chown ubuntu /mnt/work/\n",
+              "sudo -u ubuntu python  -q '",
+                {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]},
+                "' -w /mnt/work/\n"
             ]
           ]
         }
@@ -202,16 +210,20 @@ Resources:
   # polices, the scaling policies are activated by CloudWatch alarms.
   workerAutoScaleGroup:
     Type:                       AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - workerLaunchConfig
     Properties:
       AvailabilityZones:        {'Fn::GetAZs': ''}
       LaunchConfigurationName:  {Ref: workerLaunchConfig}
-      MinSize:                  0
-      MaxSize:                  20
+      MinSize:                  1
+      MaxSize:                  1
 
   # Scaling policies, these are sort of actions that can be executed by a
   # CloudWatch alarm
   workerScaleUpPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
+    DependsOn:
+      - workerAutoScaleGroup
     Properties:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
@@ -220,6 +232,8 @@ Resources:
 
   workerQuickStartPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
+    DependsOn:
+      - workerAutoScaleGroup
     Properties:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
@@ -228,6 +242,8 @@ Resources:
 
   workerScaleDownPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
+    DependsOn:
+      - workerAutoScaleGroup
     Properties:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
@@ -236,6 +252,8 @@ Resources:
 
   workerQuickKillPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
+    DependsOn:
+      - workerAutoScaleGroup
     Properties:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
@@ -245,6 +263,9 @@ Resources:
   # CloudWatch alarms, these execute scaling policies
   manyMessagesAddedAlarm:
     Type:                       AWS::CloudWatch::Alarm
+    DependsOn:
+      - telemetryAnalysisInput
+      - workerQuickStartPolicy
     Properties:
       AlarmDescription:         Scale up if 100+ message are added at once
       Namespace:                AWS/SQS
@@ -253,7 +274,7 @@ Resources:
         - Name:     QueueName
           Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
       Statistic:                Sum
-      Period:                   900
+      Period:                   60
       EvaluationPeriods:        1
       Threshold:                100
       ComparisonOperator:       GreaterThanThreshold
@@ -262,6 +283,9 @@ Resources:
 
   tooManyMessagesAlarm:
     Type:                       AWS::CloudWatch::Alarm
+    DependsOn:
+      - telemetryAnalysisInput
+      - workerScaleUpPolicy
     Properties:
       AlarmDescription:         Scale up if more than 10 messages
       Namespace:                AWS/SQS
@@ -279,6 +303,9 @@ Resources:
 
   notEnoughMessagesAlarm:
     Type:                       AWS::CloudWatch::Alarm
+    DependsOn:
+      - telemetryAnalysisInput
+      - workerScaleDownPolicy
     Properties:
       AlarmDescription:         Scale down, if not enought messages
       Namespace:                AWS/SQS
@@ -296,6 +323,9 @@ Resources:
 
   totalStarvationAlarm:
     Type:                       AWS::CloudWatch::Alarm
+    DependsOn:
+      - telemetryAnalysisInput
+      - workerQuickKillPolicy
     Properties:
       AlarmDescription:         Kill lot of workers if they poll to much
       Namespace:                AWS/SQS

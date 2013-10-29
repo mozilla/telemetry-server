@@ -1,11 +1,11 @@
-import argparse
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 from boto import sqs
 from boto.sqs.jsonmessage import JSONMessage
 from uuid import uuid4
 import json
-from telemetry_schema import TelemetrySchema
+from telemetry.telemetry_schema import TelemetrySchema
 import sys
 
 TASK_TIMEOUT = 60 * 60
@@ -28,7 +28,7 @@ class AnalysisJob:
         # S3 region of operation
         self.aws_region = "us-west-2"
         self.task_size_limit = 400 * 1024 * 1024
-        self.sqs_input_name = "telemetry-analysis-stack-telemetryAnalysisInput-1FD6PP5J6FY83" #"telemetry-analysis-input"
+        self.sqs_input_name = cfg.sqs_queue
 
     def get_filtered_files(self):
         """ Get tuples of name and size for all input files """
@@ -59,6 +59,30 @@ class AnalysisJob:
             if count % 5000 == 0:
                 print "%i files listed with %i selected" % (count, selected)
         conn.close()
+
+    def list_partitions(self, bucket, prefix='', level=0, schema=None, include_keys=False):
+        #print "Listing...", prefix, level
+        if schema is not None:
+            allowed_values = schema.sanitize_allowed_values()
+        delimiter = '/'
+        if level > 3:
+            delimiter = '.'
+        for k in bucket.list(prefix=prefix, delimiter=delimiter):
+            partitions = k.name.split("/")
+            if level > 3:
+                # split the last couple of partition components by "." instead of "/"
+                partitions.extend(partitions.pop().split(".", 2))
+            if schema is None or schema.is_allowed(partitions[level], allowed_values[level]):
+                if level >= 5:
+                    if include_keys:
+                        for f in bucket.list(prefix=k.name):
+                            yield f
+                    else:
+                        yield k.name
+                else:
+                    for prefix in self.list_partitions(bucket, k.name, level + 1, schema, include_keys):
+                        yield prefix
+
 
     def generate_tasks(self):
         """ Generates SQS tasks, we batch small files into a single task """
@@ -122,9 +146,6 @@ class AnalysisJob:
         self.put_sqs_tasks()
         print "Uploaded with job_id: %s" % self.job_id
 
-    def run(self):
-        self.create_spot_request()
-
     def upload_job_bundle(self):
         """ Upload job bundle to S3 """
         conn = S3Connection(self.aws_key, self.aws_secret_key)
@@ -136,15 +157,39 @@ class AnalysisJob:
 
 
 def main():
-    p = argparse.ArgumentParser(description='Run analysis job', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument("job_bundle", help="The analysis bundle to run")
-    p.add_argument("-k", "--aws-key", help="AWS Key")
-    p.add_argument("-s", "--aws-secret-key", help="AWS Secret Key")
-    p.add_argument("-f", "--input-filter", help="File containing filter spec", required=True)
-    p.add_argument("-q", "--target-queue", help="SQS queue for communicating finished tasks", required=True)
+    p = ArgumentParser(
+        description = 'Run analysis job',
+        formatter_class = ArgumentDefaultsHelpFormatter
+    )
+    p.add_argument(
+        "job_bundle",
+        help = "The analysis bundle to run"
+    )
+    p.add_argument(
+        "-k", "--aws-key",
+        help = "AWS Key"
+    )
+    p.add_argument(
+        "-s", "--aws-secret-key",
+        help = "AWS Secret Key"
+    )
+    p.add_argument(
+        "-f", "--input-filter",
+        help = "File containing filter spec",
+        required = True
+    )
+    p.add_argument(
+        "-t", "--target-queue",
+        help = "SQS queue for communicating finished tasks",
+        required = True
+    )
+    p.add_argument(
+        "-q", "--sqs-queue",
+        help = "SQS input queue for analysis worker stack",
+        required = True
+    )
     job = AnalysisJob(p.parse_args())
     job.setup()
-
 
 if __name__ == "__main__":
     sys.exit(main())

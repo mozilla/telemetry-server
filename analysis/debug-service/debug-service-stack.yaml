@@ -113,8 +113,8 @@ Resources:
                   - 'ec2:RunInstances'
                   - 'ec2:DescribeInstances'
                   - 'ec2:TerminateInstances'
-                  - '*'     # this is definitely suboptimal, but it works
-                Resource:     '*' # I think this works, probably not best :)
+                  - '*'     # try ec2:*
+                Resource:     '*' # try: arn:aws:ec2:*
         - PolicyName:         putObjectTemporaryBucketPolicy
           PolicyDocument:
             Statement:
