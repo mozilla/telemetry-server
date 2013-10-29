@@ -116,7 +116,7 @@ bool ProcessFile(const boost::filesystem::path& aName,
         / gMetrics.mProcessingTime.mValue;
     }
     cout << "done processing file:" << aName.filename()
-      << " success:" <<  gMetrics.mRecordsProcessed.mValue
+      << " processed:" <<  gMetrics.mRecordsProcessed.mValue
       << " failures:" << gMetrics.mRecordsFailed.mValue
       << " time:" << gMetrics.mProcessingTime.mValue
       << " throughput (MiB/s):" << gMetrics.mThroughput.mValue
