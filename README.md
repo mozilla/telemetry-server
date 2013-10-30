@@ -129,15 +129,15 @@ convert - Build instructions (from the telemetry-server root)
 
 Configuring the converter
 ----
-heka_server (string) - Hostname:port of the histogram.json web service.
-histogram_server (string) - Hostname:port of the histogram.json web service.
-telemetry_schema (string) - JSON file containing the dimension mapping.
-histogram_server (string) - Hostname:port of the histogram.json web service.
-storage_path (string) - Converter output directory
-upload_path (string) - Staging directory for S3 uploads.
-max_uncompressed (int) - Maximum uncompressed size of a telemetry record.
-memory_constraint (int) - 
-compression_preset (int) -
+`heka_server` (string) - Hostname:port of the heka log/stats service.
+`histogram_server` (string) - Hostname:port of the histogram.json web service.
+`telemetry_schema` (string) - JSON file containing the dimension mapping.
+`histogram_server` (string) - Hostname:port of the histogram.json web service.
+`storage_path` (string) - Converter output directory
+`upload_path` (string) - Staging directory for S3 uploads.
+`max_uncompressed` (int) - Maximum uncompressed size of a telemetry record.
+`memory_constraint` (int) -
+`compression_preset` (int) -
 
     {
         "heka_server": "localhost:5565",
@@ -163,7 +163,7 @@ Running the converter
 *in the release directory*
 
     mkdir input
-    ./convert convert.json input.txt 
+    ./convert convert.json input.txt
 
     # input.txt should contain a list of files to process (newline delimited)
     # i.e. /<path to telemetry-server>/release/input/telemetry1.log
@@ -186,7 +186,7 @@ With the histogram server running:
 
 Ubuntu Notes
 ----
-apt-get install cmake libprotoc-dev zlib1g-dev libboost-system1.53-dev libboost-system1.53-dev libboost-system1.53-dev 
+apt-get install cmake libprotoc-dev zlib1g-dev libboost-system1.53-dev libboost-system1.53-dev libboost-system1.53-dev
                libboost-filesystem1.53-dev libboost-thread1.53-dev libboost-test1.53-dev
 
 
