@@ -30,7 +30,13 @@ class AnalysisJob:
         self.task_size_limit = 400 * 1024 * 1024
         self.sqs_input_name = cfg.sqs_queue
 
+
     def get_filtered_files(self):
+        conn = S3Connection(self.aws_key, self.aws_secret_key)
+        bucket = conn.get_bucket(self.input_bucket)
+        return self.list_partitions(bucket)
+
+    def get_filtered_files_old(self):
         """ Get tuples of name and size for all input files """
         # Setup some auxiliary functions
         allowed_values = self.input_filter.sanitize_allowed_values()
@@ -60,10 +66,9 @@ class AnalysisJob:
                 print "%i files listed with %i selected" % (count, selected)
         conn.close()
 
-    def list_partitions(self, bucket, prefix='', level=0, schema=None, include_keys=False):
+    def list_partitions(self, bucket, prefix='', level=0):
         #print "Listing...", prefix, level
-        if schema is not None:
-            allowed_values = schema.sanitize_allowed_values()
+        allowed_values = self.input_filter.sanitize_allowed_values()
         delimiter = '/'
         if level > 3:
             delimiter = '.'
@@ -72,16 +77,13 @@ class AnalysisJob:
             if level > 3:
                 # split the last couple of partition components by "." instead of "/"
                 partitions.extend(partitions.pop().split(".", 2))
-            if schema is None or schema.is_allowed(partitions[level], allowed_values[level]):
+            if self.input_filter.is_allowed(partitions[level], allowed_values[level]):
                 if level >= 5:
-                    if include_keys:
-                        for f in bucket.list(prefix=k.name):
-                            yield f
-                    else:
-                        yield k.name
+                    for f in bucket.list(prefix=k.name):
+                        yield (f.key, f.size)
                 else:
-                    for prefix in self.list_partitions(bucket, k.name, level + 1, schema, include_keys):
-                        yield prefix
+                    for k, s in self.list_partitions(bucket, k.name, level + 1):
+                        yield (k, s)
 
 
     def generate_tasks(self):
@@ -90,6 +92,7 @@ class AnalysisJob:
         taskid = 0
         taskfiles = []
         tasksize = 0
+        total_size_of_all = 0
         for key, size in self.get_filtered_files():
             # If the task have reached desired size we yield it
             # Note, as SQS messages are limited to 65 KiB we limit tasks to
@@ -107,6 +110,8 @@ class AnalysisJob:
                     'files':            taskfiles,
                     'size':             tasksize
                 }
+                total_size_of_all += tasksize
+                print "%i tasks created acc. size: %s" % (taskid, total_size_of_all)
                 taskid += 1
                 taskfiles = []
                 tasksize = 0
@@ -115,13 +120,14 @@ class AnalysisJob:
         if len(taskfiles) > 0:
             taskfiles =  [f for f,s in sorted(taskfiles, key=lambda (f,s): s)]
             yield {
-                'id':               uid + str(taskid),
+                'id':               uid + "/" + str(taskid),
                 'code':             self.s3_code_path,
                 'target-queue':     self.target_queue,
                 'files':            taskfiles,
                 'size':             tasksize
             }
-        print "%i tasks created" % taskid
+        print "Finished:"
+        print "%i tasks created total size: %s" % (taskid, total_size_of_all + tasksize)
 
     def put_sqs_tasks(self):
         """ Create an SQS tasks for this analysis job """

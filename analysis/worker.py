@@ -6,7 +6,6 @@ from traceback import print_exc
 from subprocess import Popen, PIPE
 from zipimport import zipimporter
 from utils import mkdirp
-from messaging import Message, FinishedMessage
 from boto.s3.connection import S3Connection
 from shutil import rmtree, copyfile, copytree
 from time import sleep
@@ -49,8 +48,7 @@ class AnalysisWorker(Process):
 
         # zipimport job bundle
         proc_module = zipimporter(job_bundle_target).load_module("processor")
-        self.processor = proc_module.Processor()
-        self.processor.set_output_folder(self.output_folder)
+        self.processor = proc_module.Processor(self.output_folder)
 
     def run(self):
         try:
@@ -68,8 +66,7 @@ class AnalysisWorker(Process):
 
     def finish(self):
         # Ask processor to write output
-        self.processor.write_output()
-        self.processor.clear_state()
+        self.processor.flush()
 
         # Put output files to uploaders
         for path, folder, files in os.walk(self.output_folder):
@@ -81,44 +78,10 @@ class AnalysisWorker(Process):
         # Put finished message
         self.output_queue.put(True)
 
-
     def process_file(self, virtual_name, path):
-        # Find dimensions
-        dims = virtual_name.split('/')
-        dims += dims.pop().split('.')[:2]
-
-        self.open_compressor(path)
-        line_nb = 0
-        for line in self.decompressor.stdout:
-            line_nb += 1
-            try:
-                uid, value = line.split("\t", 1)
-                self.processor.scan(uid, dims, value)
-            except:
-                print >> sys.stderr, ("Bad input line: %i of %s" %
-                                      (line_nb, path))
-                print_exc(file = sys.stderr)
-        self.close_compressor()
+        errors = self.processor.process(virtual_name, path)
         os.remove(path)
-
-    def open_compressor(self, path):
-        self.raw_handle = open(path, "rb")
-        self.decompressor = Popen(
-            ['xz', '-d', '-c'],
-            bufsize = 65536,
-            stdin = self.raw_handle,
-            stdout = PIPE,
-            stderr = sys.stderr
-        )
-
-    def close_compressor(self):
-        self.decompressor.stdout.close()
-        self.raw_handle.close()
-        #if self.decompressor.poll() != 0:
-        #    print >> sys.stderr, "decompressor exited: %s" % self.decompressor.returncode
-        #    self.decompressor.kill()
-        self.decompressor = None
-        self.raw_handle = None
+        #TODO: Log errors to Heka
 
 
 def main():

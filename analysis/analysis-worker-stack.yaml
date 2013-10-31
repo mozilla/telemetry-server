@@ -35,7 +35,7 @@ Parameters:
   spotPrice:
     Description:              Spot price for workers
     Type:                     String
-    Default:                  0.1
+    Default:                  0.2
 
   sourcesBucket:
     Description:              Bucket containing sources and templates
@@ -132,8 +132,7 @@ Resources:
               - Effect:       Allow
                 Action:
                   - 'sqs:*'
-                Resource:
-                  - {'Fn::GetAtt': [telemetryAnalysisInput, Arn]}
+                Resource:     '*'
         - PolicyName:         analysisBucketAccess
           PolicyDocument:
             Statement:
@@ -141,8 +140,8 @@ Resources:
                 Action:
                   - 's3:*'
                 Resource:
-                  - 'arn:aws:s3:::telemetry-published-v1'
-                  - 'arn:aws:s3:::telemetry-published-v1/*'
+                  - 'arn:aws:s3:::jonasfj-telemetry-analysis'
+                  - 'arn:aws:s3:::jonasfj-telemetry-analysis/*'
 
   # IAM instance profile granting workerIAMRole to workers
   workerInstanceProfile:
@@ -173,7 +172,7 @@ Resources:
       Comment:                telemetry-analysis worker
     Properties:
       KeyName:                  {Ref: keyName}
-      #SpotPrice:                {Ref: spotPrice}
+      SpotPrice:                {Ref: spotPrice}
       ImageId:                  {'Fn::FindInMap': [
                                     'regionToAMI',
                                     {Ref: 'AWS::Region'},
@@ -198,7 +197,7 @@ Resources:
               "tar -xzf sources.tar.gz\n",
               "mkdir -p /mnt/work/\n",
               "chown ubuntu /mnt/work/\n",
-              "sudo -u ubuntu python  -q '",
+              "sudo -u ubuntu python manager.py -q '",
                 {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]},
                 "' -w /mnt/work/\n"
             ]
@@ -213,10 +212,11 @@ Resources:
     DependsOn:
       - workerLaunchConfig
     Properties:
-      AvailabilityZones:        {'Fn::GetAZs': ''}
+      AvailabilityZones:
+        - 'us-west-2c'            #{'Fn::GetAZs': ''}
       LaunchConfigurationName:  {Ref: workerLaunchConfig}
-      MinSize:                  1
-      MaxSize:                  1
+      MinSize:                  0
+      MaxSize:                  500
 
   # Scaling policies, these are sort of actions that can be executed by a
   # CloudWatch alarm
@@ -228,7 +228,7 @@ Resources:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
       Cooldown:                 60
-      ScalingAdjustment:        1
+      ScalingAdjustment:        50
 
   workerQuickStartPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
@@ -274,7 +274,7 @@ Resources:
         - Name:     QueueName
           Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
       Statistic:                Sum
-      Period:                   60
+      Period:                   120
       EvaluationPeriods:        1
       Threshold:                100
       ComparisonOperator:       GreaterThanThreshold
