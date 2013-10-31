@@ -30,7 +30,7 @@ class Launcher(object):
 
     def get_arg_parser(self):
         parser = argparse.ArgumentParser(description='Launch AWS EC2 instances')
-        parser.add_argument("config", help="JSON File contianing configuration", type=file)
+        parser.add_argument("config", help="JSON File containing configuration", type=file)
         parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
         parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
         parser.add_argument("-n", "--instance-name", help="Overrides the 'name' specified in the configuration file")
