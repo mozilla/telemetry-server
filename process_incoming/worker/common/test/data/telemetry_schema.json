@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "dimensions": [
+    {
+      "field_name": "submission_date",
+      "allowed_values": "*"
+    },
+    {
+      "field_name": "reason",
+      "allowed_values": ["idle-daily","saved-session"]
+    },
+    {
+      "field_name": "appName",
+      "allowed_values": ["Firefox","Fennec","Thunderbird"]
+    },
+    {
+      "field_name": "appUpdateChannel",
+      "allowed_values": ["release", "beta", "nightly", "aurora"]
+    },
+    {
+      "field_name": "appVersion",
+      "allowed_values": "*"
+    },
+    {
+      "field_name": "appBuildID",
+      "allowed_values": "*"
+    },
+    {
+      "field_name": "memsize",
+      "allowed_values": {"min":448, "max":500}
+    }
+  ]
+}
+

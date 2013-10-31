@@ -61,7 +61,7 @@ def unpack(filename, raw=False, verbose=False):
         data = fin.read(len_data)
         error = None
         if not raw:
-            if ord(data[0]) == 0x1f and ord(data[1]) == 0x8b:
+            if len(data) > 1 and ord(data[0]) == 0x1f and ord(data[1]) == 0x8b:
                 # Data is gzipped, uncompress it:
                 try:
                     reader = StringIO.StringIO(data)

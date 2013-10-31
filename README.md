@@ -102,6 +102,97 @@ Contains the multi-process version of the data-transformation code. This is
 used to download incoming data (as received by the HTTP server), validate and
 convert it, then publish the results back to S3.
 
+`process_incoming/worker`
+----
+Contains the C++ data validation and conversion routines.
+
+Prerequisites
+----
+* Clang 3.1 or GCC 4.7.0 or Visual Studio 10
+* CMake (2.8.7+) - http://cmake.org/cmake/resources/software.html
+* Boost (1.51.0) - http://www.boost.org/users/download/
+* zlib
+* OpenSSL
+* Protobuf
+
+Optional (used for documentation)
+----
+* Graphviz (2.28.0) - http://graphviz.org/Download..php
+* Doxygen (1.8+)- http://www.stack.nl/~dimitri/doxygen/download.html#latestsrc
+
+convert - Build instructions (from the telemetry-server root)
+----
+    mkdir release
+    cd release
+    cmake -DCMAKE_BUILD_TYPE=release ..
+    make
+
+Configuring the converter
+----
+* `heka_server` (string) - Hostname:port of the heka log/stats service.
+* `histogram_server` (string) - Hostname:port of the histogram.json web service.
+* `telemetry_schema` (string) - JSON file containing the dimension mapping.
+* `histogram_server` (string) - Hostname:port of the histogram.json web service.
+* `storage_path` (string) - Converter output directory
+* `upload_path` (string) - Staging directory for S3 uploads.
+* `max_uncompressed` (int) - Maximum uncompressed size of a telemetry record.
+* `memory_constraint` (int) -
+* `compression_preset` (int) -
+
+```
+    {
+        "heka_server": "localhost:5565",
+        "telemetry_schema": "telemetry_schema.json",
+        "histogram_server": "localhost:9898",
+        "storage_path": "storage",
+        "upload_path": "upload",
+        "max_uncompressed": 1048576,
+        "memory_constraint": 1000,
+        "compression_preset": 0
+    }
+```
+
+
+Setting up/running the histogram server
+---
+    cd telemetry
+    ../bin/get_histogram_tools.sh
+    cd ..
+    python -m http.histogram_server
+
+Running the converter
+----
+*in the release directory*
+
+    mkdir input
+    ./convert convert.json input.txt
+
+    # input.txt should contain a list of files to process (newline delimited)
+    # i.e. /<path to telemetry-server>/release/input/telemetry1.log
+
+*from another shell, in the release directory*
+
+    cp ../process_incoming/worker/common/test/data/telemetry1.log input
+
+Without the histogram server running it will produce something like this:
+
+    processing file:"telemetry1.log"
+    LoadHistogram - connect: Connection refused
+    ConvertHistogramData - histogram not found: http://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302
+    done processing file:"telemetry1.log" processed:1 failures:1 time:0.001871 throughput (MiB/s):9.3563 data in (B):18356 data out (B):0
+
+With the histogram server running:
+
+    processing file:"telemetry1.log"
+    done processing file:"telemetry1.log" processed:1 failures:0 time:0.013622 throughput (MiB/s):1.2851 data in (B):18356 data out (B):45909
+
+Ubuntu Notes
+----
+```
+apt-get install cmake libprotoc-dev zlib1g-dev libboost-system1.53-dev libboost-system1.53-dev libboost-system1.53-dev
+               libboost-filesystem1.53-dev libboost-thread1.53-dev libboost-test1.53-dev
+```
+
 `mapreduce/job.py`
 --------
 Contains the [MapReduce][6] code. This is the interface for running jobs on

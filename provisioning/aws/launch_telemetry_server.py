@@ -46,11 +46,30 @@ class TelemetryServerLauncher(Launcher):
     def start_suid_script(self, c_file, username):
         sudo("echo 'setuid {1}' > {0}".format(c_file, username))
         sudo("echo 'setgid {1}' >> {0}".format(c_file, username))
+        # Set the ulimit for # open files in the upstart scripts (since the
+        # ones set in limits.conf don't seem to apply here)
+        sudo("echo 'limit nofile 10000 40000' >> " + c_file)
         sudo("echo 'script' >> " + c_file)
 
     def end_suid_script(self, c_file):
         sudo("echo 'end script' >> {0}".format(c_file))
         sudo("echo 'respawn' >> {0}".format(c_file))
+
+    def create_logrotate_config(self, lr_file, target_log, create=True):
+        sudo("echo '%s {' > %s" % (target_log, lr_file))
+        sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
+        sudo("echo '    rotate 5' >> {0}".format(lr_file))
+        sudo("echo '    daily' >> {0}".format(lr_file))
+        sudo("echo '    compress' >> {0}".format(lr_file))
+        sudo("echo '    missingok' >> {0}".format(lr_file))
+        if create:
+            sudo("echo '    create 640 {1} {1}' >> {0}".format(lr_file, self.ssl_user))
+        else:
+            sudo("echo '    copytruncate' >> {0}".format(lr_file))
+        sudo("echo '}' >> " + lr_file)
+        with settings(warn_only=True):
+            # This will warn if there's no file there.
+            sudo("logrotate -f {0}".format(lr_file))
 
     def post_install(self, instance):
         # Install some more:
@@ -82,19 +101,11 @@ class TelemetryServerLauncher(Launcher):
         run("echo 'Soft limit:'; ulimit -S -n")
         run("echo 'Hard limit:'; ulimit -H -n")
 
-        # Setup logrotate for the stats log
-        lr_file = "/etc/logrotate.d/telemetry"
-        sudo("echo '/var/log/telemetry/telemetry-server.log {' > " + lr_file)
-        sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
-        sudo("echo '    rotate 10' >> {0}".format(lr_file))
-        sudo("echo '    daily' >> {0}".format(lr_file))
-        sudo("echo '    compress' >> {0}".format(lr_file))
-        sudo("echo '    missingok' >> {0}".format(lr_file))
-        sudo("echo '    create 640 {1} {1}' >> {0}".format(lr_file, self.ssl_user))
-        sudo("echo '}' >> " + lr_file)
-        with settings(warn_only=True):
-            # This will warn if there's no file there.
-            sudo("logrotate -f /etc/logrotate.d/telemetry")
+        # Setup logrotate for the stats log and process-incoming log
+        self.create_logrotate_config("/etc/logrotate.d/telemetry",
+                "/var/log/telemetry/telemetry-server.log")
+        self.create_logrotate_config("/etc/logrotate.d/telemetry-incoming",
+                "/var/log/telemetry/telemetry-incoming.out", False)
 
         # Create startup scripts:
         code_base = "/home/" + self.ssl_user + "/telemetry-server"
@@ -103,12 +114,25 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '    cd {1}/server' >> {0}".format(c_file, code_base))
         sudo("echo '    /usr/local/bin/node ./server.js ./server_config.json >> /var/log/telemetry/telemetry-server.out' >> {0}".format(c_file))
         self.end_suid_script(c_file)
+        sudo("echo 'start on runlevel [2345]' >> {0}".format(c_file))
+        sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
 
         c_file = "/etc/init/telemetry-export.conf"
+        base_export_command = "/usr/bin/python -u ./export.py -d {0}/data -p '^telemetry.log.*[.]finished$' -k '{1}' -s '{2}' -r '{3}' -b '{4}' -q '{5}' --remove-file".format(base_dir, self.aws_key, self.aws_secret_key, self.config["region"], self.config.get("incoming_bucket", "telemetry-incoming"), self.config.get("incoming_queue", "telemetry-incoming"))
+
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
-        sudo("echo \"    /usr/bin/python -u ./export.py -d {1}/data -p '^telemetry.log.*[.]finished$' -k '{2}' -s '{3}' -r '{4}' -b '{5}' -q '{6}' --remove-files --loop >> /var/log/telemetry/telemetry-export.out\" >> {0}".format(c_file, base_dir, self.aws_key, self.aws_secret_key, self.config["region"], self.config.get("incoming_bucket", "telemetry-incoming"), self.config.get("incoming_queue", "telemetry-incoming")))
+        sudo("echo \"    {1} --loop >> /var/log/telemetry/telemetry-export.out\" >> {0}".format(c_file, base_export_command))
         self.end_suid_script(c_file)
+        # after we receive "stop", run once more in non-looping mode to make
+        # sure we exported everything.
+        sudo("echo 'post-stop script' >> {0}".format(c_file))
+        sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
+        sudo("echo \"    {1} >> /var/log/telemetry/telemetry-export.out\" >> {0}".format(c_file, base_export_command))
+        sudo("echo 'end script' >> {0}".format(c_file))
+        # Start/stop this in lock step with telemetry-server
+        sudo("echo 'start on started telemetry-server' >> {0}".format(c_file))
+        sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
 
         # Install a specific aws_incoming.json to use
         process_incoming_config = self.config.get("process_incoming_config", "aws_incoming.json")
@@ -120,6 +144,9 @@ class TelemetryServerLauncher(Launcher):
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
         sudo("echo \"    /usr/bin/python -u process_incoming_queue.py -k '{1}' -s '{2}' ./aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
+        # NOTE: Don't automatically start/stop this service, since we only want
+        #       to start it on "primary" nodes, and we only want to stop it in
+        #       safe parts of the process-incoming code.
         self.end_suid_script(c_file)
 
         c_file = "/etc/init/telemetry-heka.conf"
@@ -127,26 +154,24 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '    cd {1}/heka' >> {0}".format(c_file, code_base))
         sudo("echo \"    /usr/bin/hekad -config heka.toml >> /var/log/telemetry/telemetry-heka.out\" >> {0}".format(c_file))
         self.end_suid_script(c_file)
+        sudo("echo 'kill signal INT' >> {0}".format(c_file))
+        # Start/stop this in lock step with telemetry-server
+        sudo("echo 'start on started telemetry-server' >> {0}".format(c_file))
+        sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
 
     def run(self, instance):
         # Start up HTTP server
         sudo("start telemetry-server")
         print "Telemetry server started"
+        # Note: This also starts up telemetry-export and telemetry-heka due to dependencies.
 
-        # Start up exporter
-        sudo("start telemetry-export")
-        print "Telemetry export started"
-        
         # Start up 'process incoming' only on the primary node
+        # TODO: pass in user-data to set this.
         if self.config.get("primary_server", False):
             sudo("start telemetry-incoming")
             print "Telemetry incoming started"
         else:
             print "Not starting telemetry-incoming since this is not a primary server"
-
-        # Start up heka
-        sudo("start telemetry-heka")
-        print "Heka daemon started"
 
 def main():
     try:

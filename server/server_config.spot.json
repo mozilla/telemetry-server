@@ -1,0 +1,10 @@
+{
+  "motd": " ==== Spot Telemetry Server. Accepting Submissions since 2013. ====",
+  "max_data_lenth": 204800,
+  "max_path_lenth": 10240,
+  "port": 8080,
+  "log_path": "/mnt/telemetry/data",
+  "max_log_age_ms": 120000,
+  "max_log_size": 50000000,
+  "stats_log_file": "/var/log/telemetry/telemetry-server.log"
+}

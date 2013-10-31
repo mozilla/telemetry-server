@@ -16,6 +16,8 @@ from datetime import datetime
 from multiprocessing import Process
 from telemetry.telemetry_schema import TelemetrySchema
 from telemetry.persist import StorageLayout
+import telemetry.util.s3 as s3util
+import telemetry.util.timer as timer
 import subprocess
 from subprocess import Popen, PIPE
 from boto.s3.connection import S3Connection
@@ -101,8 +103,7 @@ class Job:
             fetch_cmd.append("8")
             start = datetime.now()
             result = subprocess.call(fetch_cmd + remote_names, cwd=fetch_cwd)
-            delta = (datetime.now() - start)
-            duration_sec = float(delta.seconds) + float(delta.microseconds) / 1000000
+            duration_sec = timer.delta_sec(start)
             downloaded_bytes = sum([ r["size"] for r in remotes if r["type"] == "remote" ])
             downloaded_mb = float(downloaded_bytes) / 1024.0 / 1024.0
             print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
@@ -200,10 +201,9 @@ class Job:
             conn = S3Connection(self._aws_key, self._aws_secret_key)
             bucket = conn.get_bucket(self._bucket_name)
             for r in remote_files:
-                key = bucket.lookup(r)
-                size = key.size
-                dims = self._input_filter.get_dimensions(".", r)
-                remote = {"type": "remote", "name": r, "size": size, "dimensions": dims}
+                size = r.size
+                dims = self._input_filter.get_dimensions(".", r.name)
+                remote = {"type": "remote", "name": r.name, "size": size, "dimensions": dims}
                 #print "putting", remote, "into partition", min_idx
                 partitions[min_idx].append(remote)
                 sums[min_idx] += size
@@ -239,22 +239,19 @@ class Job:
             # Plain boto should be fast enough to list bucket contents.
             conn = S3Connection(self._aws_key, self._aws_secret_key)
             bucket = conn.get_bucket(self._bucket_name)
-
-            # TODO: potential optimization - if our input filter is reasonably
-            #       restrictive an/or our list of keys is very long, it may be
-            #       a win to use the "prefix" and "delimiter" params.
-            for f in bucket.list():
-                dims = self._input_filter.get_dimensions(".", f.name)
-                #print f.name, "->", ",".join(dims)
-                include = True
-                for i in range(len(self._allowed_values)):
-                    if not self.filter_includes(i, dims[i]):
-                        include = False
-                        break
-                if include:
-                    out_files.append(f.name)
+            start = datetime.now()
+            count = 0
+            # Filter input files by partition. If the filter is reasonably
+            # selective, this can be much faster than listing all files in the
+            # bucket.
+            for f in s3util.list_partitions(bucket, schema=self._input_filter, include_keys=True):
+                count += 1
+                out_files.append(f)
+                if count % 1000 == 0:
+                    print "Listed", count, "so far"
             conn.close()
-            print "Done!"
+            duration = timer.delta_sec(start)
+            print "Listed", len(out_files), "files in", duration, "seconds"
         return out_files
 
     def filter_includes(self, level, value):
@@ -406,8 +403,8 @@ def main():
     job = Job(args)
     start = datetime.now()
     job.mapreduce()
-    delta = (datetime.now() - start)
-    print "All done in %dm %ds %dms" % (delta.seconds / 60, delta.seconds % 60, delta.microseconds / 1000)
+    duration = timer.delta_sec(start)
+    print "All done in %.2fs" % (duration)
 
 if __name__ == "__main__":
     sys.exit(main())
