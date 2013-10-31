@@ -35,7 +35,7 @@ public:
    * @param fileName Fully qualified name of telemetry file.
    * 
    */
-  TelemetrySchema(const boost::filesystem::path& fileName);
+  TelemetrySchema(const boost::filesystem::path& aFilename);
 
   /**
    * Constructs the storage layout path based on the configured schema and 
@@ -45,7 +45,8 @@ public:
    * 
    * @return boost::filesystem::path 
    */
-  boost::filesystem::path GetDimensionPath(const RapidjsonDocument& aDoc);
+  std::string GetDimensionPath(const RapidjsonDocument& aDoc,
+                               uint64_t aTimestamp);
 
   /**
    * Rolls up the internal metric data into the fields element of the provided 
@@ -58,10 +59,11 @@ public:
 
 private:
 
-  struct Metrics {
-      Metrics() :
-        mInvalidStringDimension("Invalid String Dimension"),
-        mInvalidNumericDimension("Invalid Numeric Dimension") { }
+  struct Metrics
+  {
+    Metrics() :
+      mInvalidStringDimension("Invalid String Dimension"),
+      mInvalidNumericDimension("Invalid Numeric Dimension") { }
 
     Metric mInvalidStringDimension;
     Metric mInvalidNumericDimension;
@@ -93,12 +95,19 @@ private:
    */
   void LoadDimensions(const RapidjsonDocument& aDoc);
 
-  static std::string SafePath(const std::string& s);
+  void ProcessStringDimension(const std::shared_ptr<TelemetryDimension>& aTd,
+                              const std::string& aDim,
+                              const std::string& aSeparator,
+                              std::string& aPath);
+
+  static std::string SafePath(const std::string& aStr);
 
   int mVersion;
-  std::vector<std::shared_ptr<TelemetryDimension>> mDimensions;
+  std::vector<std::shared_ptr<TelemetryDimension> > mDimensions;
 
   Metrics mMetrics;
+
+  static const std::string kOther;
 };
 
 }

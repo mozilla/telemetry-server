@@ -18,6 +18,8 @@ using namespace std;
 namespace mozilla {
 namespace telemetry {
 
+const string TelemetrySchema::kOther("other");
+
 ////////////////////////////////////////////////////////////////////////////////
 TelemetrySchema::TelemetryDimension::TelemetryDimension(const RapidjsonValue& aValue)
 {
@@ -66,12 +68,12 @@ TelemetrySchema::TelemetryDimension::TelemetryDimension(const RapidjsonValue& aV
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TelemetrySchema::TelemetrySchema(const boost::filesystem::path& fileName)
+TelemetrySchema::TelemetrySchema(const boost::filesystem::path& aFilename)
 {
-  ifstream ifs(fileName.c_str());
+  ifstream ifs(aFilename.c_str());
   if (!ifs) {
     stringstream ss;
-    ss << "file open failed: " << fileName.string();
+    ss << "file open failed: " << aFilename.string();
     throw runtime_error(ss.str());
   }
   string json((istream_iterator<char>(ifs)), istream_iterator<char>());
@@ -92,47 +94,44 @@ TelemetrySchema::TelemetrySchema(const boost::filesystem::path& fileName)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-boost::filesystem::path
-TelemetrySchema::GetDimensionPath(const RapidjsonDocument& aDoc)
+std::string
+TelemetrySchema::GetDimensionPath(const RapidjsonDocument& aDoc,
+                                  uint64_t aTimestamp)
 {
   const RapidjsonValue& info = aDoc["info"];
   if (!info.IsObject()) {
     throw runtime_error("info element must be an object");
   }
-  static const string kOther("other");
-  boost::filesystem::path p;
+  string p;
   auto end = mDimensions.end();
+
+  string separator = "";
   for (auto it = mDimensions.begin(); it != end; ++it){
+    if (it + 1 == end) {
+      separator = ".";
+    } else if (!p.empty()) {
+      separator = "/";
+    }
+    if (0 == (*it)->mName.compare("submission_date")) {
+      char buf[9];
+      time_t t = aTimestamp / 1000;
+      struct tm* ptm = gmtime(&t);
+      if (0 == strftime(buf, sizeof(buf), "%Y%m%d", ptm)) {
+        buf[0] = 0;
+      }
+      ProcessStringDimension(*it, buf, separator, p);
+      continue;
+    }
     const RapidjsonValue& v = info[(*it)->mName.c_str()];
     if (v.IsString()) {
-      string dim = v.GetString();
-      switch ((*it)->mType) {
-      case TelemetryDimension::kValue:
-        if ((*it)->mValue == "*" || (*it)->mValue == dim) {
-          p /= SafePath(dim);
-        } else {
-          p /= kOther;
-        }
-        break;
-      case TelemetryDimension::kSet:
-        if ((*it)->mSet.find(dim) != (*it)->mSet.end()) {
-          p /= SafePath(dim);
-        } else {
-          p /= kOther;
-        }
-        break;
-      default:
-        // range comparison not allowed on a string
-        ++mMetrics.mInvalidStringDimension.mValue;
-        break;
-      }
+      ProcessStringDimension(*it, v.GetString(), separator, p);
     } else if (v.IsNumber()) {
       double dim = v.GetDouble();
       if ((*it)->mType == TelemetryDimension::kRange) {
         if (dim >= (*it)->mRange.first && dim <= (*it)->mRange.second) {
-          p /= boost::lexical_cast<string>(dim);
+          p += separator + boost::lexical_cast<string>(dim);
         } else {
-          p /= kOther;
+          p += separator + kOther;
         }
       } else {
         // string comparison not allowed on numbers
@@ -140,6 +139,7 @@ TelemetrySchema::GetDimensionPath(const RapidjsonDocument& aDoc)
       }
     }
   }
+
   return p;
 }
 
@@ -184,14 +184,43 @@ TelemetrySchema::LoadDimensions(const RapidjsonDocument& aDoc)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-std::string TelemetrySchema::SafePath(const std::string& s)
+void
+TelemetrySchema::ProcessStringDimension(const std::shared_ptr<TelemetryDimension>& aTd,
+                                        const std::string& aDim,
+                                        const std::string& aSeperator,
+                                        std::string& aPath)
+{
+  switch (aTd->mType) {
+  case TelemetryDimension::kValue:
+    if (aTd->mValue == "*" || aTd->mValue == aDim) {
+      aPath += aSeperator + SafePath(aDim);
+    } else {
+      aPath += aSeperator + kOther;
+    }
+    break;
+  case TelemetryDimension::kSet:
+    if (aTd->mSet.find(aDim) != aTd->mSet.end()) {
+      aPath += aSeperator + SafePath(aDim);
+    } else {
+      aPath += aSeperator + kOther;
+    }
+    break;
+  default:
+    // range comparison not allowed on a string
+    ++mMetrics.mInvalidStringDimension.mValue;
+    break;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+std::string TelemetrySchema::SafePath(const std::string& aStr)
 {
   namespace bx = boost::xpressive;
   static bx::sregex clean_re = ~bx::set[bx::range('a', 'z') |
                                           bx::range('A', 'Z') |
                                           bx::range('0', '9') |
                                           '_' | '/' | '.'];
-  return bx::regex_replace(s, clean_re, "_");
+  return bx::regex_replace(aStr, clean_re, "_");
 }
 
 }
