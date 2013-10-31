@@ -23,8 +23,8 @@ BOOST_AUTO_TEST_CASE(test_load)
     TelemetrySchema t(fn);    
     RapidjsonDocument d;
     d.Parse<0>(info);
-    boost::filesystem::path p = t.GetDimensionPath(d);
-    BOOST_REQUIRE_EQUAL("idle_daily/Firefox/release/23.0.1/20130814063812/other", p);
+    string p = t.GetDimensionPath(d, 0);
+    BOOST_REQUIRE_EQUAL("19700101/idle_daily/Firefox/release/23.0.1/20130814063812.other", p);
 
   }
   catch (const exception& e) {

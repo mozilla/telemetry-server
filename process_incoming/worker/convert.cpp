@@ -97,7 +97,8 @@ bool ProcessFile(const boost::filesystem::path& aName,
         sb.Put('\t');
         aRecord.GetDocument().Accept(writer);
         sb.Put('\n');
-        fs::path p = aSchema.GetDimensionPath(aRecord.GetDocument());
+        fs::path p = aSchema.GetDimensionPath(aRecord.GetDocument(), 
+                                              aRecord.GetTimestamp());
         aWriter.Write(p, sb.GetString(), sb.Size());
         gMetrics.mDataOut.mValue += sb.Size();
       } else {
@@ -154,7 +155,7 @@ int main(int argc, char** argv)
     return EXIT_FAILURE;
   }
   message::Message msg;
-  msg.set_type("telemetry");
+  msg.set_type("telemetry.convert");
   msg.set_pid(getpid());
   msg.set_hostname(hostname);
 
