@@ -116,7 +116,7 @@ class Job:
         file_count = len(files) + len(remote_files)
         # Not useful to have more mappers than input files.
         if file_count < self._num_mappers:
-            print "There are only", file_count, "input files. Reducing number of mappers accordingly."
+            print "There are only", file_count, "input files in", self._input_dir, "Reducing number of mappers accordingly."
             self._num_mappers = file_count
 
         # Partition files into reasonably equal groups for use by mappers
