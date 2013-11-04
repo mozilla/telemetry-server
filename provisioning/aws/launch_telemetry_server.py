@@ -111,14 +111,14 @@ class TelemetryServerLauncher(Launcher):
         code_base = "/home/" + self.ssl_user + "/telemetry-server"
         c_file = "/etc/init/telemetry-server.conf"
         self.start_suid_script(c_file, self.ssl_user)
-        sudo("echo '    cd {1}/server' >> {0}".format(c_file, code_base))
+        sudo("echo '    cd {1}/http' >> {0}".format(c_file, code_base))
         sudo("echo '    /usr/local/bin/node ./server.js ./server_config.json >> /var/log/telemetry/telemetry-server.out' >> {0}".format(c_file))
         self.end_suid_script(c_file)
         sudo("echo 'start on runlevel [2345]' >> {0}".format(c_file))
         sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
 
         c_file = "/etc/init/telemetry-export.conf"
-        base_export_command = "/usr/bin/python -u ./export.py -d {0}/data -p '^telemetry.log.*[.]finished$' -k '{1}' -s '{2}' -r '{3}' -b '{4}' -q '{5}' --remove-file".format(base_dir, self.aws_key, self.aws_secret_key, self.config["region"], self.config.get("incoming_bucket", "telemetry-incoming"), self.config.get("incoming_queue", "telemetry-incoming"))
+        base_export_command = "/usr/bin/python -u -m telemetry.util.export -d {0}/data -p '^telemetry.log.*[.]finished$' -k '{1}' -s '{2}' -r '{3}' -b '{4}' -q '{5}' --remove-file".format(base_dir, self.aws_key, self.aws_secret_key, self.config["region"], self.config.get("incoming_bucket", "telemetry-incoming"), self.config.get("incoming_queue", "telemetry-incoming"))
 
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
@@ -136,14 +136,14 @@ class TelemetryServerLauncher(Launcher):
 
         # Install a specific aws_incoming.json to use
         process_incoming_config = self.config.get("process_incoming_config", "aws_incoming.json")
-        put(process_incoming_config, code_base + "/aws_provisioning/aws_incoming.json")
+        put(process_incoming_config, code_base + "/provisioning/aws/aws_incoming.json")
 
         c_file = "/etc/init/telemetry-incoming.conf"
         self.start_suid_script(c_file, self.ssl_user)
-        sudo("echo '    cd {1}/aws_provisioning' >> {0}".format(c_file, code_base))
+        sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
-        sudo("echo \"    /usr/bin/python -u process_incoming_queue.py -k '{1}' -s '{2}' ./aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
+        sudo("echo \"    /usr/bin/python -u -m provisioning.aws.process_incoming_queue -k '{1}' -s '{2}' provisioning/aws/aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
         # NOTE: Don't automatically start/stop this service, since we only want
         #       to start it on "primary" nodes, and we only want to stop it in
         #       safe parts of the process-incoming code.
@@ -151,7 +151,7 @@ class TelemetryServerLauncher(Launcher):
 
         c_file = "/etc/init/telemetry-heka.conf"
         self.start_suid_script(c_file, self.ssl_user)
-        sudo("echo '    cd {1}/heka' >> {0}".format(c_file, code_base))
+        sudo("echo '    cd {1}/monitoring/heka' >> {0}".format(c_file, code_base))
         sudo("echo \"    /usr/bin/hekad -config heka.toml >> /var/log/telemetry/telemetry-heka.out\" >> {0}".format(c_file))
         self.end_suid_script(c_file)
         sudo("echo 'kill signal INT' >> {0}".format(c_file))
