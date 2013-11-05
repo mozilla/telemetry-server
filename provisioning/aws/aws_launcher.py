@@ -76,6 +76,11 @@ class Launcher(object):
         with cd(home):
             run("git clone https://github.com/mreid-moz/telemetry-server.git")
 
+    def install_histogram_tools(self, instance):
+        home = "/home/" + self.ssl_user
+        with cd(home + "/telemetry-server/telemetry"):
+            run("bash ../bin/get_histogram_tools.sh")
+
     def choose_telemetry_branch(self, instance):
         # By default we use the master branch, but if you wanted to use a
         # specific branch you could do it here.
