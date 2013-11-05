@@ -115,10 +115,18 @@ class Job:
             print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
         return result
 
+    def dedupe_remotes(self, remote_files, local_files):
+        return [ r for r in remote_files if os.path.join(self._input_dir, r.name) not in local_files ]
+
     def mapreduce(self):
         # Find files matching specified input filter
         files = self.get_filtered_files(self._input_dir)
         remote_files = self.get_filtered_files_s3()
+
+        # If we're using the cache dir as the data dir, we will end up reading
+        # each already-downloaded file twice, so we should skip any remote files
+        # that exist in the data dir.
+        remote_files = self.dedupe_remotes(remote_files, files)
 
         file_count = len(files) + len(remote_files)
         # Not useful to have more mappers than input files.
