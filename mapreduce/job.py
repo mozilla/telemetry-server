@@ -99,10 +99,12 @@ class Job:
             fetch_cmd = ["/usr/local/bin/s3funnel"]
             fetch_cmd.append(self._bucket_name)
             fetch_cmd.append("get")
-            fetch_cmd.append("-a")
-            fetch_cmd.append(self._aws_key)
-            fetch_cmd.append("-s")
-            fetch_cmd.append(self._aws_secret_key)
+            if self._aws_key is not None:
+                fetch_cmd.append("-a")
+                fetch_cmd.append(self._aws_key)
+            if self._aws_secret_key is not None:
+                fetch_cmd.append("-s")
+                fetch_cmd.append(self._aws_secret_key)
             fetch_cmd.append("-t")
             fetch_cmd.append("8")
             start = datetime.now()
@@ -203,10 +205,7 @@ class Job:
             min_idx = find_min_idx(sums)
 
         # And now do the same with the remote files.
-        # TODO: if this is too slow, just distribute remote files round-robin.
         if len(remote_files) > 0:
-            conn = S3Connection(self._aws_key, self._aws_secret_key)
-            bucket = conn.get_bucket(self._bucket_name)
             for r in remote_files:
                 size = r.size
                 dims = self._input_filter.get_dimensions(".", r.name)
@@ -218,7 +217,6 @@ class Job:
 
         # Print out some info to see how balanced the partitions were:
         self.dump_stats(sums)
-
         return partitions
 
     def get_filtered_files(self, searchdir):
@@ -244,7 +242,10 @@ class Job:
         if not self._local_only:
             print "Fetching file list from S3..."
             # Plain boto should be fast enough to list bucket contents.
-            conn = S3Connection(self._aws_key, self._aws_secret_key)
+            if self._aws_key is not None:
+                conn = S3Connection(self._aws_key, self._aws_secret_key)
+            else:
+                conn = S3Connection()
             bucket = conn.get_bucket(self._bucket_name)
             start = datetime.now()
             count = 0
@@ -391,8 +392,8 @@ def main():
     parser.add_argument("-r", "--num-reducers", metavar="N", help="Start N reducer processes", type=int, default=1)
     parser.add_argument("-d", "--data-dir", help="Base data directory", required=True)
     parser.add_argument("-b", "--bucket", help="S3 Bucket name")
-    parser.add_argument("-k", "--aws-key", help="AWS Key")
-    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key")
+    parser.add_argument("-k", "--aws-key", help="AWS Key", default=None)
+    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", default=None)
     parser.add_argument("-w", "--work-dir", help="Location to put temporary work files", default="/tmp/telemetry_mr")
     parser.add_argument("-o", "--output", help="Filename to use for final job output", required=True)
     #TODO: make the input filter optional, default to "everything valid" and generate dims intelligently.
@@ -405,8 +406,8 @@ def main():
             print "       You can install it using `sudo pip install boto`"
             parser.print_help()
             sys.exit(-2)
-        # if we want to process remote data, 3 arguments are required.
-        for remote_req in ["bucket", "aws_key", "aws_secret_key"]:
+        # If we want to process remote data, some more arguments are required.
+        for remote_req in ["bucket"]:
             if not hasattr(args, remote_req) or getattr(args, remote_req) is None:
                 print "ERROR:", remote_req, "is a required option"
                 parser.print_help()
