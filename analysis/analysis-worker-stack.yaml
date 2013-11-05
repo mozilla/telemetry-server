@@ -37,6 +37,11 @@ Parameters:
     Type:                     String
     Default:                  0.2
 
+  maxWorkers:
+    Description:              Maximum number of workers
+    Type:                     String
+    Default:                  50
+
   sourcesBucket:
     Description:              Bucket containing sources and templates
     Type:                     String
@@ -199,7 +204,8 @@ Resources:
               "chown ubuntu /mnt/work/\n",
               "sudo -u ubuntu python manager.py -q '",
                 {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]},
-                "' -w /mnt/work/\n"
+                "' -w /mnt/work/\n",
+              "sudo shutdown -h now\n"
             ]
           ]
         }
@@ -212,11 +218,15 @@ Resources:
     DependsOn:
       - workerLaunchConfig
     Properties:
-      AvailabilityZones:
-        - 'us-west-2c'            #{'Fn::GetAZs': ''}
+      AvailabilityZones:        {'Fn::GetAZs': ''}
       LaunchConfigurationName:  {Ref: workerLaunchConfig}
       MinSize:                  0
-      MaxSize:                  500
+      MaxSize:                  {Ref: maxWorkers}
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize:           10
+        MinInstancesInService:  0
+        PauseTime:              "PT0S"
 
   # Scaling policies, these are sort of actions that can be executed by a
   # CloudWatch alarm
@@ -228,7 +238,7 @@ Resources:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
       Cooldown:                 60
-      ScalingAdjustment:        50
+      ScalingAdjustment:        1
 
   workerQuickStartPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
@@ -238,7 +248,7 @@ Resources:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
       Cooldown:                 60
-      ScalingAdjustment:        10
+      ScalingAdjustment:        15
 
   workerScaleDownPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
@@ -250,7 +260,7 @@ Resources:
       Cooldown:                 60
       ScalingAdjustment:        -1
 
-  workerQuickKillPolicy:
+  workerQuickEndPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
     DependsOn:
       - workerAutoScaleGroup
@@ -258,7 +268,7 @@ Resources:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
       Cooldown:                 60
-      ScalingAdjustment:        -10
+      ScalingAdjustment:        -15
 
   # CloudWatch alarms, these execute scaling policies
   manyMessagesAddedAlarm:
@@ -295,8 +305,8 @@ Resources:
           Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
       Statistic:                Sum
       Period:                   60
-      EvaluationPeriods:        10
-      Threshold:                1
+      EvaluationPeriods:        5
+      Threshold:                0
       ComparisonOperator:       GreaterThanThreshold
       AlarmActions:
         - {Ref: workerScaleUpPolicy}
@@ -316,30 +326,30 @@ Resources:
       Statistic:                Sum
       Period:                   60
       EvaluationPeriods:        10
-      Threshold:                1
+      Threshold:                10
       ComparisonOperator:       GreaterThanThreshold
       AlarmActions:
         - {Ref: workerScaleDownPolicy}
 
-  totalStarvationAlarm:
+  tooManyWorkersAlarm:
     Type:                       AWS::CloudWatch::Alarm
     DependsOn:
       - telemetryAnalysisInput
-      - workerQuickKillPolicy
+      - workerQuickEndPolicy
     Properties:
-      AlarmDescription:         Kill lot of workers if they poll to much
+      AlarmDescription:         Scale down, if not enought messages
       Namespace:                AWS/SQS
       MetricName:               NumberOfEmptyReceives
       Dimensions:
         - Name:     QueueName
           Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
       Statistic:                Sum
-      Period:                   900
-      EvaluationPeriods:        1
-      Threshold:                5000
+      Period:                   120
+      EvaluationPeriods:        5
+      Threshold:                150
       ComparisonOperator:       GreaterThanThreshold
       AlarmActions:
-        - {Ref: workerQuickKillPolicy}
+        - {Ref: workerQuickEndPolicy}
 
 ################################################################################
 

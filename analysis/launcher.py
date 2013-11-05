@@ -19,11 +19,13 @@ class AnalysisJob:
         self.aws_key = cfg.aws_key
         self.aws_secret_key = cfg.aws_secret_key
         self.input_bucket = "telemetry-published-v1"
+        self.job_name = cfg.name
+        self.job_owner = cfg.owner
 
         # Bucket with intermediate data for this analysis job
         self.analysis_bucket = "jonasfj-telemetry-analysis"
 
-        self.s3_code_path = "batch-jobs/" + self.job_id + ".zip"
+        self.s3_code_path = "batch-jobs/" + self.job_id + ".egg"
 
         # S3 region of operation
         self.aws_region = "us-west-2"
@@ -89,7 +91,7 @@ class AnalysisJob:
     def generate_tasks(self):
         """ Generates SQS tasks, we batch small files into a single task """
         uid = str(uuid4())
-        taskid = 0
+        taskid = 1
         taskfiles = []
         tasksize = 0
         total_size_of_all = 0
@@ -104,7 +106,9 @@ class AnalysisJob:
                 # faster to download when handling the job
                 taskfiles =  [f for f,s in sorted(taskfiles, key=lambda (f,s): s)]
                 yield {
-                    'id':               uid + str(taskid),
+                    'id':               uid + "/" +  str(taskid),
+                    'name':             self.job_name,
+                    'owner':            self.job_owner,
                     'code':             self.s3_code_path,
                     'target-queue':     self.target_queue,
                     'files':            taskfiles,
@@ -121,6 +125,8 @@ class AnalysisJob:
             taskfiles =  [f for f,s in sorted(taskfiles, key=lambda (f,s): s)]
             yield {
                 'id':               uid + "/" + str(taskid),
+                'name':             self.job_name,
+                'owner':            self.job_owner,
                 'code':             self.s3_code_path,
                 'target-queue':     self.target_queue,
                 'files':            taskfiles,
@@ -178,6 +184,16 @@ def main():
     p.add_argument(
         "-s", "--aws-secret-key",
         help = "AWS Secret Key"
+    )
+    p.add_argument(
+        "-n", "--name",
+        help = "Job name",
+        required = True
+    )
+    p.add_argument(
+        "-o", "--owner",
+        help = "Job owner, should be an @mozilla.com email address",
+        required = True
     )
     p.add_argument(
         "-f", "--input-filter",

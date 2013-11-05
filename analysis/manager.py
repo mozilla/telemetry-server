@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from multiprocessing import Queue, cpu_count, active_children
-from threading import Thread
+from threading import Thread, Lock
 from boto.sqs import connect_to_region as sqs_connect
 from boto.sqs.jsonmessage import JSONMessage
 from boto.s3.connection import S3Connection
@@ -9,12 +9,37 @@ from boto.s3.key import Key
 from worker import AnalysisWorker
 from traceback import print_exc
 from downloader import DownloaderProcess
+from time import sleep
 import os, sys
 
 NUMBER_DOWNLOADERS = 2
 
+IDLE_WAIT_BEFORE_SHUTDOWN = 5 * 60
+
+class ActiveCounter:
+    """" Auxiliary counter that tracks how many processes are active """
+    def __init__(self):
+        self.counter = 0
+        self.lock = Lock()
+
+    def increment(self):
+        self.lock.acquire()
+        self.counter += 1
+        self.lock.release()
+
+    def decrement(self):
+        self.lock.acquire()
+        self.counter -= 1
+        self.lock.release()
+
+    def count(self):
+        self.lock.acquire()
+        retval = self.counter
+        self.lock.release()
+        return retval
+
 class Manager(Thread):
-    def __init__(self, aws_cred, work_dir, sqs_input_queue, index):
+    def __init__(self, aws_cred, work_dir, sqs_input_queue, index, activeCount):
         super(Manager, self).__init__()
         self.aws_cred = aws_cred
         self.work_dir = os.path.join(work_dir, "process-%i" % index)
@@ -26,6 +51,7 @@ class Manager(Thread):
             self.analysis_bucket_name,
             validate = False
         )
+        self.activeCount = activeCount
 
     def run(self):
         # Connect to SQS input queue
@@ -34,10 +60,51 @@ class Manager(Thread):
         self.sqs_input_queue.set_message_class(JSONMessage)
 
         while True:
-            msgs = self.sqs_input_queue.get_messages(num_messages = 1)
+            msgs = self.sqs_input_queue.get_messages(
+                num_messages        = 1,
+                wait_time_seconds   = 19,
+                attributes          = ['ApproximateReceiveCount']
+            )
+            print "Fetched %i messages" % len(msgs)
             if len(msgs) > 0:
-                self.process_message(msgs[0])
+                try:
+                    self.activeCount.increment()
+                    msg = msgs[0]
+                    retries = int(msg.attributes['ApproximateReceiveCount'])
+                    if retries >= 5:
+                        self.abort_message(msg)
+                        print "Aborted message after %s retries, msg-id: %s" % (retries, msg['id'])
+                    else:
+                        self.process_message(msg)
+                        print "Message processed successfully, msg-id: %s" % msg['id']
+                    self.activeCount.decrement()
+                except:
+                    raise
+                finally:
+                    self.activeCount.decrement()
+            else:
+                sleep(23)
 
+    def abort_message(self, msg):
+        """ Don't try to execute the message again, just abort it """
+        # Delete message
+        self.sqs_input_queue.delete_message(msg)
+
+        # Get output SQS queue
+        target_queue = self.sqs.get_queue(msg["target-queue"])
+        target_queue.set_message_class(JSONMessage)
+
+        m = target_queue.new_message(body = {
+            'id':               msg['id'],
+            'name':             msg['name'],
+            'owner':            msg['owner'],
+            'code':             msg['code'],
+            'target-queue':     msg['target-queue'],
+            'files':            msg['files'],
+            'size':             msg['size'],
+            'target-prefix':    None
+        })
+        target_queue.write(m)
 
     def process_message(self, msg):
         # Create queues for communication
@@ -74,7 +141,7 @@ class Manager(Thread):
         # TODO multi-process uploaders
         success = False
         while True:
-            val = upload_queue.get()
+            val = upload_queue.get(timeout = 30 * 60)
             if type(val) is bool:
                 success = val
                 break
@@ -91,12 +158,23 @@ class Manager(Thread):
             target_queue = self.sqs.get_queue(msg["target-queue"])
             target_queue.set_message_class(JSONMessage)
 
-            m = target_queue.new_message(body = {'id': msg["id"]})
+            m = target_queue.new_message(body = {
+                'id':               msg['id'],
+                'name':             msg['name'],
+                'owner':            msg['owner'],
+                'code':             msg['code'],
+                'target-queue':     msg['target-queue'],
+                'files':            msg['files'],
+                'size':             msg['size'],
+                'target-prefix':    target_prefix
+            })
             target_queue.write(m)
 
         # Kill all downloaders
         for downloader in downloaders:
             downloader.terminate()
+        # Kill worker
+        worker.terminate()
 
 def main():
     p = ArgumentParser(
@@ -139,15 +217,31 @@ def main():
         'aws_secret_access_key':    cfg.aws_secret_key
     }
 
+    activeCount = ActiveCounter()
+
     for index in xrange(0, nb_workers):
-        manager = Manager(aws_cred, cfg.work_dir, cfg.queue, index)
+        manager = Manager(aws_cred, cfg.work_dir, cfg.queue, index, activeCount)
         manager.start()
+
+    # TODO: Figure out how to reenable this... we probably can't do it with
+    #       AWS autoscaling groups as they might bring up the instances again.
+    #       At least this needs more investigation...
+    #idle_wait = IDLE_WAIT_BEFORE_SHUTDOWN
+    #while True:
+    #    sleep(47)
+    #    if activeCount.count() == 0:
+    #        idle_wait -= 47
+    #    else:
+    #        idle_wait = IDLE_WAIT_BEFORE_SHUTDOWN
+    #    if idle_wait <= 0:
+    #        for child in active_children():
+    #            child.terminate()
+    #        sys.exit(0)
 
 
 if __name__ == "__main__":
-    retval = 0
     try:
-        retval = main()
+        main()
     except KeyboardInterrupt:
         print >> sys.stderr, "Exit requested by user"
         raise
@@ -159,4 +253,3 @@ if __name__ == "__main__":
         # Terminate all children
         for child in active_children():
             child.terminate()
-    sys.exit(retval)

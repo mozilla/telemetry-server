@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-
+try:
+    import simplejson as json
+except ImportError:
+    import json
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from multiprocessing import Process, Queue
 from traceback import print_exc
@@ -8,6 +11,7 @@ from zipimport import zipimporter
 from utils import mkdirp
 from boto.s3.connection import S3Connection
 from shutil import rmtree, copyfile, copytree
+from pkg_resources import WorkingSet
 from time import sleep
 import os, sys
 
@@ -16,7 +20,8 @@ class AnalysisWorker(Process):
         Analysis worker that processes files from input_queue and
         adds to output_queue when nb_files have been received
     """
-    def __init__(self, job_bundle, nb_files, aws_cred, input_queue, output_queue, work_dir):
+    def __init__(self, job_bundle, nb_files, aws_cred, input_queue, output_queue,
+                 work_dir):
         super(AnalysisWorker, self).__init__()
         self.job_bundle_bucket, self.job_bundle_prefix = job_bundle
         self.aws_cred = aws_cred
@@ -27,7 +32,6 @@ class AnalysisWorker(Process):
         self.nb_files = nb_files
 
     def setup(self):
-        print "Worker setting up"
         # Remove work folder, no failures allowed
         if os.path.exists(self.work_folder):
             rmtree(self.work_folder, ignore_errors = False)
@@ -36,7 +40,7 @@ class AnalysisWorker(Process):
         mkdirp(self.work_folder)
         mkdirp(self.output_folder)
 
-        job_bundle_target = os.path.join(self.work_folder,   "job_bundle.zip")
+        job_bundle_target = os.path.join(self.work_folder, "job_bundle.egg")
         # If job_bundle_bucket is None then the bundle is stored locally
         if self.job_bundle_bucket == None:
             copyfile(self.job_bundle_prefix, job_bundle_target)
@@ -46,9 +50,19 @@ class AnalysisWorker(Process):
             key = bucket.get_key(self.job_bundle_prefix)
             key.get_contents_to_filename(job_bundle_target)
 
-        # zipimport job bundle
-        proc_module = zipimporter(job_bundle_target).load_module("processor")
-        self.processor = proc_module.Processor(self.output_folder)
+        # Add job bundle (.egg) to sys.path
+        sys.path.append(job_bundle_target)
+
+        # Search for processor entry in telemetry.analysis
+        # These are provided plugins (.egg files)
+        sys.path.append(job_bundle_target)
+        w = WorkingSet([job_bundle_target])
+        for entry in w.iter_entry_points(group = 'telemetry.analysis',
+                                         name = 'processor'):
+            self.processorClass = entry.load()
+            break
+        # Instantiate processor
+        self.processor = self.processorClass(self.output_folder)
 
     def run(self):
         try:
@@ -78,10 +92,50 @@ class AnalysisWorker(Process):
         # Put finished message
         self.output_queue.put(True)
 
-    def process_file(self, virtual_name, path):
-        errors = self.processor.process(virtual_name, path)
+    def process_file(self, prefix, path):
+        if self.processorClass.INTERFACE is 'raw-files':
+            errors = self.processor.process(prefix, path)
+        elif self.processorClass.INTERFACE in ('raw-payloads', 'parsed-json'):
+            parse_json = (self.processorClass.INTERFACE == 'parsed-json')
+
+            # Find dimensions
+            dims = prefix.split('/')
+            dims += dims.pop().split('.')[:2]
+
+            # Open a compressor
+            raw_handle = open(path, "rb")
+            decompressor = Popen(
+                ['xz', '-d', '-c'],
+                bufsize = 65536,
+                stdin = raw_handle,
+                stdout = PIPE,
+                stderr = sys.stderr
+            )
+
+            # Process each line
+            line_nb = 0
+            errors = 0
+            for line in decompressor.stdout:
+                line_nb += 1
+                try:
+                    uid, payload = line.split("\t", 1)
+                    if parse_json:
+                        payload = json.loads(payload)
+                    self.processor.process(uid, dims, payload)
+                except:
+                    print >> sys.stderr, ("Bad input line: %i of %s" %
+                                          (line_nb, prefix))
+                    print_exc(file = sys.stderr)
+                    errors += 1
+
+            # Close decompressor
+            decompressor.stdout.close()
+            raw_handle.close()
+        else:
+            print "Processor interface: %s unknown" % self.processorClass.INTERFACE
+        if errors > 0:
+            print "Processor failed to handle %i rows" % errors
         os.remove(path)
-        #TODO: Log errors to Heka
 
 
 def main():
