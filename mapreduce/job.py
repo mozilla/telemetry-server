@@ -20,7 +20,11 @@ import telemetry.util.s3 as s3util
 import telemetry.util.timer as timer
 import subprocess
 from subprocess import Popen, PIPE
-from boto.s3.connection import S3Connection
+try:
+    from boto.s3.connection import S3Connection
+    BOTO_AVAILABLE=True
+except ImportError:
+    BOTO_AVAILABLE=False
 
 def find_min_idx(stuff):
     min_idx = 0
@@ -396,6 +400,11 @@ def main():
     args = parser.parse_args()
 
     if not args.local_only:
+        if not BOTO_AVAILABLE:
+            print "ERROR: The 'boto' library is required except in 'local-only' mode."
+            print "       You can install it using `sudo pip install boto`"
+            parser.print_help()
+            sys.exit(-2)
         # if we want to process remote data, 3 arguments are required.
         for remote_req in ["bucket", "aws_key", "aws_secret_key"]:
             if not hasattr(args, remote_req) or getattr(args, remote_req) is None:
