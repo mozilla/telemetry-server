@@ -20,7 +20,11 @@ import telemetry.util.s3 as s3util
 import telemetry.util.timer as timer
 import subprocess
 from subprocess import Popen, PIPE
-from boto.s3.connection import S3Connection
+try:
+    from boto.s3.connection import S3Connection
+    BOTO_AVAILABLE=True
+except ImportError:
+    BOTO_AVAILABLE=False
 
 def find_min_idx(stuff):
     min_idx = 0
@@ -95,10 +99,12 @@ class Job:
             fetch_cmd = ["/usr/local/bin/s3funnel"]
             fetch_cmd.append(self._bucket_name)
             fetch_cmd.append("get")
-            fetch_cmd.append("-a")
-            fetch_cmd.append(self._aws_key)
-            fetch_cmd.append("-s")
-            fetch_cmd.append(self._aws_secret_key)
+            if self._aws_key is not None:
+                fetch_cmd.append("-a")
+                fetch_cmd.append(self._aws_key)
+            if self._aws_secret_key is not None:
+                fetch_cmd.append("-s")
+                fetch_cmd.append(self._aws_secret_key)
             fetch_cmd.append("-t")
             fetch_cmd.append("8")
             start = datetime.now()
@@ -109,10 +115,18 @@ class Job:
             print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
         return result
 
+    def dedupe_remotes(self, remote_files, local_files):
+        return [ r for r in remote_files if os.path.join(self._input_dir, r.name) not in local_files ]
+
     def mapreduce(self):
         # Find files matching specified input filter
         files = self.get_filtered_files(self._input_dir)
         remote_files = self.get_filtered_files_s3()
+
+        # If we're using the cache dir as the data dir, we will end up reading
+        # each already-downloaded file twice, so we should skip any remote files
+        # that exist in the data dir.
+        remote_files = self.dedupe_remotes(remote_files, files)
 
         file_count = len(files) + len(remote_files)
         # Not useful to have more mappers than input files.
@@ -199,10 +213,7 @@ class Job:
             min_idx = find_min_idx(sums)
 
         # And now do the same with the remote files.
-        # TODO: if this is too slow, just distribute remote files round-robin.
         if len(remote_files) > 0:
-            conn = S3Connection(self._aws_key, self._aws_secret_key)
-            bucket = conn.get_bucket(self._bucket_name)
             for r in remote_files:
                 size = r.size
                 dims = self._input_filter.get_dimensions(".", r.name)
@@ -214,7 +225,6 @@ class Job:
 
         # Print out some info to see how balanced the partitions were:
         self.dump_stats(sums)
-
         return partitions
 
     def get_filtered_files(self, searchdir):
@@ -240,7 +250,10 @@ class Job:
         if not self._local_only:
             print "Fetching file list from S3..."
             # Plain boto should be fast enough to list bucket contents.
-            conn = S3Connection(self._aws_key, self._aws_secret_key)
+            if self._aws_key is not None:
+                conn = S3Connection(self._aws_key, self._aws_secret_key)
+            else:
+                conn = S3Connection()
             bucket = conn.get_bucket(self._bucket_name)
             start = datetime.now()
             count = 0
@@ -387,8 +400,8 @@ def main():
     parser.add_argument("-r", "--num-reducers", metavar="N", help="Start N reducer processes", type=int, default=1)
     parser.add_argument("-d", "--data-dir", help="Base data directory", required=True)
     parser.add_argument("-b", "--bucket", help="S3 Bucket name")
-    parser.add_argument("-k", "--aws-key", help="AWS Key")
-    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key")
+    parser.add_argument("-k", "--aws-key", help="AWS Key", default=None)
+    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", default=None)
     parser.add_argument("-w", "--work-dir", help="Location to put temporary work files", default="/tmp/telemetry_mr")
     parser.add_argument("-o", "--output", help="Filename to use for final job output", required=True)
     #TODO: make the input filter optional, default to "everything valid" and generate dims intelligently.
@@ -396,8 +409,13 @@ def main():
     args = parser.parse_args()
 
     if not args.local_only:
-        # if we want to process remote data, 3 arguments are required.
-        for remote_req in ["bucket", "aws_key", "aws_secret_key"]:
+        if not BOTO_AVAILABLE:
+            print "ERROR: The 'boto' library is required except in 'local-only' mode."
+            print "       You can install it using `sudo pip install boto`"
+            parser.print_help()
+            sys.exit(-2)
+        # If we want to process remote data, some more arguments are required.
+        for remote_req in ["bucket"]:
             if not hasattr(args, remote_req) or getattr(args, remote_req) is None:
                 print "ERROR:", remote_req, "is a required option"
                 parser.print_help()
