@@ -11,7 +11,7 @@
     },
     {
       "field_name": "appUpdateChannel",
-      "allowed_values": ["nightly", "aurora", "beta"]
+      "allowed_values": ["nightly", "aurora"]
     },
     {
       "field_name": "appVersion",
@@ -23,7 +23,10 @@
     },
     {
       "field_name": "submission_date",
-      "allowed_values": "*"
+      "allowed_values": {
+        "min": "20131101",
+        "max": "20131103"
+      }
     }
   ]
 }
