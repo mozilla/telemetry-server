@@ -148,8 +148,8 @@ class Job:
             if len(partitions[i]) > 0:
                 # Fetch the files we need for each mapper
                 print "Fetching remotes for partition", i
-                self.fetch_remotes(partitions[i])
-                print "Done"
+                fetch_result = self.fetch_remotes(partitions[i])
+                print "Done with code", fetch_result
                 p = Process(
                         target=Mapper,
                         args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
@@ -365,11 +365,13 @@ class Mapper:
             input_file["handle"] = open(filename, "r")
 
 class Reducer:
+    COMBINE_SIZE = 50
     def __init__(self, reducer_id, work_dir, module, mapper_count):
         #print "I am reducer", reducer_id, ", and I'm reducing", mapper_count, "mapped files"
         output_file = os.path.join(work_dir, "reducer_" + str(reducer_id))
         context = TextContext(output_file)
         reducefunc = getattr(module, 'reduce', None)
+        combinefunc = getattr(module, 'combine', None)
         if reducefunc is None or not callable(reducefunc):
             print "No reduce function (that's ok)"
         else:
@@ -384,6 +386,12 @@ class Reducer:
                         if key not in collected:
                             collected[key] = []
                         collected[key].append(value)
+                        # If we have a 'combine' func, run it on these when we
+                        # have enough items.
+                        if combinefunc is not None and \
+                                callable(combinefunc) and \
+                                len(collected[key]) > Reducer.COMBINE_SIZE:
+                            collected[key] = combinefunc(k, collected[key], context)
                     except EOFError:
                         break
 
@@ -406,6 +414,7 @@ def main():
     parser.add_argument("-o", "--output", help="Filename to use for final job output", required=True)
     #TODO: make the input filter optional, default to "everything valid" and generate dims intelligently.
     parser.add_argument("-f", "--input-filter", help="File containing filter spec", required=True)
+    parser.add_argument("-v", "--verbose", help="Print verbose output", action="store_true")
     args = parser.parse_args()
 
     if not args.local_only:
