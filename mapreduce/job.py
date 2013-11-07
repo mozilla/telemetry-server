@@ -279,7 +279,12 @@ class Context:
     def __init__(self, out, partition_count):
         self._basename = out
         self._partition_count = partition_count
-        self._sinks = {} # = open(out, "wb")
+        self._sinks = {}
+        # Pre-open all the files to make sure they exist for the reducer. This
+        # takes care of the situation where we don't get a key value hashing
+        # to a particular partition.
+        for i in range(partition_count):
+            self._sinks[i] = open("%s_%d" % (self._basename, i), "wb")
 
     def partition(self, key):
         #print "hash of", key, "is", hash(key) % self._partition_count
@@ -287,11 +292,7 @@ class Context:
 
     def write(self, key, value):
         p = self.partition(key)
-        if p not in self._sinks:
-            out = open("%s_%d" % (self._basename, p), "wb")
-            self._sinks[p] = out
-        else:
-            out = self._sinks[p]
+        out = self._sinks[p]
         marshal.dump((key, value), out)
 
     def finish(self):
@@ -318,8 +319,6 @@ class Mapper:
         print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
-        # TODO: pre-create all the files to avoid the situation where we don't
-        #       get a key value hashing to each bucket.
         context = Context(output_file, partition_count)
         if mapfunc is None or not callable(mapfunc):
             print "No map function!!!"
@@ -364,6 +363,31 @@ class Mapper:
         else:
             input_file["handle"] = open(filename, "r")
 
+
+class Collector(dict):
+    def __init__(self, combine_func=None, combine_size=50):
+        if combine_func is not None and callable(combine_func):
+            self.combine = combine_func
+        else:
+            self.combine = self.dummy_combine
+        self.combine_size = combine_size
+
+    def write(self, key, value):
+        self.__setitem__(key, [value])
+
+    def collect(self, key, value):
+        values = []
+        if key in self:
+            values = self.__getitem__(key)
+        values.append(value)
+        self.__setitem__(key, values)
+        if len(values) >= self.combine_size:
+            self.combine(key, values, self)
+
+    def dummy_combine(self, k, v, cx):
+        pass
+
+
 class Reducer:
     COMBINE_SIZE = 50
     def __init__(self, reducer_id, work_dir, module, mapper_count):
@@ -375,7 +399,7 @@ class Reducer:
         if reducefunc is None or not callable(reducefunc):
             print "No reduce function (that's ok)"
         else:
-            collected = {}
+            collected = Collector(combinefunc, Reducer.COMBINE_SIZE)
             for i in range(mapper_count):
                 mapper_file = os.path.join(work_dir, "mapper_%d_%d" % (i, reducer_id))
                 # read, group by key, call reducefunc, output
@@ -383,18 +407,9 @@ class Reducer:
                 while True:
                     try:
                         key, value = marshal.load(input_fd)
-                        if key not in collected:
-                            collected[key] = []
-                        collected[key].append(value)
-                        # If we have a 'combine' func, run it on these when we
-                        # have enough items.
-                        if combinefunc is not None and \
-                                callable(combinefunc) and \
-                                len(collected[key]) > Reducer.COMBINE_SIZE:
-                            collected[key] = [combinefunc(key, collected[key], context)]
+                        collected.collect(key, value)
                     except EOFError:
                         break
-
             for k,v in collected.iteritems():
                 reducefunc(k, v, context)
         context.finish()
