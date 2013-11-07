@@ -391,7 +391,7 @@ class Reducer:
                         if combinefunc is not None and \
                                 callable(combinefunc) and \
                                 len(collected[key]) > Reducer.COMBINE_SIZE:
-                            collected[key] = combinefunc(key, collected[key], context)
+                            collected[key] = [combinefunc(key, collected[key], context)]
                     except EOFError:
                         break
 
