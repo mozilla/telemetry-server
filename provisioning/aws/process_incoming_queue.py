@@ -42,7 +42,7 @@ class ProcessIncomingQueueLauncher(ProcessIncomingLauncher):
             if self.config.get("skip_conversion", False):
                 skip_conversion = "--skip-conversion"
             print "Processing incoming queue:", self.config["incoming_queue"]
-            run('python -m process_incoming.process_incoming_mp --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -r "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry_schema.json -q "%s" %s %s %s' % (self.aws_key, self.aws_secret_key, self.config["region"], self.config["incoming_queue"], skip_conversion, self.config["incoming_bucket"], self.config["publish_bucket"]))
+            run('python -m process_incoming.process_incoming_mp --bad-data-log /mnt/telemetry/bad_records.txt -k "%s" -s "%s" -r "%s" -w /mnt/telemetry/work -o /mnt/telemetry/processed -t ./telemetry/telemetry_schema.json -q "%s" %s %s %s' % (self.aws_key, self.aws_secret_key, self.config["region"], self.config["incoming_queue"], skip_conversion, self.config["incoming_bucket"], self.config["publish_bucket"]))
 
 def main():
     try:
