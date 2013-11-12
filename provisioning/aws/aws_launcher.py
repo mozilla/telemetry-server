@@ -54,6 +54,26 @@ class Launcher(object):
             sudo("mkfs.ext3 -T largefile /dev/md0")
             sudo("mount /dev/md0 /mnt")
 
+    def create_log_dir(self):
+        # Create log dir (within base_dir, but symlinked to /var/log):
+        base_dir = self.config.get("base_dir", "/mnt/telemetry")
+        log_dir = base_dir + "/log"
+        run("mkdir {0}".format(log_dir))
+        sudo("ln -s {0} /var/log/telemetry".format(log_dir))
+
+    def start_suid_script(self, c_file, username):
+        sudo("echo 'setuid {1}' > {0}".format(c_file, username))
+        sudo("echo 'setgid {1}' >> {0}".format(c_file, username))
+        # Set the ulimit for # open files in the upstart scripts (since the
+        # ones set in limits.conf don't seem to apply here). This is required
+        # for the node.js telemetry http server.
+        sudo("echo 'limit nofile 10000 40000' >> " + c_file)
+        sudo("echo 'script' >> " + c_file)
+
+    def end_suid_script(self, c_file):
+        sudo("echo 'end script' >> {0}".format(c_file))
+        sudo("echo 'respawn' >> {0}".format(c_file))
+
     def install_apt_dependencies(self, instance):
         print "Installing apt dependencies"
         aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm")
