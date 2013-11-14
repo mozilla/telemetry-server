@@ -124,8 +124,6 @@ class Converter:
         json_dict = json.loads(jsonstr)
         if "info" not in json_dict:
             raise ValueError("Missing in payload: info")
-        if "histograms" not in json_dict:
-            raise ValueError("Missing in payload: histograms")
 
         info = json_dict.get("info")
 
@@ -134,13 +132,18 @@ class Converter:
             if json_dict["ver"] == Converter.VERSION_UNCONVERTED:
                 # Convert it and update the version
                 if "revision" not in info:
-                    raise ValueError("Missing in payload: info.revision")
-                revision = info.get("revision")
-                try:
-                    json_dict["histograms"] = self.rewrite_hists(revision, json_dict["histograms"])
-                    json_dict["ver"] = Converter.VERSION_CONVERTED
-                except KeyError:
-                    raise ValueError("Missing in payload: histograms")
+                    # We need "revision" to correctly convert histograms. If
+                    # we don't have histograms in the payload, we don't care
+                    # about revision (since we don't need to convert anything)
+                    if "histograms" in json_dict:
+                        raise ValueError("Missing in payload: info.revision")
+                else:
+                    revision = info.get("revision")
+                    try:
+                        json_dict["histograms"] = self.rewrite_hists(revision, json_dict["histograms"])
+                    except KeyError:
+                        raise ValueError("Missing in payload: histograms")
+                json_dict["ver"] = Converter.VERSION_CONVERTED
             elif json_dict["ver"] != Converter.VERSION_CONVERTED:
                 raise ValueError("Unknown payload version: " + str(json_dict["ver"]))
             # else it's already converted.
