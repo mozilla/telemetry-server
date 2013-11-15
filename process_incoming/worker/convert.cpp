@@ -99,7 +99,7 @@ bool ProcessFile(const boost::filesystem::path& aName,
         sb.Put('\n');
         fs::path p = aSchema.GetDimensionPath(aRecord.GetDocument(), 
                                               aRecord.GetTimestamp());
-        aWriter.Write(p, sb.GetString(), sb.Size());
+        aWriter.Write(p.string(), sb.GetString(), sb.Size());
         gMetrics.mDataOut.mValue += sb.Size();
       } else {
         // cerr << "Conversion failed: " << aRecord.GetPath() << endl;
@@ -165,7 +165,7 @@ int main(int argc, char** argv)
     mt::TelemetryRecord record;
     mt::HistogramCache cache(config.mHistogramServer);
     mt::TelemetrySchema schema(config.mTelemetrySchema);
-    mt::RecordWriter writer(config.mStoragePath, config.mUploadPath,
+    mt::RecordWriter writer(config.mStoragePath.string(), config.mUploadPath.string(),
                             config.mMaxUncompressed, config.mMemoryConstraint,
                             config.mCompressionPreset);
     mt::HekaLogger logger;
