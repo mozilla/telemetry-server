@@ -8,9 +8,12 @@
 #define RecordWriter_h
 
 #include <string>
+#include <sstream>
 #include <unordered_map>
 
-#include "Utils.h"
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 namespace mozilla {
 
@@ -75,9 +78,12 @@ public:
   }
 
   /** Get a new UUID */
-  const std::string& GetUUID()
+  std::string GetUUID()
   {
-    return mUUIDSource.GetUUID();
+    boost::uuids::uuid u = boost::uuids::random_generator()();
+    std::stringstream ss;
+    ss << u;
+    return ss.str();
   }
 
 private:
@@ -88,7 +94,6 @@ private:
   uint32_t    mCompressionPreset;
   FileMap     mFileMap;
   size_t      mRecordsSinceLastReprioritization;
-  Utils::UUIDGenerator mUUIDSource;
 
   /** Reprioritize on-the-fly compression */
   bool ReprioritizeCompression();

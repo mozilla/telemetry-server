@@ -13,8 +13,6 @@
 
 #include <lzma.h>
 
-#include "Utils.h"
-
 namespace mozilla {
 
 /**

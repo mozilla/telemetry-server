@@ -59,34 +59,5 @@ bool EnsurePath(const std::string& aPath) {
   return mkdirp(aPath.c_str());
 }
 
-
-UUIDGenerator::UUIDGenerator()
- : mGenerator(),
- mDistribution(0, 15),
- mUUID(36, '0')
-{
-  std::random_device rd;
-  mGenerator.seed(rd());
-}
-
-const std::string& UUIDGenerator::GetUUID()
-{
-  int i = 0;
-  while(i < 36) {
-    char rand = mDistribution(mGenerator);
-    mUUID[i++] = rand + (rand < 10 ? 48 : 97);
-  }
-
-  // UUID4 format conformance
-  mUUID[8] = '-';
-  mUUID[13] = '-';
-  mUUID[14] = '4';
-  mUUID[18] = '-';
-  mUUID[19] = (mUUID[19] | 0x8) & ~ 0x4;
-  mUUID[23] = '-';
-
-  return mUUID;
-}
-
 } // namespace Utils
 } // namespace mozilla
