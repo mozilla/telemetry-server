@@ -1,7 +1,14 @@
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include "CompressedFileWriter.h"
 #include "Utils.h"
 
 #include "RecordWriter.h"
+#include "Logger.h"
 
 #include <errno.h>
 #include <string.h>
@@ -181,26 +188,24 @@ bool RecordWriter::OutputFile::Write(const char* aRecord, size_t aLength)
     assert(mCompressedFile && mUncompressedRawSize == 0);
     // If writing to compressed file fails, we return for clean process abortion
     if (!mCompressor->Write(aRecord, aLength)) {
+      LOGGER(error) << "compressor write failed";
       mIsCorrupted = true;
       return false;
     }
   } else {
-
     // If raw file is missing we open one
     if (!mRawFile) {
       mu::EnsurePath(WorkFolder());
       mRawFile = fopen(RawPath().c_str(), "w+");
       if (mRawFile == NULL) {
-        fprintf(stderr, "OutputFile::Write: fopen failed: %s\n",
-                        strerror(errno));
+	LOGGER(error) << "fopen failed, " << strerror(errno);
         return false;
       }
     }
 
     // Write to raw-file
     if (fwrite(aRecord, 1, aLength, mRawFile) != aLength) {
-      fprintf(stderr, "OutputFile::Write: fwrite failed: %s\n",
-                      strerror(errno));
+      LOGGER(error) << "fwrite failed, " << strerror(errno);
       mIsCorrupted = true;
       return false;
     }
@@ -229,8 +234,7 @@ bool RecordWriter::OutputFile::AddCompressor()
   if (!mCompressedFile) {
     mCompressedFile = fopen(CompressedPath().c_str(), "a");
     if (mCompressedFile == NULL) {
-      fprintf(stderr, "OutputFile::AddCompressor: fopen failed: %s\n",
-                      strerror(errno));
+      LOGGER(error) << "fopen failed, " << strerror(errno);
       return false;
     }
   }
@@ -238,6 +242,7 @@ bool RecordWriter::OutputFile::AddCompressor()
   // Create compressor
   mCompressor = new CompressedFileWriter(mCompressedFile);
   if (!mCompressor->Initialize(mOwner.CompressionPreset())) {
+    LOGGER(error) << "compressor initialization failed";
     mIsCorrupted = true;
     return false;
   }
@@ -254,13 +259,14 @@ bool RecordWriter::OutputFile::AddCompressor()
 
     // Check for errors
     if (read < BUFSIZ && ferror(mRawFile)) {
-      fprintf(stderr, "OutputFile::AddCompressor: ferror() return error!\n");
+      LOGGER(error) << "fread failed, " << strerror(errno);
       mIsCorrupted = true;
       return false;
     }
 
     // Write to compressor
     if (!mCompressor->Write(buffer, read)) {
+      LOGGER(error) << "compressor write failed";
       mIsCorrupted = true;
       return false;
     }
@@ -268,8 +274,7 @@ bool RecordWriter::OutputFile::AddCompressor()
 
   // Close raw file
   if (fclose(mRawFile)) {
-    fprintf(stderr, "OutputFile::AddCompressor: failed to fclose() raw file: "
-                    "%s\n", strerror(errno));
+    LOGGER(error) << "fclose failed, " << strerror(errno);
     mIsCorrupted = true;
     return false;
   }
@@ -277,8 +282,7 @@ bool RecordWriter::OutputFile::AddCompressor()
 
   // Remove raw file
   if (remove(RawPath().c_str())) {
-    fprintf(stderr, "OutputFile::AddCompressor: failed to remove() raw file: "
-                    "%s\n", strerror(errno));
+    LOGGER(warning) << "remove failed, " << strerror(errno);
     // This error is not fatal
   }
 
@@ -293,8 +297,7 @@ bool RecordWriter::OutputFile::RemoveCompressor()
 
   // Finalize compressor
   if (mCompressor->Finalize()) {
-    fprintf(stderr, "OutputFile::RemoveCompressor: Failed to finalize"
-                    "compressor.\n");
+    LOGGER(error) << "compressor finalization failure";
     mIsCorrupted = true;
     return false;
   }
@@ -320,6 +323,7 @@ bool RecordWriter::OutputFile::Finalize()
   if (mRawFile) {
     assert(!HasCompressor());
     if (!AddCompressor()) {
+      LOGGER(error) << "failure to add compressor";
       mIsCorrupted = true;
       return false;
     }
@@ -328,6 +332,7 @@ bool RecordWriter::OutputFile::Finalize()
   // If we have a compressor remove it
   if (HasCompressor()) {
     if (!RemoveCompressor()) {
+      LOGGER(error) << "failure to remove compressor";
       mIsCorrupted = true;
       return false;
     }
@@ -335,8 +340,7 @@ bool RecordWriter::OutputFile::Finalize()
 
   // Close the compressed file
   if (fclose(mCompressedFile)) {
-    fprintf(stderr, "OutputFile::Finalize: failed to fclose() compressed file: "
-                    "%s\n", strerror(errno));
+    LOGGER(error) << "fclose failed, " << strerror(errno);
     mIsCorrupted = true;
     return false;
   }
@@ -344,14 +348,14 @@ bool RecordWriter::OutputFile::Finalize()
 
   // Create upload folder, so we can move the file there
   if (!mu::EnsurePath(UploadFolder())) {
+    LOGGER(error) << "failure to create upload folder";
     mIsCorrupted = true;
     return false;
   }
 
   // Move atomically to the upload folder
   if (rename(CompressedPath().c_str(), FinishedPath().c_str())) {
-    fprintf(stderr, "OutputFile::AddCompressor: failed to rename() finished "
-                    "file to upload folder: %s\n", strerror(errno));
+    LOGGER(error) << "rename failed, " << strerror(errno);
     mIsCorrupted = true;
     return false;
   }
@@ -389,6 +393,7 @@ bool RecordWriter::Write(const string& aPath, const char* aRecord,
   if (mRecordsSinceLastReprioritization++ > REPRIORIZATION_INTERVAL) {
     mRecordsSinceLastReprioritization = 0;
     if (!ReprioritizeCompression()) {
+      LOGGER(error) << "compression reprioritization failed";
       return false;
     }
   }
@@ -422,6 +427,7 @@ bool RecordWriter::Finalize()
 
     // Don't try to finalized corrupted files, behavior is undefined
     if (file->IsCorrupted()) {
+      LOGGER(error) << "file is corrupted, " << file->Path();
       retval = false;
     } else {
       // Finalize file, compress and move to upload folder
@@ -466,6 +472,7 @@ bool RecordWriter::ReprioritizeCompression()
   for(i = contexts; i < len; i++) {
     if (files[i]->HasCompressor()) {
       if (!files[i]->RemoveCompressor()) {
+	LOGGER(error) << "failure to remove compressor";
         return false;
       }
     }
@@ -475,6 +482,7 @@ bool RecordWriter::ReprioritizeCompression()
   for(i = 0; i < contexts; i++) {
     if (!files[i]->HasCompressor()) {
       if (!files[i]->AddCompressor()) {
+	LOGGER(error) << "failure to remove compressor";
         return false;
       }
     }

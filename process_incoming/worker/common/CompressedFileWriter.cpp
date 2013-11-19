@@ -1,4 +1,11 @@
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include "CompressedFileWriter.h"
+#include "Logger.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -35,21 +42,20 @@ bool CompressedFileWriter::Initialize(uint32_t preset)
     // Print error code
     switch (ret) {
       case LZMA_MEM_ERROR:
-      fprintf(stderr, "CompressedFileWriter::Init: "
-                      "Memory allocation failed (code %u)\n", ret);
-      break;
-    case LZMA_OPTIONS_ERROR:
-      fprintf(stderr, "CompressedFileWriter::Init: "
-                      "Specified preset is not supported (code %u)\n", ret);
-      break;
-    case LZMA_UNSUPPORTED_CHECK:
-      fprintf(stderr, "CompressedFileWriter::Init: "
-                      "Specified integrity check is not supported (code %u)\n", ret);
-      break;
-    default:
-      fprintf(stderr, "CompressedFileWriter::Init: "
-                      "Unknown error, possibly a bug (code %u)\n", ret);
-      break;
+	LOGGER(error) << "memory allocation failed (code " << ret << ")";
+	break;
+
+      case LZMA_OPTIONS_ERROR:
+	LOGGER(error) << "specified preset is not supported (code " << ret << ")";
+	break;
+	
+      case LZMA_UNSUPPORTED_CHECK:
+	LOGGER(error) << "specified integrity check is not supported (code " << ret << ")";
+	break;
+
+      default:
+	LOGGER(error) << "unknown error, possible bug (code " << ret << ")";
+	break;
     }
 
     // Abort initialization
@@ -89,20 +95,16 @@ bool CompressedFileWriter::Write(const char* aBuffer, size_t aLength)
     if (ret != LZMA_OK) {
       switch (ret) {
         case LZMA_STREAM_END:
-          fprintf(stderr, "CompressedFileWriter::Write: "
-                          "Unexpected LZMA stream end!\n");
+	  LOGGER(error) << "unexpected LZMA stream end";
           break;
         case LZMA_MEM_ERROR:
-          fprintf(stderr, "CompressedFileWriter::Write: "
-                          "Memory allocation failed (code %u)\n", ret);
+	  LOGGER(error) << "memory allocation failed (code " << ret << ")";
           break;
         case LZMA_DATA_ERROR:
-          fprintf(stderr, "CompressedFileWriter::Write: "
-                          "File size limits exceeded (code %u)\n", ret);
+	  LOGGER(error) << "file size limits exceeded (code " << ret << ")";
           break;
         default:
-          fprintf(stderr, "CompressedFileWriter::Write: "
-                          "Unknown error, possibly a bug (code %u)\n", ret);
+	  LOGGER(error) << "unknown error, possibly a bug (code " << ret << ")";
           break;
       }
       return false;
@@ -113,8 +115,7 @@ bool CompressedFileWriter::Write(const char* aBuffer, size_t aLength)
 
       // Write to file
       if (fwrite(mBuffer, 1, BUF_SIZE, mFile) != BUF_SIZE) {
-        fprintf(stderr, "CompressedFileWriter::Write: fwrite failed: %s\n",
-                        strerror(errno));
+	LOGGER(error) << "fwrite failed, " << strerror(errno);
         return false;
       }
 
@@ -173,16 +174,13 @@ bool CompressedFileWriter::Finalize()
     if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
       switch (ret) {
         case LZMA_MEM_ERROR:
-          fprintf(stderr, "CompressedFileWriter::Finalize: "
-                          "Memory allocation failed (code %u)\n", ret);
+	  LOGGER(error) << "memory allocation failed (code " << ret << ")";
           break;
         case LZMA_DATA_ERROR:
-          fprintf(stderr, "CompressedFileWriter::Finalize: "
-                          "File size limits exceeded (code %u)\n", ret);
+	  LOGGER(error) << "file size limits exceeded (code " << ret << ")";
           break;
         default:
-          fprintf(stderr, "CompressedFileWriter::Finalize: "
-                          "Unknown error, possibly a bug (code %u)\n", ret);
+	  LOGGER(error) << "unknown error, possibly a bug (code " << ret << ")";
           break;
       }
       return false;
@@ -195,8 +193,7 @@ bool CompressedFileWriter::Finalize()
 
       // Write to file
       if (fwrite(mBuffer, 1, outsize, mFile) != outsize) {
-        fprintf(stderr, "CompressedFileWriter::Finalize: fwrite failed: %s\n",
-                        strerror(errno));
+	LOGGER(error) << "fwrite failed, " << strerror(errno);
         return false;
       }
 

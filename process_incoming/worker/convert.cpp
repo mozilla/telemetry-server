@@ -15,6 +15,7 @@
 #include "RecordWriter.h"
 #include "Metric.h"
 #include "message.pb.h"
+#include "Logger.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/uuid/uuid.hpp>
@@ -74,7 +75,6 @@ struct Metrics
   mt::Metric mExceptions;
 } gMetrics;
 
-///////////////////////////////////////////////////////////////////////////////
 bool ProcessFile(const boost::filesystem::path& aName,
                  mt::TelemetrySchema& aSchema,
                  mt::TelemetryRecord& aRecord,
@@ -82,19 +82,23 @@ bool ProcessFile(const boost::filesystem::path& aName,
                  mt::RecordWriter& aWriter)
 {
   try {
-    cout << "processing file:" << aName.filename() << endl;
+    LOGGER(info) << "processing file: " << aName.filename();
+
     chrono::time_point<chrono::system_clock> start, end;
     start = chrono::system_clock::now();
     ifstream file(aName.c_str());
     rapidjson::StringBuffer sb;
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+
     while (aRecord.Read(file)) {
       if (ConvertHistogramData(aCache, aRecord.GetDocument())) {
-        sb.Clear();
         const char* s = aRecord.GetPath();
+        sb.Clear();
+
         for (int x = 0; s[x] != 0 && s[x] != '/'; ++x) { // extract uuid
           sb.Put(s[x]);
         }
+
         sb.Put('\t');
         aRecord.GetDocument().Accept(writer);
         sb.Put('\n');
@@ -103,11 +107,13 @@ bool ProcessFile(const boost::filesystem::path& aName,
         aWriter.Write(p.string(), sb.GetString(), sb.Size());
         gMetrics.mDataOut.mValue += sb.Size();
       } else {
-        // cerr << "Conversion failed: " << aRecord.GetPath() << endl;
+        LOGGER(warning) << "conversion failed: " << aRecord.GetPath();
         ++gMetrics.mRecordsFailed.mValue;
       }
+
       ++gMetrics.mRecordsProcessed.mValue;
     }
+
     end = chrono::system_clock::now();
     chrono::duration<double> elapsed = end - start;
     gMetrics.mProcessingTime.mValue = elapsed.count();
@@ -127,19 +133,19 @@ bool ProcessFile(const boost::filesystem::path& aName,
       << endl;
   }
   catch (const exception& e) {
-    cerr << "ProcessFile std exception: " << e.what() << endl;
+    LOGGER(error) << "ProcessFile std exception: " << e.what();
     ++gMetrics.mExceptions.mValue;
     return false;
   }
   catch (...) {
-    cerr << "ProcessFile unknown exception\n";
+    LOGGER(error) << "ProcessFile unknown exception";
     ++gMetrics.mExceptions.mValue;
     return false;
   }
+
   return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv)
 {
   // Verify that the version of the library that we linked against is
@@ -166,25 +172,30 @@ int main(int argc, char** argv)
                             config.mMaxUncompressed, config.mMemoryConstraint,
                             config.mCompressionPreset);
     mt::HekaLogger logger;
+
     if (!logger.Connect(config.mHekaServer)) {
-      cerr << "Cannot connect to Heka, logging is disabled\n";
+      LOGGER(warning) << "Cannot connect to Heka, logging is disabled\n";
     }
+
     boost::asio::streambuf sb;
     ostream os(&sb);
-
     ifstream ifs(argv[2]);
     string filename;
+
     while (getline(ifs, filename)) {
       fs::path fn(filename);
       if (fn.empty()) {
         continue;
       }
+
       while (!exists(fn)) {
         sleep(2);
       }
+
       if (ProcessFile(fn, schema, record, cache, writer)) {
         remove(fn);
       }
+
       if (logger()) {
         boost::uuids::uuid u = boost::uuids::random_generator()();
         msg.set_uuid(&u, u.size());
@@ -213,15 +224,14 @@ int main(int argc, char** argv)
     }
   }
   catch (const exception& e) {
-    cerr << "std exception: " << e.what();
+    LOGGER(error) << "std exception: " << e.what();
     return EXIT_FAILURE;
   }
   catch (...) {
-    cerr << "unknown exception";
+    LOGGER(error) << "unknown exception";
     return EXIT_FAILURE;
   }
-// Optional:  Delete all global objects allocated by libprotobuf.
-  google::protobuf::ShutdownProtobufLibrary();
 
+  google::protobuf::ShutdownProtobufLibrary();
   return EXIT_SUCCESS;
 }
