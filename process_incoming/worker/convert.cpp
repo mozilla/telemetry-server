@@ -91,6 +91,8 @@ bool ProcessFile(const boost::filesystem::path& aName,
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
 
     while (aRecord.Read(file)) {
+      bool conversionFailed = false;
+
       if (ConvertHistogramData(aCache, aRecord.GetDocument())) {
         const char* s = aRecord.GetPath();
         sb.Clear();
@@ -104,9 +106,16 @@ bool ProcessFile(const boost::filesystem::path& aName,
         sb.Put('\n');
         fs::path p = aSchema.GetDimensionPath(aRecord.GetDocument(),
                                               aRecord.GetTimestamp());
-        aWriter.Write(p.string(), sb.GetString(), sb.Size());
-        gMetrics.mDataOut.mValue += sb.Size();
+        if(aWriter.Write(p.string(), sb.GetString(), sb.Size())) {
+          gMetrics.mDataOut.mValue += sb.Size();
+        } else {
+          conversionFailed = true;
+        }
       } else {
+        conversionFailed = true;
+      }
+
+      if (conversionFailed) {
         LOGGER(warning) << "conversion failed: " << aRecord.GetPath();
         ++gMetrics.mRecordsFailed.mValue;
       }
@@ -123,14 +132,13 @@ bool ProcessFile(const boost::filesystem::path& aName,
       gMetrics.mThroughput.mValue = gMetrics.mDataIn.mValue / 1024 / 1024
         / gMetrics.mProcessingTime.mValue;
     }
-    cout << "done processing file:" << aName.filename()
+    LOGGER(info) << "done processing file:" << aName.filename()
       << " processed:" <<  gMetrics.mRecordsProcessed.mValue
       << " failures:" << gMetrics.mRecordsFailed.mValue
       << " time:" << gMetrics.mProcessingTime.mValue
       << " throughput (MiB/s):" << gMetrics.mThroughput.mValue
       << " data in (B):" << gMetrics.mDataIn.mValue
-      << " data out (B):" << gMetrics.mDataOut.mValue
-      << endl;
+      << " data out (B):" << gMetrics.mDataOut.mValue;
   }
   catch (const exception& e) {
     LOGGER(error) << "ProcessFile std exception: " << e.what();
@@ -174,7 +182,7 @@ int main(int argc, char** argv)
     mt::HekaLogger logger;
 
     if (!logger.Connect(config.mHekaServer)) {
-      LOGGER(warning) << "Cannot connect to Heka, logging is disabled\n";
+      LOGGER(warning) << "Cannot connect to Heka, logging is disabled";
     }
 
     boost::asio::streambuf sb;

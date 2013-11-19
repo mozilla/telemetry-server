@@ -7,8 +7,15 @@
 #ifndef mozilla_telemetry_logger_h
 #define mozilla_telemetry_logger_h
 
+#include <cstring>
 #include <boost/log/trivial.hpp>
 
-#define LOGGER(level) BOOST_LOG_TRIVIAL(level) << __PRETTY_FUNCTION__ << ":" << __LINE__ << " - "
+#define __SHORT_FORM_OF_FILE__ \
+  (strrchr(__FILE__,'/') \
+   ? strrchr(__FILE__,'/')+1 \
+   : __FILE__ \
+   )
+
+#define LOGGER(level) BOOST_LOG_TRIVIAL(level) << __FUNCTION__ << " @ " << __SHORT_FORM_OF_FILE__ << ":" << __LINE__ << " - "
 
 #endif
