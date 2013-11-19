@@ -21,7 +21,7 @@ namespace telemetry {
 ////////////////////////////////////////////////////////////////////////////////
 HistogramDefinition::HistogramDefinition(const RapidjsonValue& aValue)
 {
-  const RapidjsonValue& k = aValue["kind"]; 
+  const RapidjsonValue& k = aValue["kind"];
   if (!k.IsString()) {
     throw runtime_error("missing kind element");
   }

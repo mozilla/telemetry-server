@@ -98,7 +98,7 @@ bool ProcessFile(const boost::filesystem::path& aName,
         sb.Put('\t');
         aRecord.GetDocument().Accept(writer);
         sb.Put('\n');
-        fs::path p = aSchema.GetDimensionPath(aRecord.GetDocument(), 
+        fs::path p = aSchema.GetDimensionPath(aRecord.GetDocument(),
                                               aRecord.GetTimestamp());
         aWriter.Write(p.string(), sb.GetString(), sb.Size());
         gMetrics.mDataOut.mValue += sb.Size();

@@ -22,7 +22,7 @@ static size_t PresetCompressionContextMemorySize[] = {
   195035136, 387973120, 706740224
 };
 
-/** 
+/**
  * Minimum number of bytes initiating on-the-fly compression, compression
  * overhead of compressing everything 20 MiB chunks is negligible. Thus, when
  * when we first start on-the-fly compression at 20 MiB we can always stop
@@ -105,19 +105,19 @@ public:
 private:
   /** Record writer that owns this OutputFile */
   RecordWriter& mOwner;
-  
+
   /** Compression context, if on-the-fly compression is active */
   CompressedFileWriter* mCompressor;
 
   /** Number of records written since last reprioritization */
   uint32_t  mRecordsSinceLastReprioritization;
-  
+
   /** File handle for raw file, if not currently compressing */
   FILE* mRawFile;
-  
+
   /** File handle for compressed file */
   FILE* mCompressedFile;
-  
+
   /** Size of data current written to mRawFile */
   uint64_t mUncompressedRawSize;
 
@@ -185,7 +185,7 @@ bool RecordWriter::OutputFile::Write(const char* aRecord, size_t aLength)
       return false;
     }
   } else {
-    
+
     // If raw file is missing we open one
     if (!mRawFile) {
       mu::EnsurePath(WorkFolder());
@@ -302,7 +302,7 @@ bool RecordWriter::OutputFile::RemoveCompressor()
   // Delete compressor
   delete mCompressor;
   mCompressor = nullptr;
-  
+
   return true;
 }
 
@@ -484,7 +484,7 @@ bool RecordWriter::ReprioritizeCompression()
   for(auto kv : mFileMap) {
     kv.second->ResetReprioritizationRecordCounter();
   }
-  
+
   return true;
 }
 

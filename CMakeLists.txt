@@ -18,7 +18,7 @@ find_package(ZLIB REQUIRED)
 find_package(LZMA)
 find_package(OpenSSL REQUIRED)
 find_package(Protobuf 2.3 REQUIRED)
-find_package(Boost 1.51.0 REQUIRED 
+find_package(Boost 1.51.0 REQUIRED
 filesystem
 system
 thread

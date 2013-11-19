@@ -133,7 +133,7 @@ class Launcher(object):
             print "ssh -i", self.ssl_key_path, ssl_host
             env.key_filename = self.ssl_key_path
             env.host_string = ssl_host
-            
+
             # Can't connect when using known hosts :(
             env.disable_known_hosts = True
 

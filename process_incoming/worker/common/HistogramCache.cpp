@@ -170,7 +170,7 @@ HistogramCache::LoadHistogram(const std::string& aRevisionKey)
     }
     catch (exception &e){
       ++mMetrics.mInvalidHistograms.mValue;
-      cerr << "LoadHistogram - invalid histogram specification: " 
+      cerr << "LoadHistogram - invalid histogram specification: "
         << aRevisionKey << endl;
       return shared_ptr<HistogramSpecification>();
     }

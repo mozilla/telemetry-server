@@ -22,9 +22,9 @@ public:
 
   /**
    * Connects the logger to a Heka instance.
-   * 
+   *
    * @param aHeka Hostname:port
-   * 
+   *
    * @return bool True if a connection could be established.
    */
   bool Connect(const std::string& aHeka);
@@ -35,15 +35,15 @@ public:
   void Disconnect();
 
   /**
-   * Writes the data to the Heka server. 
-   *  
+   * Writes the data to the Heka server.
+   *
    * @param sb Stream buffer containing the data to output.
-   * 
+   *
    * @return bool True if the data was successfully written to Heka.
    */
   bool Write(boost::asio::streambuf& sb);
 
-  bool operator()() 
+  bool operator()()
   {
     return mSocket.is_open();
   }

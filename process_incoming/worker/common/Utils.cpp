@@ -70,8 +70,8 @@ const std::string& UUIDGenerator::GetUUID()
     char rand = mDistribution(mGenerator);
     mUUID[i++] = rand + (rand < 10 ? 48 : 97);
   }
- 
-  // UUID4 format conformance 
+
+  // UUID4 format conformance
   mUUID[8] = '-';
   mUUID[13] = '-';
   mUUID[14] = '4';

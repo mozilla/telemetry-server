@@ -18,7 +18,7 @@ HekaLogger.cpp)
 
 add_library(telemetry STATIC ${TELEMETRY_SRC})
 add_dependencies(telemetry rapidjson-0_11)
-target_link_libraries(telemetry 
+target_link_libraries(telemetry
 ${Boost_LIBRARIES}
 ${PROTOBUF_LIBRARIES}
 ${ZLIB_LIBRARIES}
