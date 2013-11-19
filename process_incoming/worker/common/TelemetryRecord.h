@@ -13,6 +13,7 @@
 #include "Metric.h"
 #include "TelemetryConstants.h"
 
+#include <istream>
 #include <boost/utility.hpp>
 #include <cstdint>
 #include <rapidjson/document.h>

@@ -19,6 +19,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
+#include <boost/asio.hpp>
 #include <chrono>
 #include <exception>
 #include <fstream>
@@ -149,15 +150,11 @@ int main(int argc, char** argv)
     cerr << "usage: " << argv[0] << " <json config> <input config>\n";
     return EXIT_FAILURE;
   }
-  char hostname[HOST_NAME_MAX];
-  if (gethostname(hostname, HOST_NAME_MAX) != 0) {
-    cerr << "gethostname() failed\n";
-    return EXIT_FAILURE;
-  }
+
   message::Message msg;
   msg.set_type("telemetry.convert");
   msg.set_pid(getpid());
-  msg.set_hostname(hostname);
+  msg.set_hostname(boost::asio::ip::host_name().c_str());
 
   try {
     mt::ConvertConfig config;
