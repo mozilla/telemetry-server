@@ -141,12 +141,12 @@ bool ProcessFile(const boost::filesystem::path& aName,
       << " data out (B):" << gMetrics.mDataOut.mValue;
   }
   catch (const exception& e) {
-    LOGGER(error) << "ProcessFile std exception: " << e.what();
+    LOGGER(error) << "std exception: " << e.what();
     ++gMetrics.mExceptions.mValue;
     return false;
   }
   catch (...) {
-    LOGGER(error) << "ProcessFile unknown exception";
+    LOGGER(error) << "unknown exception";
     ++gMetrics.mExceptions.mValue;
     return false;
   }

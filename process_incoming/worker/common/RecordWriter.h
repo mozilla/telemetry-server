@@ -7,6 +7,7 @@
 #ifndef RecordWriter_h
 #define RecordWriter_h
 
+#include <algorithm>
 #include <string>
 #include <sstream>
 #include <unordered_map>
@@ -47,6 +48,11 @@ public:
                uint64_t aMaxUncompressedSize, size_t aSoftMemoryLimit,
                uint32_t aCompressionPreset);
 
+  ~RecordWriter()
+  {
+    Finalize();
+  }
+
   /** Write record with given filter path */
   bool Write(const std::string& aPath, const char* aRecord, size_t aLength);
 
@@ -83,7 +89,9 @@ public:
     boost::uuids::uuid u = boost::uuids::random_generator()();
     std::stringstream ss;
     ss << u;
-    return ss.str();
+    std::string ret = ss.str();
+    ret.erase(std::remove(ret.begin(), ret.end(), '-'), ret.end());
+    return ret;
   }
 
 private:

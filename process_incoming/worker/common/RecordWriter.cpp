@@ -146,13 +146,13 @@ private:
   /** Get path to raw file */
   string RawPath() const
   {
-    return WorkFolder() + "/raw-data.log";
+    return WorkFolder() + "/v2.log";
   }
 
   /** Get path to compressed file */
   string CompressedPath() const
   {
-    return WorkFolder() + "/data.log.xz";
+    return WorkFolder() + "/v2.log.lzma";
   }
 
   /** Get folder to finished file for upload */
@@ -164,8 +164,7 @@ private:
   /** Get path to the finish file for upload */
   string FinishedPath() const
   {
-    //<build-id>.<submission-date>.v<version>.log.<number of records>.<uuid4>.lzma
-    return UploadFolder() + "/data.log.xz"; // +  mOwner.GetUUID()
+    return UploadFolder() + ".v2.log." + mOwner.GetUUID() + ".lzma";
   }
 };
 
@@ -296,7 +295,7 @@ bool RecordWriter::OutputFile::RemoveCompressor()
   assert(mCompressor && mCompressedFile);
 
   // Finalize compressor
-  if (mCompressor->Finalize()) {
+  if (!mCompressor->Finalize()) {
     LOGGER(error) << "compressor finalization failure";
     mIsCorrupted = true;
     return false;
@@ -472,7 +471,7 @@ bool RecordWriter::ReprioritizeCompression()
   for(i = contexts; i < len; i++) {
     if (files[i]->HasCompressor()) {
       if (!files[i]->RemoveCompressor()) {
-	LOGGER(error) << "failure to remove compressor";
+        LOGGER(error) << "failure to remove compressor";
         return false;
       }
     }

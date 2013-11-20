@@ -42,20 +42,20 @@ bool CompressedFileWriter::Initialize(uint32_t preset)
     // Print error code
     switch (ret) {
       case LZMA_MEM_ERROR:
-	LOGGER(error) << "memory allocation failed (code " << ret << ")";
-	break;
+        LOGGER(error) << "memory allocation failed (code " << ret << ")";
+        break;
 
       case LZMA_OPTIONS_ERROR:
-	LOGGER(error) << "specified preset is not supported (code " << ret << ")";
-	break;
+        LOGGER(error) << "specified preset is not supported (code " << ret << ")";
+        break;
 	
       case LZMA_UNSUPPORTED_CHECK:
-	LOGGER(error) << "specified integrity check is not supported (code " << ret << ")";
-	break;
+        LOGGER(error) << "specified integrity check is not supported (code " << ret << ")";
+        break;
 
       default:
-	LOGGER(error) << "unknown error, possible bug (code " << ret << ")";
-	break;
+        LOGGER(error) << "unknown error, possible bug (code " << ret << ")";
+        break;
     }
 
     // Abort initialization
@@ -95,16 +95,16 @@ bool CompressedFileWriter::Write(const char* aBuffer, size_t aLength)
     if (ret != LZMA_OK) {
       switch (ret) {
         case LZMA_STREAM_END:
-	  LOGGER(error) << "unexpected LZMA stream end";
+          LOGGER(error) << "unexpected LZMA stream end";
           break;
         case LZMA_MEM_ERROR:
-	  LOGGER(error) << "memory allocation failed (code " << ret << ")";
+          LOGGER(error) << "memory allocation failed (code " << ret << ")";
           break;
         case LZMA_DATA_ERROR:
-	  LOGGER(error) << "file size limits exceeded (code " << ret << ")";
+          LOGGER(error) << "file size limits exceeded (code " << ret << ")";
           break;
         default:
-	  LOGGER(error) << "unknown error, possibly a bug (code " << ret << ")";
+          LOGGER(error) << "unknown error, possibly a bug (code " << ret << ")";
           break;
       }
       return false;
@@ -115,7 +115,7 @@ bool CompressedFileWriter::Write(const char* aBuffer, size_t aLength)
 
       // Write to file
       if (fwrite(mBuffer, 1, BUF_SIZE, mFile) != BUF_SIZE) {
-	LOGGER(error) << "fwrite failed, " << strerror(errno);
+        LOGGER(error) << "fwrite failed, " << strerror(errno);
         return false;
       }
 
@@ -174,13 +174,13 @@ bool CompressedFileWriter::Finalize()
     if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
       switch (ret) {
         case LZMA_MEM_ERROR:
-	  LOGGER(error) << "memory allocation failed (code " << ret << ")";
+          LOGGER(error) << "memory allocation failed (code " << ret << ")";
           break;
         case LZMA_DATA_ERROR:
-	  LOGGER(error) << "file size limits exceeded (code " << ret << ")";
+          LOGGER(error) << "file size limits exceeded (code " << ret << ")";
           break;
         default:
-	  LOGGER(error) << "unknown error, possibly a bug (code " << ret << ")";
+          LOGGER(error) << "unknown error, possibly a bug (code " << ret << ")";
           break;
       }
       return false;
@@ -193,7 +193,7 @@ bool CompressedFileWriter::Finalize()
 
       // Write to file
       if (fwrite(mBuffer, 1, outsize, mFile) != outsize) {
-	LOGGER(error) << "fwrite failed, " << strerror(errno);
+        LOGGER(error) << "fwrite failed, " << strerror(errno);
         return false;
       }
 
