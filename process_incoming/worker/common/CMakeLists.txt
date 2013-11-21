@@ -11,7 +11,6 @@ TelemetryRecord.cpp
 TelemetrySchema.cpp
 RecordWriter.cpp
 CompressedFileWriter.cpp
-Utils.cpp
 Metric.cpp
 message.pb.cc
 HekaLogger.cpp)

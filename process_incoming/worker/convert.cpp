@@ -17,14 +17,16 @@
 #include "message.pb.h"
 #include "Logger.h"
 
-#include <boost/filesystem.hpp>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/asio.hpp>
 #include <chrono>
 #include <exception>
 #include <fstream>
 #include <iostream>
+
+#include <boost/filesystem.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/asio.hpp>
+
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
@@ -106,7 +108,7 @@ bool ProcessFile(const boost::filesystem::path& aName,
         sb.Put('\n');
         fs::path p = aSchema.GetDimensionPath(aRecord.GetDocument(),
                                               aRecord.GetTimestamp());
-        if(aWriter.Write(p.string(), sb.GetString(), sb.Size())) {
+        if(aWriter.Write(p, sb.GetString(), sb.Size())) {
           gMetrics.mDataOut.mValue += sb.Size();
         } else {
           conversionFailed = true;
@@ -152,6 +154,29 @@ bool ProcessFile(const boost::filesystem::path& aName,
   }
 
   return true;
+}
+
+void InitializeLogMsg(message::Message &msg, const std::string &payload)
+{
+  boost::uuids::uuid u = boost::uuids::random_generator()();
+  msg.set_uuid(&u, u.size());
+  auto tp = chrono::high_resolution_clock::now();
+  chrono::nanoseconds ts = tp.time_since_epoch();
+  msg.set_timestamp(ts.count());
+  msg.set_payload(payload.c_str());
+}
+
+void FinalizeLogMsg(mt::HekaLogger &logger, boost::asio::streambuf &sb)
+{
+  logger.Write(sb);
+}
+
+template <typename T>
+void LogComponent(message::Message &msg, const std::string &name, T &component, ostream &os)
+{
+  msg.set_logger(name);
+  component.GetMetrics(msg);
+  mt::WriteMessage(os, msg);
 }
 
 int main(int argc, char** argv)
@@ -205,30 +230,22 @@ int main(int argc, char** argv)
       }
 
       if (logger()) {
-        boost::uuids::uuid u = boost::uuids::random_generator()();
-        msg.set_uuid(&u, u.size());
-        auto tp = chrono::high_resolution_clock::now();
-        chrono::nanoseconds ts = tp.time_since_epoch();
-        msg.set_timestamp(ts.count());
-        msg.set_payload(fn.filename().c_str());
-
-        msg.set_logger("cache");
-        cache.GetMetrics(msg);
-        mt::WriteMessage(os, msg);
-
-        msg.set_logger("record");
-        record.GetMetrics(msg);
-        mt::WriteMessage(os, msg);
-
-        msg.set_logger("schema");
-        schema.GetMetrics(msg);
-        mt::WriteMessage(os, msg);
-
-        msg.set_logger("converter");
-        gMetrics.GetMetrics(msg);
-        mt::WriteMessage(os, msg);
-        logger.Write(sb);
+        InitializeLogMsg(msg, fn.filename().c_str());
+        LogComponent(msg, "cache", cache, os);
+        LogComponent(msg, "record", record, os);
+        LogComponent(msg, "schema", schema, os);
+        LogComponent(msg, "writer", writer, os);
+        LogComponent(msg, "converter", gMetrics, os);
+        FinalizeLogMsg(logger, sb);
       }
+    }
+
+    if (logger()) {
+      writer.Finalize();
+
+      InitializeLogMsg(msg, "EOF");
+      LogComponent(msg, "writer", writer, os);
+      FinalizeLogMsg(logger, sb);
     }
   }
   catch (const exception& e) {

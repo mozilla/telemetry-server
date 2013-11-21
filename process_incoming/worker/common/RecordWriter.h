@@ -7,14 +7,14 @@
 #ifndef RecordWriter_h
 #define RecordWriter_h
 
+#include "Metric.h"
+
 #include <algorithm>
 #include <string>
 #include <sstream>
 #include <unordered_map>
 
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include <boost/filesystem.hpp>
 
 namespace mozilla {
 
@@ -54,7 +54,7 @@ public:
   }
 
   /** Write record with given filter path */
-  bool Write(const std::string& aPath, const char* aRecord, size_t aLength);
+  bool Write(const boost::filesystem::path &aPath, const char *aRecord, size_t aLength);
 
   /** Close all open files, compress and move to upload folder */
   bool Finalize();
@@ -83,28 +83,41 @@ public:
     return mMaxUncompressedSize;
   }
 
-  /** Get a new UUID */
-  std::string GetUUID()
-  {
-    boost::uuids::uuid u = boost::uuids::random_generator()();
-    std::stringstream ss;
-    ss << u;
-    std::string ret = ss.str();
-    ret.erase(std::remove(ret.begin(), ret.end(), '-'), ret.end());
-    return ret;
-  }
+  /**
+   * Rolls up the internal metric data into the fields element of the provided
+   * message. The metrics are reset after each call.
+   *
+   * @param aMsg The message fields element will be cleared and then populated
+   *             with the RecordWriter metrics.
+   */
+  void GetMetrics(message::Message& aMsg);
 
 private:
+  struct Metrics {
+    Metrics() :
+      mGeneratedFiles("Generated Files"),
+      mUncompressedSize("Uncompressed Size"),
+      mCompressedSize("Compressed Size") { }
+
+    Metric mGeneratedFiles;
+    Metric mUncompressedSize;
+    Metric mCompressedSize;
+  };
+
   std::string mWorkFolder;
   std::string mUploadFolder;
-  uint64_t    mMaxUncompressedSize;
-  size_t      mSoftMemoryLimit;
-  uint32_t    mCompressionPreset;
-  FileMap     mFileMap;
-  size_t      mRecordsSinceLastReprioritization;
+  uint64_t mMaxUncompressedSize;
+  size_t mSoftMemoryLimit;
+  uint32_t mCompressionPreset;
+  FileMap mFileMap;
+  size_t mRecordsSinceLastReprioritization;
+  Metrics mMetrics;
 
   /** Reprioritize on-the-fly compression */
   bool ReprioritizeCompression();
+
+  /** Get a new UUID */
+  std::string GetUUID();
 };
 
 } // namespace Telemetry

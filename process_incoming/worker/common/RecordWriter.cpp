@@ -5,23 +5,24 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "CompressedFileWriter.h"
-#include "Utils.h"
-
 #include "RecordWriter.h"
 #include "Logger.h"
 
-#include <errno.h>
-#include <string.h>
-#include <assert.h>
+#include <cerrno>
+#include <cstring>
+#include <cassert>
 
 #include <vector>
 #include <algorithm>
 
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
 using namespace std;
+namespace fs = boost::filesystem;
 
-namespace mu = mozilla::Utils;
-
-#define REPRIORIZATION_INTERVAL     1000
+#define REPRIORIZATION_INTERVAL 1000
 
 /** Compression memory requirements from man xz(1) */
 static size_t PresetCompressionContextMemorySize[] = {
@@ -36,7 +37,7 @@ static size_t PresetCompressionContextMemorySize[] = {
  * on-the-fly compression again, this is useful of another OutputFile
  * receives more traffic.
  */
-#define MIN_COMRESS_CHUNCK          20 * 1024 * 1024
+#define MIN_COMRESS_CHUNCK 20 * 1024 * 1024
 
 namespace mozilla {
 namespace telemetry {
@@ -45,10 +46,11 @@ namespace telemetry {
 class RecordWriter::OutputFile
 {
 public:
-  OutputFile(const string& aPath, RecordWriter& aOwner)
+  OutputFile(const fs::path &aPath, RecordWriter& aOwner)
    : mOwner(aOwner), mCompressor(nullptr), mRecordsSinceLastReprioritization(0),
      mRawFile(NULL), mCompressedFile(NULL), mUncompressedRawSize(0),
-     mUncompressedSize(0), mPath(aPath), mIsCorrupted(false)
+     mUncompressedSize(0), mCompressedSize(0), mPath(aPath.parent_path().string()),
+     mPrefix(aPath.filename().string()), mIsCorrupted(false)
   {
     // Initialized with no raw file or on-the-fly compression
   }
@@ -109,6 +111,14 @@ public:
     mRecordsSinceLastReprioritization = 0;
   }
 
+  uint64_t GetUncompressedSize() {
+    return mUncompressedSize;
+  }
+
+  uint64_t GetCompressedSize() {
+    return mCompressedSize;
+  }
+
 private:
   /** Record writer that owns this OutputFile */
   RecordWriter& mOwner;
@@ -131,8 +141,14 @@ private:
   /** Size of data both in mRawFile and chunks compressed */
   uint64_t mUncompressedSize;
 
+  /** Size of compressed data written */
+  uint64_t mCompressedSize;
+
   /** Filter path string */
   string mPath;
+
+  /** Filename prefix string */
+  string mPrefix;
 
   /** True, if this file is corrupted, ie. failures with undefined outcome */
   bool mIsCorrupted;
@@ -146,13 +162,13 @@ private:
   /** Get path to raw file */
   string RawPath() const
   {
-    return WorkFolder() + "/v2.log";
+    return WorkFolder() + "/" + mPrefix + ".v2.log";
   }
 
   /** Get path to compressed file */
   string CompressedPath() const
   {
-    return WorkFolder() + "/v2.log.lzma";
+    return WorkFolder() + "/" + mPrefix + ".v2.log.xz";
   }
 
   /** Get folder to finished file for upload */
@@ -164,10 +180,9 @@ private:
   /** Get path to the finish file for upload */
   string FinishedPath() const
   {
-    return UploadFolder() + ".v2.log." + mOwner.GetUUID() + ".lzma";
+    return UploadFolder() + "/" + mPrefix + ".v2.log." + mOwner.GetUUID() + ".xz";
   }
 };
-
 
 bool RecordWriter::OutputFile::Write(const char* aRecord, size_t aLength)
 {
@@ -186,18 +201,20 @@ bool RecordWriter::OutputFile::Write(const char* aRecord, size_t aLength)
   if (mCompressor) {
     assert(mCompressedFile && mUncompressedRawSize == 0);
     // If writing to compressed file fails, we return for clean process abortion
-    if (!mCompressor->Write(aRecord, aLength)) {
+    size_t bytesWritten = 0;
+    if (!mCompressor->Write(aRecord, aLength, &bytesWritten)) {
       LOGGER(error) << "compressor write failed";
       mIsCorrupted = true;
       return false;
     }
+    mCompressedSize += bytesWritten;
   } else {
     // If raw file is missing we open one
     if (!mRawFile) {
-      mu::EnsurePath(WorkFolder());
+      fs::create_directories(WorkFolder());
       mRawFile = fopen(RawPath().c_str(), "w+");
       if (mRawFile == NULL) {
-	LOGGER(error) << "fopen failed, " << strerror(errno);
+        LOGGER(error) << "fopen failed, " << strerror(errno);
         return false;
       }
     }
@@ -239,8 +256,8 @@ bool RecordWriter::OutputFile::AddCompressor()
   }
 
   // Create compressor
-  mCompressor = new CompressedFileWriter(mCompressedFile);
-  if (!mCompressor->Initialize(mOwner.CompressionPreset())) {
+  mCompressor = new CompressedFileWriter();
+  if (!mCompressor->Initialize(mCompressedFile, mOwner.CompressionPreset())) {
     LOGGER(error) << "compressor initialization failed";
     mIsCorrupted = true;
     return false;
@@ -264,11 +281,13 @@ bool RecordWriter::OutputFile::AddCompressor()
     }
 
     // Write to compressor
-    if (!mCompressor->Write(buffer, read)) {
+    size_t bytesWritten = 0;
+    if (!mCompressor->Write(buffer, read, &bytesWritten)) {
       LOGGER(error) << "compressor write failed";
       mIsCorrupted = true;
       return false;
     }
+    mCompressedSize += bytesWritten;
   }
 
   // Close raw file
@@ -295,11 +314,13 @@ bool RecordWriter::OutputFile::RemoveCompressor()
   assert(mCompressor && mCompressedFile);
 
   // Finalize compressor
-  if (!mCompressor->Finalize()) {
+  size_t bytesWritten = 0;
+  if (!mCompressor->Finalize(&bytesWritten)) {
     LOGGER(error) << "compressor finalization failure";
     mIsCorrupted = true;
     return false;
   }
+  mCompressedSize += bytesWritten;
 
   // Delete compressor
   delete mCompressor;
@@ -307,7 +328,6 @@ bool RecordWriter::OutputFile::RemoveCompressor()
 
   return true;
 }
-
 
 bool RecordWriter::OutputFile::Finalize()
 {
@@ -346,11 +366,7 @@ bool RecordWriter::OutputFile::Finalize()
   mCompressedFile = NULL;
 
   // Create upload folder, so we can move the file there
-  if (!mu::EnsurePath(UploadFolder())) {
-    LOGGER(error) << "failure to create upload folder";
-    mIsCorrupted = true;
-    return false;
-  }
+  fs::create_directories(UploadFolder());
 
   // Move atomically to the upload folder
   if (rename(CompressedPath().c_str(), FinishedPath().c_str())) {
@@ -362,30 +378,28 @@ bool RecordWriter::OutputFile::Finalize()
   return true;
 }
 
-
 RecordWriter::RecordWriter(const std::string& aWorkFolder,
                            const std::string& aUploadFolder,
                            uint64_t aMaxUncompressedSize,
                            size_t aSoftMemoryLimit, uint32_t aCompressionPreset)
    : mWorkFolder(aWorkFolder), mUploadFolder(aUploadFolder),
-     mMaxUncompressedSize(aMaxUncompressedSize),
-     mSoftMemoryLimit(aSoftMemoryLimit), mCompressionPreset(aCompressionPreset),
-     mFileMap(), mRecordsSinceLastReprioritization(0)
-  {
-    // We don't allow use of extreme flag
-    assert(mCompressionPreset <= 9);
+     mMaxUncompressedSize(aMaxUncompressedSize), mSoftMemoryLimit(aSoftMemoryLimit),
+     mCompressionPreset(aCompressionPreset), mFileMap(),
+     mRecordsSinceLastReprioritization(0)
+{
+  // We don't allow use of extreme flag
+  assert(mCompressionPreset <= 9);
 
-    // Ensure that folder strings always end with a slash
-    if (mWorkFolder[mWorkFolder.length() - 1] != '/') {
-      mWorkFolder += "/";
-    }
-    if (mUploadFolder[mUploadFolder.length() - 1] != '/') {
-      mUploadFolder += "/";
-    }
+  // Ensure that folder strings always end with a slash
+  if (mWorkFolder[mWorkFolder.length() - 1] != '/') {
+    mWorkFolder += "/";
   }
+  if (mUploadFolder[mUploadFolder.length() - 1] != '/') {
+    mUploadFolder += "/";
+  }
+}
 
-
-bool RecordWriter::Write(const string& aPath, const char* aRecord,
+bool RecordWriter::Write(const fs::path &aPath, const char* aRecord,
                          size_t aLength)
 {
   // We've hit the repriorization interval reprioritize on-the-fly compression
@@ -401,14 +415,14 @@ bool RecordWriter::Write(const string& aPath, const char* aRecord,
   OutputFile* file = nullptr;
 
   // Lookup in hash table
-  auto it = mFileMap.find(aPath);
+  auto it = mFileMap.find(aPath.string());
   if (it != mFileMap.end()) {
     file = it->second;
   } else {
     // Create output file
     file = new OutputFile(aPath, *this);
     // Store file for use next time
-    mFileMap.insert({{aPath, file}});
+    mFileMap.insert({aPath.string(), file});
   }
   assert(file);
 
@@ -431,6 +445,9 @@ bool RecordWriter::Finalize()
     } else {
       // Finalize file, compress and move to upload folder
       retval = file->Finalize() && retval;
+      mMetrics.mUncompressedSize.mValue += file->GetUncompressedSize();
+      mMetrics.mCompressedSize.mValue += file->GetCompressedSize();
+      ++mMetrics.mGeneratedFiles.mValue;
     }
 
     delete file;
@@ -481,7 +498,7 @@ bool RecordWriter::ReprioritizeCompression()
   for(i = 0; i < contexts; i++) {
     if (!files[i]->HasCompressor()) {
       if (!files[i]->AddCompressor()) {
-	LOGGER(error) << "failure to remove compressor";
+        LOGGER(error) << "failure to remove compressor";
         return false;
       }
     }
@@ -495,6 +512,27 @@ bool RecordWriter::ReprioritizeCompression()
   return true;
 }
 
+void RecordWriter::GetMetrics(message::Message& aMsg)
+{
+  aMsg.clear_fields();
+  ConstructField(aMsg, mMetrics.mGeneratedFiles);
+  ConstructField(aMsg, mMetrics.mUncompressedSize);
+  ConstructField(aMsg, mMetrics.mCompressedSize);
+
+  mMetrics.mGeneratedFiles.mValue = 0;
+  mMetrics.mUncompressedSize.mValue = 0;
+  mMetrics.mCompressedSize.mValue = 0;
+}
+
+std::string RecordWriter::GetUUID()
+{
+  boost::uuids::uuid u = boost::uuids::random_generator()();
+  std::stringstream ss;
+  ss << u;
+  std::string ret = ss.str();
+  ret.erase(std::remove(ret.begin(), ret.end(), '-'), ret.end());
+  return ret;
+}
 
 } // namespace Telemetry
 } // namespace mozilla

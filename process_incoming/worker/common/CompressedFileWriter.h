@@ -13,6 +13,9 @@
 
 #include <lzma.h>
 
+/** Buffer output buffer size, before writing to file */
+#define BUF_SIZE BUFSIZ
+
 namespace mozilla {
 
 /**
@@ -24,32 +27,26 @@ class CompressedFileWriter
 {
 public:
   /** Create CompressedFileWriter */
-  CompressedFileWriter(FILE* aFile);
+  CompressedFileWriter();
 
   /**
    * Initialize CompressedFileWriter given an LZMA compression level, a number
    * between 0 and 9.
    * See preset option in xz(1) for more details.
    */
-  bool Initialize(uint32_t preset = 0);
+  bool Initialize(FILE *aFile, uint32_t preset = 0);
 
   /** Write buffer to compressed file */
-  bool Write(const char* aBuffer, size_t aLength);
-
-  /** Size of data added to compressed file */
-  uint64_t UncompressedSize() const;
-
-  /** Size of compressed file so far */
-  uint64_t CompressedSize() const;
+  bool Write(const char* aBuffer, size_t aSize, size_t *aCompressedSize = nullptr);
 
   /** Finalize compression */
-  bool Finalize();
+  bool Finalize(size_t *aCompressedSize = nullptr);
 
   ~CompressedFileWriter();
 private:
   FILE* mFile;
-  lzma_stream* mStream;
-  char* mBuffer;
+  lzma_stream mStream;
+  char mBuffer[BUF_SIZE];
 };
 
 } // namespace mozilla
