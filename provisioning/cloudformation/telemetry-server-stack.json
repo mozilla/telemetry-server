@@ -247,6 +247,10 @@
   },
 
   "Outputs": {
+    "LoadBalancer": {
+      "Description": "The name of the Load Balancer in front of the web nodes",
+      "Value":  { "Ref": "LoadBalancer" }
+    },
     "IncomingBucket": {
       "Description": "The name of the Incoming S3 Bucket",
       "Value":  { "Ref": "IncomingBucketName" }
