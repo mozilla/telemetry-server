@@ -1,0 +1,267 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation template for telemetry-server setup. This stack takes care of everything from accepting Telemetry submissions via HTTPS to saving published data in S3.",
+
+  "Parameters": {
+    "LoadBalancer": {
+      "Description": "Load Balancer Name of the ELB in front of Telemetry HTTP nodes",
+      "Type":        "String",
+      "Default":     "telemetry-server-lb"
+    },
+    "SSHKeyName": {
+      "Description": "The EC2 Key Pair to allow SSH access to the instances",
+      "Type":        "String",
+      "Default":     "mreid"
+    },
+    "IncomingBucketName": {
+      "Description": "The name of the S3 bucket in which to store incoming data",
+      "Type":        "String",
+      "Default":     "telemetry-incoming-v2"
+    },
+    "IncomingQueueName": {
+      "Description": "The name of the SQS queue in which to store incoming data",
+      "Type":        "String",
+      "Default":     "telemetry-incoming-v1"
+    },
+    "PublishedBucketName": {
+      "Description": "The name of the S3 bucket in which to store published data",
+      "Type":        "String",
+      "Default":     "telemetry-published-v1"
+    },
+    "WebServerInstanceType": {
+      "Description": "Type of EC2 instance to launch for HTTP nodes",
+      "Type":        "String",
+      "Default":     "m1.small"
+    },
+    "ProcessIncomingInstanceType": {
+      "Description": "Type of EC2 instance to launch for Process Incoming nodes",
+      "Type":        "String",
+      "Default":     "c1.xlarge"
+    }
+  },
+
+  "Mappings": {
+    "Region2WebServerAMI": {
+      "us-west-2": { "AMI": "ami-7c7be34c" }
+    },
+    "Region2ProcessIncomingAMI": {
+      "us-west-2": { "AMI": "ami-7c7be34c" }
+    }
+  },
+
+  "Resources": {
+    "WebServerGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones":       { "Fn::GetAZs": "" },
+        "LaunchConfigurationName": { "Ref": "WebServerLaunchConfig" },
+        "MinSize":                 "2",
+        "MaxSize":                 "10",
+        "LoadBalancerNames":       [ { "Ref": "LoadBalancer" } ]
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": "1",
+          "MaxBatchSize": "1",
+          "PauseTime": "PT10M"
+        }
+      }
+    },
+
+    "WebServerIAMProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ { "Ref": "WebServerIAMRole" } ]
+      }
+    },
+
+    "WebServerIAMRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path": "/telemetry/server/",
+        "Policies": [ {
+          "PolicyName": "WriteS3Incoming",
+          "PolicyDocument": {
+            "Statement": [ {
+              "Effect": "Allow",
+              "Action": [ "s3:PutObject" ],
+              "Resource": [ {
+                "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "IncomingBucketName" }, "/*" ] ]
+              } ]
+            } ]
+          }
+        }, {
+          "PolicyName": "WriteSQSIncoming",
+          "PolicyDocument": {
+            "Statement": [ {
+              "Effect": "Allow",
+              "Action": [ "sqs:SendMessage" ],
+              "Resource": [ {
+                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2::", { "Ref": "IncomingQueueName" }, "/*" ] ]
+              } ]
+            } ]
+          }
+        }]
+      }
+    },
+
+    "WebServerLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "KeyName":            { "Ref": "SSHKeyName" },
+        "ImageId":            { "Fn::FindInMap": [ "Region2WebServerAMI", { "Ref": "AWS::Region" }, "AMI" ] },
+        "SecurityGroups":     [ "telemetry" ],
+        "IamInstanceProfile": { "Ref": "WebServerIAMProfile" },
+        "InstanceType":       { "Ref": "WebServerInstanceType" },
+        "UserData": { "Fn::Base64": { "Fn::Join": [ "\n", [
+          "#!/bin/bash",
+          "mkdir -p /mnt/telemetry",
+          "mkdir -p /mnt/telemetry/data",
+          "mkdir -p /mnt/telemetry/log",
+          "chown -R ubuntu:ubuntu /mnt/telemetry",
+          "if [ ! -e '/var/log/telemetry' ]; then",
+          "  ln -s /mnt/telemetry/log /var/log/telemetry",
+          "fi",
+          "start telemetry-server"
+        ] ] } }
+      }
+    },
+
+    "ProcessIncomingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones":       { "Fn::GetAZs": "" },
+        "LaunchConfigurationName": { "Ref": "ProcessIncomingLaunchConfig" },
+        "MinSize":                 "1",
+        "MaxSize":                 "5"
+      }
+    },
+
+    "ProcessIncomingIAMRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path": "/telemetry/server/",
+        "Policies": [ {
+          "PolicyName": "ReadAndDeleteS3Incoming",
+          "PolicyDocument": {
+            "Statement": [ {
+              "Effect": "Allow",
+                "Action": [ "s3:GetObject", "s3:DeleteObject", "s3:ListBucket" ],
+              "Resource": [ {
+                "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "IncomingBucketName" }, "/*" ] ]
+              } ]
+            } ]
+          }
+        }, {
+          "PolicyName": "WriteS3Published",
+          "PolicyDocument": {
+            "Statement": [ {
+              "Effect": "Allow",
+                "Action": [ "s3:PutObject" ],
+              "Resource": [ {
+                "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "PublishedBucketName" }, "/*" ] ]
+              } ]
+            } ]
+          }
+        }, {
+          "PolicyName": "ReadAndDeleteSQSIncoming",
+          "PolicyDocument": {
+            "Statement": [ {
+              "Effect": "Allow",
+              "Action": [ "sqs:ReceiveMessage", "sqs:DeleteMessage" ],
+              "Resource": [ {
+                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2::", { "Ref": "IncomingQueueName" }, "/*" ] ]
+              } ]
+            } ]
+          }
+        }]
+      }
+    },
+
+    "ProcessIncomingIAMProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ { "Ref": "ProcessIncomingIAMRole" } ]
+      }
+    },
+
+    "ProcessIncomingLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "KeyName":            { "Ref": "SSHKeyName" },
+        "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMI" ] },
+        "SecurityGroups":     [ { "Ref": "ProcessIncomingSecurityGroup" } ],
+        "IamInstanceProfile": { "Ref": "ProcessIncomingIAMProfile" },
+        "InstanceType":       { "Ref": "ProcessIncomingInstanceType" },
+        "BlockDeviceMappings": [
+          { "DeviceName": "/dev/xvdb", "VirtualName": "ephemeral0" },
+          { "DeviceName": "/dev/xvdc", "VirtualName": "ephemeral1" },
+          { "DeviceName": "/dev/xvdd", "VirtualName": "ephemeral2" },
+          { "DeviceName": "/dev/xvde", "VirtualName": "ephemeral3" }
+        ],
+        "UserData": { "Fn::Base64": { "Fn::Join": [ "\n", [
+          "#!/bin/bash",
+          "umount /mnt",
+          "yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices=4 /dev/xvdb /dev/xvdc /dev/xvdd /dev/xvde",
+          "echo 'DEVICE /dev/xvdb /dev/xvdc /dev/xvdd /dev/xvde' >> /etc/mdadm/mdadm.conf",
+          "mdadm --detail --scan >> /etc/mdadm/mdadm.conf",
+          "mkfs.ext3 -T largefile /dev/md0",
+          "mount /dev/md0 /mnt",
+          "mkdir -p /mnt/telemetry",
+          "mkdir -p /mnt/telemetry/processed",
+          "mkdir -p /mnt/telemetry/work",
+          "chown -R ubuntu:ubuntu /mnt/telemetry"
+        ] ] } }
+      }
+    },
+
+    "ProcessIncomingSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for ProcessIncoming workers",
+        "SecurityGroupIngress": [
+          { "IpProtocol": "tcp", "FromPort": "22", "ToPort": "22", "CidrIp": "0.0.0.0/0" }
+        ]
+      }
+    }
+  },
+
+  "Outputs": {
+    "LoadBalancer": {
+      "Description": "The name of the Load Balancer in front of the web nodes",
+      "Value":  { "Ref": "LoadBalancer" }
+    },
+    "IncomingBucket": {
+      "Description": "The name of the Incoming S3 Bucket",
+      "Value":  { "Ref": "IncomingBucketName" }
+    },
+    "PublishedBucket": {
+      "Description": "The name of the Published S3 Bucket",
+      "Value":  { "Ref": "PublishedBucketName" }
+    },
+    "IncomingQueue": {
+      "Description": "The name of the Incoming SQS Queue",
+      "Value":  { "Ref": "IncomingQueueName" }
+    }
+  }
+}
