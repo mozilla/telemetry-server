@@ -229,8 +229,8 @@
           "mount /dev/md0 /mnt",
           "mkdir -p /mnt/telemetry",
           "mkdir -p /mnt/telemetry/processed",
-          "mkdir -p /mnt/telemetry/work"
-          "chown -R ubuntu:ubuntu /mnt/telemetry",
+          "mkdir -p /mnt/telemetry/work",
+          "chown -R ubuntu:ubuntu /mnt/telemetry"
         ] ] } }
       }
     },
