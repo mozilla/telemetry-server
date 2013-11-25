@@ -332,14 +332,14 @@ class CompressCompletedStep(PipeStep):
 
 
 class ExportCompressedStep(PipeStep):
-    def __init__(self, num, name, q_in, base_dir, key, skey, bucket, dry_run):
+    def __init__(self, num, name, q_in, base_dir, config, dry_run):
         self.dry_run = dry_run
         self.batch_size = 8
         self.retries = 10
         self.base_dir = base_dir
-        self.aws_key = key
-        self.aws_secret_key = skey
-        self.aws_bucket_name = bucket
+        self.aws_key = config.get("aws_key", None)
+        self.aws_secret_key = config.get("aws_secret_key", None)
+        self.aws_bucket_name = config["publish_bucket"]
         PipeStep.__init__(self, num, name, q_in)
 
     def setup(self):
@@ -458,22 +458,16 @@ def start_workers(count, name, clazz, q_in, more_args):
 def main():
     signal.signal(signal.SIGINT, handle_sigint)
     parser = argparse.ArgumentParser(description='Process incoming Telemetry data', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-c", "--config", help="Configuration file (json)", required=True, type=file)
+    parser.add_argument("-c", "--config", help="AWS Configuration file (json)", required=True, type=file)
 
-    parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
-    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
-    parser.add_argument("-r", "--aws-region", help="AWS Region", default="us-west-2")
     parser.add_argument("-w", "--work-dir", help="Location to cache downloaded files", required=True)
     parser.add_argument("-o", "--output-dir", help="Base dir to store processed data", required=True)
     parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
     parser.add_argument("-b", "--bad-data-log", help="Save bad records to this file")
-    parser.add_argument("-q", "--queue", help="SQS Queue name to poll for incoming data")
     parser.add_argument("-c", "--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
     parser.add_argument("-D", "--dry-run", help="Don't modify remote files", action="store_true")
-    parser.add_argument("-C", "--skip-conversion", help="Skip validation/conversion of payloads", action="store_true")
-    parser.add_argument("-l", "--loop", help="Keep polling the queue for new input", action="store_true")
     args = parser.parse_args()
 
     config = json.load(args.config)
@@ -491,10 +485,7 @@ def main():
     schema = TelemetrySchema(json.load(schema_data))
     schema_data.close()
     cache = RevisionCache(args.histogram_cache_path, "hg.mozilla.org")
-    if args.skip_conversion:
-        converter = None
-    else:
-        converter = Converter(cache, schema)
+    converter = Converter(cache, schema)
     storage = StorageLayout(schema, args.output_dir, args.max_output_size)
 
     num_cpus = multiprocessing.cpu_count()
@@ -508,20 +499,21 @@ def main():
         # Set up AWS connections
         conn = S3Connection(config.get("aws_key", None), config.get("aws_secret_key", None))
         incoming_bucket = conn.get_bucket(config["incoming_bucket"])
-        q_conn = boto.sqs.connect_to_region(args.aws_region,
-                aws_access_key_id=args.aws_key,
-                aws_secret_access_key=args.aws_secret_key)
-        incoming_queue = q_conn.get_queue(args.queue)
+        q_conn = boto.sqs.connect_to_region(config.get("aws_region", None),
+                aws_access_key_id=config.get("aws_key", None),
+                aws_secret_access_key=config.get("aws_secret_key", None))
+        incoming_queue = q_conn.get_queue(config["incoming_queue"])
         if incoming_queue is None:
-            print "Error: could not get queue", args.queue
+            print "Error: could not get queue", config["incoming_queue"]
             return -2
-        print "Verifying that we can write to", args.publish_bucket
+
+        print "Verifying that we can write to", config["publish_bucket"]
         try:
-            publish_bucket = conn.get_bucket(args.publish_bucket)
+            publish_bucket = conn.get_bucket(config["publish_bucket"])
             print "Looks good!"
         except S3ResponseError:
-            print "Bucket", args.publish_bucket, "not found.  Attempting to create it."
-            publish_bucket = conn.create_bucket(args.publish_bucket)
+            print "Bucket", config["publish_bucket"], "not found.  Attempting to create it."
+            publish_bucket = conn.create_bucket(config["publish_bucket"])
         downloader = s3util.Downloader(args.work_dir, config["incoming_bucket"], poolsize=num_cpus)
 
     raw_readers = None
@@ -534,7 +526,7 @@ def main():
             start = datetime.now()
             incoming_filenames = []
             incoming_queue_messages = []
-            print "Fetching file list from queue", args.queue
+            print "Fetching file list from queue", config["incoming_queue"]
             if args.dry_run:
                 print "Dry run mode... can't read from the queue without messing things up..."
             else:
@@ -548,7 +540,7 @@ def main():
                         possible_filename = m.get_body()
                         key = incoming_bucket.get_key(possible_filename)
                         if key is None:
-                            print "Could not find queued filename in bucket", args.incoming_bucket, ":", possible_filename
+                            print "Could not find queued filename in bucket", config["incoming_bucket"], ":", possible_filename
                             # try to delete it:
                             incoming_queue.delete_message(m)
                         else:
@@ -628,8 +620,7 @@ def main():
 
             # Export compressed files to S3.
             exporters = start_workers(num_cpus, "Exporter", ExportCompressedStep,
-                    compressed_files, (args.output_dir, args.aws_key,
-                        args.aws_secret_key, args.publish_bucket, args.dry_run))
+                    compressed_files, (args.output_dir, config, args.dry_run))
 
             try:
                 wait_for(exporters, "Exporters")
@@ -667,6 +658,7 @@ def main():
         except InterruptProcessingError, e:
             print "Received normal shutdown request... quittin' time!"
             done = True
+    print "All done."
     return 0
 
 if __name__ == "__main__":
