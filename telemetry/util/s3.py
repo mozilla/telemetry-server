@@ -76,7 +76,8 @@ def download_one(args):
             k = Key(bucket)
             k.key = remote_key
             k.get_contents_to_filename(target)
-            # TODO: compare md5?
+            # TODO: compare md5? Note that it will fail if we switch to
+            #       multipart uploads.
             success = True
             break
         except:
