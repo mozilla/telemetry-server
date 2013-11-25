@@ -25,7 +25,7 @@ import telemetry.util.s3 as s3util
 from telemetry.convert import Converter, BadPayloadError
 from telemetry.revision_cache import RevisionCache
 from telemetry.persist import StorageLayout
-import boto.sqsprocess_incoming_standalone.py
+import boto.sqs
 import traceback
 import signal
 
@@ -87,7 +87,7 @@ class InterruptProcessingError(Exception):
         self.msg = msg
 
 def handle_sigint(signum, frame):
-    debug("Caught signal " + str(signum))
+    print "Caught signal " + str(signum)
     if signum == signal.SIGINT:
         raise InterruptProcessingError("It's quittin' time")
 
@@ -464,7 +464,7 @@ def main():
     parser.add_argument("-o", "--output-dir", help="Base dir to store processed data", required=True)
     parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
     parser.add_argument("-b", "--bad-data-log", help="Save bad records to this file")
-    parser.add_argument("-c", "--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
+    parser.add_argument("--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
     parser.add_argument("-D", "--dry-run", help="Don't modify remote files", action="store_true")
