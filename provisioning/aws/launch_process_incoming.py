@@ -20,7 +20,6 @@ class ProcessIncomingLauncher(Launcher):
             run("mkdir work processed")
 
         self.create_log_dir()
-        
         # create startup scripts:
         c_file = "/etc/init/telemetry-incoming.conf"
         self.start_suid_script(c_file, self.ssl_user)
@@ -38,6 +37,8 @@ class ProcessIncomingLauncher(Launcher):
         sudo("echo 'kill signal INT' >> {0}".format(c_file))
         sudo("echo 'start on runlevel [2345]' >> {0}".format(c_file))
         sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
+        # Wait up to 5 minutes for the current batch to finish.
+        sudo("echo 'kill timeout 300' >> {0}".format(c_file))
 
     def run(self, instance):
         # Startup 'process_incoming' service:
