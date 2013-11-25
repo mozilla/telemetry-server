@@ -24,7 +24,7 @@ namespace telemetry {
  * RecordWriter is responsible for writing records into temporary files stored
  * in mWorkFolder, compressing and moving them to mUploadFolder, when the files
  * grow large enough or RecordWriter::Finalize() is called.
- * The RecordWrite will attempt to do on-the-fly compression of as many files
+ * The RecordWriter will attempt to do on-the-fly compression of as many files
  * especially commonly used files as much as possible. Whilst providing the
  * desired compression preset and respecting soft memory limits,
  */
@@ -44,7 +44,8 @@ public:
    * Remark: aSoftMemoryLimit will be used to determine the number of files that
    * can be compressed on-the-fly, it maybe violated.
    */
-  RecordWriter(const std::string& aWorkFolder, const std::string& aUploadFolder,
+  RecordWriter(const boost::filesystem::path &aWorkFolder,
+               const boost::filesystem::path &aUploadFolder,
                uint64_t aMaxUncompressedSize, size_t aSoftMemoryLimit,
                uint32_t aCompressionPreset);
 
@@ -54,19 +55,20 @@ public:
   }
 
   /** Write record with given filter path */
-  bool Write(const boost::filesystem::path &aPath, const char *aRecord, size_t aLength);
+  bool Write(const boost::filesystem::path &aPath,
+             const char *aRecord, size_t aLength);
 
   /** Close all open files, compress and move to upload folder */
   bool Finalize();
 
   /** Get absolute path to work folder, ending with a slash */
-  const std::string& WorkFolder() const
+  const boost::filesystem::path & WorkFolder() const
   {
     return mWorkFolder;
   }
 
   /** Get absolute path to upload folder, ending with a slash */
-  const std::string& UploadFolder() const
+  const boost::filesystem::path &  UploadFolder() const
   {
     return mUploadFolder;
   }
@@ -104,8 +106,8 @@ private:
     Metric mCompressedSize;
   };
 
-  std::string mWorkFolder;
-  std::string mUploadFolder;
+  boost::filesystem::path mWorkFolder;
+  boost::filesystem::path mUploadFolder;
   uint64_t mMaxUncompressedSize;
   size_t mSoftMemoryLimit;
   uint32_t mCompressionPreset;

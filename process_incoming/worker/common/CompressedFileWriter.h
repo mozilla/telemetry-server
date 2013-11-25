@@ -17,6 +17,7 @@
 #define BUF_SIZE BUFSIZ
 
 namespace mozilla {
+namespace telemetry {
 
 /**
  * Compressed Wrapper class that writes data to an compressed XZ file
@@ -34,7 +35,7 @@ public:
    * between 0 and 9.
    * See preset option in xz(1) for more details.
    */
-  bool Initialize(FILE *aFile, uint32_t preset = 0);
+  bool Initialize(FILE *aFile, uint32_t aPreset = 0);
 
   /** Write buffer to compressed file */
   bool Write(const char* aBuffer, size_t aSize, size_t *aCompressedSize = nullptr);
@@ -49,6 +50,7 @@ private:
   char mBuffer[BUF_SIZE];
 };
 
+} // namespace telemetry
 } // namespace mozilla
 
 #endif // CompressedFileWriter_h

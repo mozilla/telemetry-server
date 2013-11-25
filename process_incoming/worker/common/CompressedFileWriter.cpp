@@ -13,12 +13,13 @@
 #include <errno.h>
 
 namespace mozilla {
+namespace telemetry {
 
 CompressedFileWriter::CompressedFileWriter() : mFile(nullptr)
 {
 }
 
-bool CompressedFileWriter::Initialize(FILE *aFile, uint32_t preset)
+bool CompressedFileWriter::Initialize(FILE *aFile, uint32_t aPreset)
 {
   // We cannot be initialized here
   assert(!mFile);
@@ -29,7 +30,7 @@ bool CompressedFileWriter::Initialize(FILE *aFile, uint32_t preset)
   memset(&mStream, 0, sizeof(lzma_stream));
 
   // Initialize encoder
-  lzma_ret ret = lzma_easy_encoder(&mStream, preset, LZMA_CHECK_CRC64);
+  lzma_ret ret = lzma_easy_encoder(&mStream, aPreset, LZMA_CHECK_CRC64);
 
   // Report errors
   if (ret != LZMA_OK) {
@@ -191,7 +192,9 @@ bool CompressedFileWriter::Finalize(size_t *aCompressedSize)
 CompressedFileWriter::~CompressedFileWriter()
 {
   // We should finalize before destruction
-  assert(!mFile);
+  if (mFile)
+    Finalize();
 }
 
+} // namespace telemetry
 } // namespace mozilla

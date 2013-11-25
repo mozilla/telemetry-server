@@ -18,7 +18,7 @@ find_package(ZLIB REQUIRED)
 find_package(LZMA)
 find_package(OpenSSL REQUIRED)
 find_package(Protobuf 2.3 REQUIRED)
-find_package(Boost 1.51.0 REQUIRED log filesystem system thread unit_test_framework)
+find_package(Boost 1.54.0 REQUIRED log filesystem system thread unit_test_framework)
 
 include_directories(${Boost_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} "${CMAKE_SOURCE_DIR}/process_incoming/worker/common")
 

@@ -49,7 +49,7 @@ public:
   OutputFile(const fs::path &aPath, RecordWriter& aOwner)
    : mOwner(aOwner), mCompressor(nullptr), mRecordsSinceLastReprioritization(0),
      mRawFile(NULL), mCompressedFile(NULL), mUncompressedRawSize(0),
-     mUncompressedSize(0), mCompressedSize(0), mPath(aPath.parent_path().string()),
+     mUncompressedSize(0), mCompressedSize(0), mPath(aPath.parent_path()),
      mPrefix(aPath.filename().string()), mIsCorrupted(false)
   {
     // Initialized with no raw file or on-the-fly compression
@@ -92,7 +92,7 @@ public:
   bool Finalize();
 
   /** Return filter path for this OutputFile */
-  const string& Path() const
+  const fs::path & Path() const
   {
     return mPath;
   }
@@ -145,7 +145,7 @@ private:
   uint64_t mCompressedSize;
 
   /** Filter path string */
-  string mPath;
+  fs::path mPath;
 
   /** Filename prefix string */
   string mPrefix;
@@ -154,33 +154,33 @@ private:
   bool mIsCorrupted;
 
   /** Get working folder for this OutputFolder */
-  string WorkFolder() const
+  fs::path WorkFolder() const
   {
-    return mOwner.WorkFolder() + mPath;
+    return mOwner.WorkFolder() / mPath;
   }
 
   /** Get path to raw file */
-  string RawPath() const
+  fs::path RawPath() const
   {
-    return WorkFolder() + "/" + mPrefix + ".v2.log";
+    return WorkFolder() / (mPrefix + ".v2.log");
   }
 
   /** Get path to compressed file */
-  string CompressedPath() const
+  fs::path CompressedPath() const
   {
-    return WorkFolder() + "/" + mPrefix + ".v2.log.xz";
+    return WorkFolder() / (mPrefix + ".v2.log.xz");
   }
 
   /** Get folder to finished file for upload */
-  string UploadFolder() const
+  fs::path UploadFolder() const
   {
-    return mOwner.UploadFolder() + mPath;
+    return mOwner.UploadFolder() / mPath;
   }
 
   /** Get path to the finish file for upload */
-  string FinishedPath() const
+  fs::path FinishedPath() const
   {
-    return UploadFolder() + "/" + mPrefix + ".v2.log." + mOwner.GetUUID() + ".xz";
+    return UploadFolder() / (mPrefix + ".v2.log." + mOwner.GetUUID() + ".xz");
   }
 };
 
@@ -378,8 +378,8 @@ bool RecordWriter::OutputFile::Finalize()
   return true;
 }
 
-RecordWriter::RecordWriter(const std::string& aWorkFolder,
-                           const std::string& aUploadFolder,
+RecordWriter::RecordWriter(const fs::path &aWorkFolder,
+                           const fs::path &aUploadFolder,
                            uint64_t aMaxUncompressedSize,
                            size_t aSoftMemoryLimit, uint32_t aCompressionPreset)
    : mWorkFolder(aWorkFolder), mUploadFolder(aUploadFolder),
@@ -389,14 +389,6 @@ RecordWriter::RecordWriter(const std::string& aWorkFolder,
 {
   // We don't allow use of extreme flag
   assert(mCompressionPreset <= 9);
-
-  // Ensure that folder strings always end with a slash
-  if (mWorkFolder[mWorkFolder.length() - 1] != '/') {
-    mWorkFolder += "/";
-  }
-  if (mUploadFolder[mUploadFolder.length() - 1] != '/') {
-    mUploadFolder += "/";
-  }
 }
 
 bool RecordWriter::Write(const fs::path &aPath, const char* aRecord,
@@ -435,7 +427,7 @@ bool RecordWriter::Finalize()
   bool retval = true;
 
   // Serialize each file
-  for (auto it = mFileMap.begin(); it != mFileMap.end(); it++) {
+  for (auto it = mFileMap.begin(), end = mFileMap.end(); it != end; ++it) {
     auto file = it->second;
 
     // Don't try to finalized corrupted files, behavior is undefined
@@ -463,7 +455,7 @@ bool RecordWriter::ReprioritizeCompression()
 {
   // Create a list of files that can be compressed
   vector<OutputFile*> files;
-  for(auto kv : mFileMap) {
+  for(auto &kv : mFileMap) {
     if (kv.second->CanAddCompression()) {
       files.push_back(kv.second);
     }
@@ -527,9 +519,7 @@ void RecordWriter::GetMetrics(message::Message& aMsg)
 std::string RecordWriter::GetUUID()
 {
   boost::uuids::uuid u = boost::uuids::random_generator()();
-  std::stringstream ss;
-  ss << u;
-  std::string ret = ss.str();
+  string ret = to_string(u);
   ret.erase(std::remove(ret.begin(), ret.end(), '-'), ret.end());
   return ret;
 }
