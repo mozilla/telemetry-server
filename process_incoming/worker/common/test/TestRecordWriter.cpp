@@ -11,6 +11,7 @@
 
 #include <stdlib.h>
 #include <fstream>
+#include <regex>
 
 #include <boost/test/unit_test.hpp>
 
@@ -31,13 +32,18 @@ BOOST_AUTO_TEST_CASE(test_converter)
 
   RecordWriter writer(workDir.string(), uploadDir.string(), 1048576, 1000, 0);
   string payload = "431ab5c3-2712-4ab7-a4b6-e9b61f3a1f30	{\"ver\":2,\"histograms\":{\"A11Y_IATABLE_USAGE_FLAG\":[1,0,0,0,-1,-1,1.23415,1.01]},\"info\":{\"revision\":\"http://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302\"}}";
-  writer.Write("output", payload.c_str(), payload.size() + 1);
+  string prefix = "output";
+  writer.Write(prefix, payload.c_str(), payload.size() + 1);
   writer.Finalize();
   BOOST_REQUIRE(fs::is_empty(workDir));
   BOOST_REQUIRE(!fs::is_empty(uploadDir));
 
   fs::directory_iterator it(uploadDir);
   fs::path generated = it->path();
+
+  string filename = generated.leaf().string();
+  regex reg(prefix + "\\.v2\\.log\\.[0-9a-f]{32}\\.xz");
+  BOOST_REQUIRE(regex_match(filename.begin(), filename.end(), reg));
 
   string command = "xz -d " + generated.string();
   BOOST_REQUIRE(system(command.c_str()) == 0);
