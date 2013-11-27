@@ -6,8 +6,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import hashlib
-import struct, gzip
+import struct
+import gzip
 import StringIO as StringIO
+import os
 
 
 # might as well return the size too...
@@ -82,3 +84,12 @@ def unpack(filename, raw=False, verbose=False):
     if verbose:
         print "Processed", record_count, "records, with", bad_records, "bad records, and skipped", total_bytes_skipped, "bytes of corruption"
     fin.close()
+
+def makedirs_concurrent(target_dir):
+    try:
+        os.makedirs(target_dir)
+    except OSError, e:
+        # errno 17 means "directory exists". This is a race condition
+        # in a multi-process environment, and can safely be ignored.
+        if e.errno != 17:
+            raise
