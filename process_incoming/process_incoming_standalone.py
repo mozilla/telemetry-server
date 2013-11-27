@@ -31,51 +31,6 @@ import traceback
 import signal
 
 S3FUNNEL_PATH = "/usr/local/bin/s3funnel"
-def fetch_s3_files(incoming_files, fetch_cwd, bucket, aws_key, aws_secret_key):
-    result = 0
-    if len(incoming_files) > 0:
-        if not os.path.isdir(fetch_cwd):
-            os.makedirs(fetch_cwd)
-
-        files = []
-        for f in incoming_files:
-            full_filename = os.path.join(fetch_cwd, f)
-            if os.path.isfile(full_filename):
-                md5, size = fileutil.md5file(full_filename)
-                # f is the key name - it does not include the full path to the
-                # data dir.
-                key = bucket.get_key(f)
-                # Strip quotes from md5
-                remote_md5 = key.etag[1:-1]
-                if md5 != remote_md5:
-                    files.append(f)
-                else:
-                    print "Already downloaded", f
-            else:
-                files.append(f)
-        fetch_cmd = [S3FUNNEL_PATH]
-        fetch_cmd.append(bucket.name)
-        fetch_cmd.append("get")
-        fetch_cmd.append("-a")
-        fetch_cmd.append(aws_key)
-        fetch_cmd.append("-s")
-        fetch_cmd.append(aws_secret_key)
-        fetch_cmd.append("-t")
-        fetch_cmd.append("8")
-        # Fetch in batches of 8 files at a time
-        while len(files) > 0:
-            current_files = files[0:8]
-            files = files[8:]
-            start = datetime.now()
-            result = subprocess.call(fetch_cmd + current_files, cwd=fetch_cwd)
-            duration_sec = timer.delta_sec(start)
-            # TODO: verify MD5s
-            downloaded_bytes = sum([ os.path.getsize(os.path.join(fetch_cwd, f)) for f in current_files ])
-            downloaded_mb = downloaded_bytes / 1024.0 / 1024.0
-            print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
-            if result != 0:
-                break
-    return result
 
 def wait_for(processes, label):
     print "Waiting for", label, "..."
@@ -341,8 +296,6 @@ class CompressCompletedStep(PipeStep):
 class ExportCompressedStep(PipeStep):
     def __init__(self, num, name, q_in, base_dir, config, dry_run):
         self.dry_run = dry_run
-        self.batch_size = 8
-        self.retries = 10
         self.base_dir = base_dir
         self.aws_key = config.get("aws_key", None)
         self.aws_secret_key = config.get("aws_secret_key", None)
@@ -351,60 +304,12 @@ class ExportCompressedStep(PipeStep):
 
     def setup(self):
         self.batch = []
-        self.s3f_cmd = [S3FUNNEL_PATH, self.aws_bucket_name, "put",
-                "-a", self.aws_key, "-s", self.aws_secret_key, "-t",
-                str(self.batch_size), "--put-only-new", "--put-full-path"]
         if self.dry_run:
             self.conn = None
             self.bucket = None
             return
         self.conn = S3Connection(self.aws_key, self.aws_secret_key)
         self.bucket = self.conn.get_bucket(self.aws_bucket_name)
-
-    def export_batch(self, data_dir, conn, bucket, files):
-        print self.label, "Uploading", ",".join(files)
-        if self.dry_run:
-            return 0
-
-        # Time the s3funnel call:
-        start = datetime.now()
-        result = subprocess.call(self.s3f_cmd + files, cwd=data_dir)
-        sec = timer.delta_sec(start)
-
-        total_size = 0
-        if result == 0:
-            # Success! Verify each file's checksum, then truncate it.
-            for f in files:
-                # Verify checksum and track cumulative size so we can figure out MB/s
-                full_filename = os.path.join(data_dir, f)
-                md5, size = fileutil.md5file(full_filename)
-                total_size += size
-                # f is the key name - it does not include the full path to the
-                # data dir.
-                key = bucket.get_key(f)
-                # Strip quotes from md5
-                remote_md5 = key.etag[1:-1]
-                if md5 != remote_md5:
-                    # TODO: add it to a "failed" queue.
-                    print "ERROR: %s failed checksum verification: Local=%s, Remote=%s" % (f, md5, remote_md5)
-                    self.bad_records += 1
-                    result = -1
-                # TODO: else add it to a "succeeded" queue and remove it locally.
-        else:
-            print "Failed to upload one or more files in the current batch. Error code was", result
-
-        total_mb = float(total_size) / 1024.0 / 1024.0
-        print "Transferred %.2fMB in %.2fs (%.2fMB/s)" % (total_mb, sec, total_mb / sec)
-        return result
-
-    def retry_export_batch(self, data_dir, conn, bucket, files):
-        success = False
-        for i in range(self.retries):
-            batch_response = self.export_batch(self.base_dir, self.conn, self.bucket, self.batch)
-            if batch_response == 0:
-                success = True
-                break
-        return success
 
     def strip_data_dir(self, data_dir, full_file):
         if full_file.startswith(data_dir):
@@ -413,41 +318,42 @@ class ExportCompressedStep(PipeStep):
                 chopped = chopped[1:]
             return chopped
         else:
-            print "ERROR: cannot remove", data_dir, "from", full_file
             raise ValueError("Invalid full filename: " + str(full_file))
 
     def handle(self, record):
-        # Remove the output dir prefix from filenames
         try:
+            # Remove the output dir prefix from filenames
             stripped_name = self.strip_data_dir(self.base_dir, record)
-        except Exception, e:
+        except ValueError, e:
             print self.label, "Warning: couldn't strip base dir from", record, e
             stripped_name = record
-        self.batch.append(stripped_name)
-        if len(self.batch) >= self.batch_size:
-            success = self.retry_export_batch(self.base_dir, self.conn, self.bucket, self.batch)
-            if success:
-                # Delete local files once they've been uploaded successfully.
-                if not self.dry_run:
-                    for b in self.batch:
-                        try:
-                            os.remove(os.path.join(self.base_dir, b))
-                            print self.label, "Removed uploaded file", b
-                        except Exception, e:
-                            print self.label, "Failed to remove uploaded file", b
-                self.batch = []
-            else:
-                print self.label, "ERROR: failed to upload a batch:", ",".join(self.batch)
-                # TODO: add to a "failures" queue, save them or something?
 
-    def finish(self):
-        if len(self.batch) > 0:
-            print "Sending last batch of", len(self.batch)
-            success = self.retry_export_batch(self.base_dir, self.conn, self.bucket, self.batch)
-            if not success:
-                print self.label, "ERROR: failed to upload a batch:", ",".join(self.batch)
-                # TODO: add to a "failures" queue, save them or something?
-        self.dump_stats()
+        print self.label, "Uploading", stripped_name
+        start = datetime.now()
+        if self.dry_run:
+            local_filename = record
+            remote_filename = stripped_name
+            err = None
+        else:
+            local_filename, remote_filename, err = s3util.upload_one([self.base_dir, self.bucket, stripped_name])
+        sec = timer.delta_sec(start)
+        current_size = os.path.getsize(record)
+        self.bytes_read += current_size
+        if err is None:
+            # Everything went well.
+            self.records_written += 1
+            self.bytes_written += current_size
+            # Delete local files once they've been uploaded successfully.
+            if not self.dry_run:
+                try:
+                    os.remove(record)
+                    print self.label, "Removed uploaded file", record
+                except Exception, e:
+                    print self.label, "Failed to remove uploaded file", record, e
+        else:
+            print self.label, "ERROR: failed to upload a file:", record, err
+            self.bad_records += 1
+            # TODO: add to a "failures" queue, save them or something?
 
 def start_workers(count, name, clazz, q_in, more_args):
     workers = []
@@ -500,7 +406,7 @@ def main():
     conn = None
     incoming_bucket = None
     incoming_queue = None
-    s3loader = None
+    s3downloader = None
 
     if not args.dry_run:
         # Set up AWS connections
@@ -521,7 +427,7 @@ def main():
         except S3ResponseError:
             print "Bucket", config["publish_bucket"], "not found.  Attempting to create it."
             publish_bucket = conn.create_bucket(config["publish_bucket"])
-        s3loader = s3util.Loader(args.work_dir, config["incoming_bucket"], poolsize=num_cpus)
+        s3downloader = s3util.Loader(args.work_dir, config["incoming_bucket"], poolsize=num_cpus)
 
     raw_readers = None
     compressors = None
@@ -571,11 +477,11 @@ def main():
             if args.dry_run:
                 print "Dry run mode: skipping download from S3"
             else:
-                for local_filename, remote_filename, err in s3loader.get_list(incoming_filenames):
+                for local_filename, remote_filename, err in s3downloader.get_list(incoming_filenames):
                     if err is None:
                         local_filenames.append(local_filename)
                     else:
-                        # s3loader already retries 3 times.
+                        # s3downloader already retries 3 times.
                         print "Error downloading", local_filename, "Error:", err
                         return 2
 
