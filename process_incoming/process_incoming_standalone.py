@@ -13,6 +13,7 @@ import Queue as Q
 import simplejson as json
 import sys
 import os
+import time
 from datetime import date, datetime
 from telemetry.telemetry_schema import TelemetrySchema
 import subprocess
@@ -80,6 +81,12 @@ def wait_for(processes, label):
     print "Waiting for", label, "..."
     for p in processes:
         p.join()
+    print label, "Done."
+
+def terminate(processes, label):
+    print "Terminating", label, "..."
+    for p in processes:
+        p.terminate()
     print label, "Done."
 
 class InterruptProcessingError(Exception):
@@ -493,7 +500,7 @@ def main():
     conn = None
     incoming_bucket = None
     incoming_queue = None
-    downloader = None
+    s3loader = None
 
     if not args.dry_run:
         # Set up AWS connections
@@ -514,7 +521,7 @@ def main():
         except S3ResponseError:
             print "Bucket", config["publish_bucket"], "not found.  Attempting to create it."
             publish_bucket = conn.create_bucket(config["publish_bucket"])
-        downloader = s3util.Downloader(args.work_dir, config["incoming_bucket"], poolsize=num_cpus)
+        s3loader = s3util.Loader(args.work_dir, config["incoming_bucket"], poolsize=num_cpus)
 
     raw_readers = None
     compressors = None
@@ -551,7 +558,8 @@ def main():
             print "Done"
 
             if len(incoming_filenames) == 0:
-                print "Nothing to do!"
+                print "Nothing to do! Sleeping..."
+                time.sleep(5)
                 continue
 
             for f in incoming_filenames:
@@ -563,13 +571,14 @@ def main():
             if args.dry_run:
                 print "Dry run mode: skipping download from S3"
             else:
-                for local_filename, err in downloader.fetch_list(incoming_filenames):
+                for local_filename, remote_filename, err in s3loader.get_list(incoming_filenames):
                     if err is None:
-                        local_filenames.add(local_filename)
+                        local_filenames.append(local_filename)
                     else:
+                        # s3loader already retries 3 times.
                         print "Error downloading", local_filename, "Error:", err
-                        # FIXME: retry here.
                         return 2
+
             after_download = datetime.now()
             duration_sec = timer.delta_sec(before_download, after_download)
             downloaded_bytes = sum([ os.path.getsize(f) for f in local_filenames ])
@@ -628,6 +637,7 @@ def main():
                 print "Received shutdown request... waiting for exporters to finish"
                 done = True
                 wait_for(exporters, "Exporters")
+                print "OK, cleaning up"
 
             print "Removing processed logs from S3..."
             for f in incoming_filenames:
@@ -657,6 +667,13 @@ def main():
             print "All done in %.2fs (%.2fs excluding download time)" % (duration, timer.delta_sec(after_download))
         except InterruptProcessingError, e:
             print "Received normal shutdown request... quittin' time!"
+            if raw_readers is not None:
+                terminate(raw_readers, "Readers")
+            if compressors is not None:
+                terminate(compressors, "Compressors")
+            if exporters is not None:
+                terminate(exporters, "Exporters")
+
             done = True
     print "All done."
     return 0
