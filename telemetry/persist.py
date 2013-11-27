@@ -12,9 +12,9 @@ try:
     import simplejson as json
 except ImportError:
     import json
-from telemetry_schema import TelemetrySchema
 import time
 import logging
+import telemetry.util.files as fileutil
 
 
 class StorageLayout:
@@ -51,7 +51,6 @@ class StorageLayout:
         #   a.b.c.log
         # We want to roll this over (and compress) when it reaches a size limit
 
-        # TODO: should we actually write "err" to file?
         if isinstance(obj, basestring):
             jsonstr = self.clean_newlines(unicode(obj), obj)
         else:
@@ -62,13 +61,7 @@ class StorageLayout:
 
         dirname = os.path.dirname(filename)
         if not os.path.exists(dirname):
-            try:
-                os.makedirs(dirname)
-            except OSError, e:
-                # errno 17 means "directory exists". This is a race condition
-                # in a multi-process environment, and can safely be ignored.
-                if e.errno != 17:
-                    raise
+            fileutil.makedirs_concurrent(dirname)
 
         # According to SO, this should be atomic on a well-behaved OS:
         # http://stackoverflow.com/questions/7561663/appending-to-the-end-of-a-file-in-a-concurrent-environment
