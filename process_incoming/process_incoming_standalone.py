@@ -533,11 +533,10 @@ def main():
             for i in range(num_cpus):
                 compressed_files.put(PipeStep.SENTINEL)
 
-            # Export compressed files to S3.
-            exporters = start_workers(num_cpus, "Exporter", ExportCompressedStep,
-                    compressed_files, (args.output_dir, config, args.dry_run))
-
             try:
+                # Export compressed files to S3.
+                exporters = start_workers(num_cpus, "Exporter", ExportCompressedStep,
+                        compressed_files, (args.output_dir, config, args.dry_run))
                 wait_for(exporters, "Exporters")
             except InterruptProcessingError, e:
                 print "Received shutdown request... waiting for exporters to finish"
