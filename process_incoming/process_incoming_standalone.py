@@ -30,8 +30,6 @@ import boto.sqs
 import traceback
 import signal
 
-S3FUNNEL_PATH = "/usr/local/bin/s3funnel"
-
 def wait_for(processes, label):
     print "Waiting for", label, "..."
     for p in processes:
@@ -385,11 +383,6 @@ def main():
 
     config = json.load(args.config)
     # TODO: allow commandline args to override config values.
-
-    if not os.path.isfile(S3FUNNEL_PATH):
-        print "ERROR: s3funnel not found at", S3FUNNEL_PATH
-        print "You can get it from github: https://github.com/sstoiana/s3funnel"
-        return -1
 
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
