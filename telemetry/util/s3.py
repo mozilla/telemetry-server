@@ -32,6 +32,7 @@ class Loader:
     def load_list(self, files, load_function):
         pool = Pool(processes=self.poolsize)
         result_iterator = pool.imap_unordered(load_function, self.make_args(files))
+        pool.close()
         while True:
             try:
                 yield result_iterator.next(timeout=1)
@@ -40,6 +41,7 @@ class Loader:
                     print "no results yet.."
             except StopIteration:
                 break
+        pool.join()
 
     def get_list(self, files):
         for local_filename, remote_filename, err in self.load_list(files, download_one):
