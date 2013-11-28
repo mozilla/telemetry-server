@@ -36,6 +36,12 @@ class Launcher(object):
         parser.add_argument("-n", "--instance-name", help="Overrides the 'name' specified in the configuration file")
         return parser
 
+    def get_instance(self):
+        return self.instance
+
+    def get_connection(self):
+        return self.conn
+
     def configure_raid(self, instance):
         if "ephemeral_map" in self.config:
             # Following advice from here:
@@ -145,6 +151,8 @@ class Launcher(object):
         else:
             print "Creating instance..."
             conn, instance = aws_util.create_instance(self.config, self.aws_key, self.aws_secret_key)
+        self.conn = conn
+        self.instance = instance
 
         print "Ready to connect..."
         try:
