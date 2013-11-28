@@ -89,13 +89,7 @@ class Launcher(object):
         sudo('pip install simplejson boto fabric')
 
     def install_misc_dependencies(self, instance):
-        print "Installing other dependencies"
-        # By default, install S3Funnel
-        home = "/home/" + self.ssl_user
-        with cd(home):
-            run("git clone https://github.com/sstoiana/s3funnel.git")
-        with cd(home + "/s3funnel"):
-            sudo("python setup.py install")
+        pass
 
     def install_telemetry_code(self, instance):
         home = "/home/" + self.ssl_user
