@@ -132,6 +132,7 @@
           "if [ ! -e '/var/log/telemetry' ]; then",
           "  ln -s /mnt/telemetry/log /var/log/telemetry",
           "fi",
+          "echo 'start on runlevel [2345]' >> /etc/init/telemetry-server.conf"
           "start telemetry-server"
         ] ] } }
       }
