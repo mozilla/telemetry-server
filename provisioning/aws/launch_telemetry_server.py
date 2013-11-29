@@ -89,7 +89,7 @@ class TelemetryServerLauncher(Launcher):
         self.create_logrotate_config("/etc/logrotate.d/telemetry-server",
                 "/var/log/telemetry/telemetry-server.log")
         self.create_logrotate_config("/etc/logrotate.d/telemetry-incoming",
-                "/var/log/telemetry/telemetry-incoming.log", False)
+                "/var/log/telemetry/telemetry-incoming.log")
 
         # Create startup scripts:
         code_base = "/home/" + self.ssl_user + "/telemetry-server"
@@ -148,7 +148,8 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
 
         # Install the default config file:
-        aws_util.install_file("provisioning/config/telemetry_aws.json", "/etc/mozilla/telemetry_aws.json")
+        sudo("mkdir -p /etc/mozilla")
+        aws_util.install_file("provisioning/config/telemetry_aws.prod.json", "/etc/mozilla/telemetry_aws.json")
 
     def run(self, instance):
         # Start up HTTP server
