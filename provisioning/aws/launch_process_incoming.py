@@ -16,11 +16,13 @@ from aws_launcher import Launcher
 class ProcessIncomingLauncher(Launcher):
     def post_install(self, instance):
         self.install_histogram_tools(instance)
-        with cd(self.config.get("base_dir", "/mnt/telemetry")):
+        base_data_dir = self.config.get("base_dir", "/mnt/telemetry")
+        with cd(base_data_dir):
             run("mkdir work processed")
 
         self.create_log_dir()
         # create startup scripts:
+        code_base = "/home/" + self.ssl_user + "/telemetry-server"
         c_file = "/etc/init/telemetry-incoming.conf"
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
@@ -32,13 +34,13 @@ class ProcessIncomingLauncher(Launcher):
 
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
-        sudo("echo \"    /usr/bin/python -u -m provisioning.aws.process_incoming_queue -k '{1}' -s '{2}' provisioning/aws/aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
+        sudo("echo \"    /usr/bin/python -u -m process_incoming.process_incoming_standalone -c /etc/mozilla/telemetry_aws.json -w {1}/work -o {1}/processed -t telemetry/telemetry_schema.json -l /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, base_data_dir))
         self.end_suid_script(c_file)
         sudo("echo 'kill signal INT' >> {0}".format(c_file))
-        sudo("echo 'start on runlevel [2345]' >> {0}".format(c_file))
-        sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
-        # Wait up to 5 minutes for the current batch to finish.
-        sudo("echo 'kill timeout 300' >> {0}".format(c_file))
+        #sudo("echo 'start on runlevel [2345]' >> {0}".format(c_file))
+        #sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
+        # Wait up to 10 minutes for the current exports to finish.
+        sudo("echo 'kill timeout 600' >> {0}".format(c_file))
 
     def run(self, instance):
         # Startup 'process_incoming' service:
