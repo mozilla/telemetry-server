@@ -44,7 +44,7 @@ class Exporter:
 
             # This gets the queue if it already exists, otherwise creates it
             # using the supplied default timeout (in seconds).
-            self.q_incoming = conn.create_queue(self.queue, 90 * 60)
+            self.q_incoming = conn.get_queue(self.queue)
         self.s3loader = s3util.Loader(self.data_dir, self.bucket, self.aws_key, self.aws_secret_key)
 
         # Make sure the target S3 bucket exists.
