@@ -58,8 +58,9 @@ class Exporter:
             b = s3conn.create_bucket(self.bucket)
 
     def enqueue_incoming(self, filename):
+        success = False
         if self.queue is None:
-            return
+            return success
 
         m = Message()
         m.set_body(filename)
@@ -70,9 +71,11 @@ class Exporter:
                 status = self.q_incoming.write(m)
                 if status:
                     print "Successfully enqueued", filename
+                    success = True
                     break
             except Exception, e:
                 print "Failed to enqueue:", filename, "Error:", e
+        return success
 
     def strip_data_dir(self, data_dir, full_file):
         if full_file.startswith(data_dir):
@@ -122,6 +125,7 @@ class Exporter:
                 else:
                     os.remove(local)
                 # Send a message to SQS
+                # TODO: verify that it succeeded.
                 self.enqueue_incoming(remote)
 
             else:
