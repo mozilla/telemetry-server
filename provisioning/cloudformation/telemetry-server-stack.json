@@ -42,10 +42,10 @@
 
   "Mappings": {
     "Region2WebServerAMI": {
-      "us-west-2": { "AMI": "ami-7c7be34c" }
+      "us-west-2": { "AMI": "ami-d41b81e4" }
     },
     "Region2ProcessIncomingAMI": {
-      "us-west-2": { "AMI": "ami-7c7be34c" }
+      "us-west-2": { "AMI": "ami-d41b81e4" }
     }
   },
 
@@ -94,10 +94,18 @@
           "PolicyDocument": {
             "Statement": [ {
               "Effect": "Allow",
+              "Action": [ "s3:GetBucketLocation", "s3:ListAllMyBuckets" ],
+              "Resource": "arn:aws:s3:::*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [ "s3:ListBucket" ],
+              "Resource": [ { "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "IncomingBucketName" } ] ] } ]
+            },
+            {
+              "Effect": "Allow",
               "Action": [ "s3:PutObject" ],
-              "Resource": [ {
-                "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "IncomingBucketName" }, "/*" ] ]
-              } ]
+              "Resource": [ { "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "IncomingBucketName" }, "/*" ] ] } ]
             } ]
           }
         }, {
@@ -105,9 +113,9 @@
           "PolicyDocument": {
             "Statement": [ {
               "Effect": "Allow",
-              "Action": [ "sqs:SendMessage" ],
+              "Action": [ "sqs:ListQueues", "sqs:GetQueueAttributes", "sqs:SendMessage" ],
               "Resource": [ {
-                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2::", { "Ref": "IncomingQueueName" }, "/*" ] ]
+                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2::", { "Ref": "IncomingQueueName" } ] ]
               } ]
             } ]
           }
@@ -132,7 +140,13 @@
           "if [ ! -e '/var/log/telemetry' ]; then",
           "  ln -s /mnt/telemetry/log /var/log/telemetry",
           "fi",
-          "echo 'start on runlevel [2345]' >> /etc/init/telemetry-server.conf"
+          { "Fn::Join": [ "", [
+            "echo '{\"incoming_bucket\":\"", { "Ref": "IncomingBucketName" }, "\",",
+            "\"incoming_queue\":\"", { "Ref": "IncomingQueueName" }, "\",",
+            "\"publish_bucket\":\"", { "Ref": "PublishedBucketName" }, "\",",
+            "\"aws_region\":\"", { "Ref": "AWS::Region" }, "\"}' > /etc/mozilla/telemetry_aws.json"
+          ] ] },
+          "echo 'start on runlevel [2345]' >> /etc/init/telemetry-server.conf",
           "start telemetry-server"
         ] ] } }
       }
@@ -166,7 +180,19 @@
           "PolicyDocument": {
             "Statement": [ {
               "Effect": "Allow",
-                "Action": [ "s3:GetObject", "s3:DeleteObject", "s3:ListBucket" ],
+              "Action": [ "s3:GetBucketLocation", "s3:ListAllMyBuckets" ],
+              "Resource": "arn:aws:s3:::*"
+            },
+            {
+              "Effect": "Allow",
+                "Action": [ "s3:ListBucket" ],
+              "Resource": [ {
+                "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "IncomingBucketName" } ] ]
+              } ]
+            },
+            {
+              "Effect": "Allow",
+                "Action": [ "s3:GetObject", "s3:DeleteObject" ],
               "Resource": [ {
                 "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "IncomingBucketName" }, "/*" ] ]
               } ]
@@ -176,6 +202,18 @@
           "PolicyName": "WriteS3Published",
           "PolicyDocument": {
             "Statement": [ {
+              "Effect": "Allow",
+              "Action": [ "s3:GetBucketLocation", "s3:ListAllMyBuckets" ],
+              "Resource": "arn:aws:s3:::*"
+            },
+            {
+              "Effect": "Allow",
+                "Action": [ "s3:ListBucket" ],
+              "Resource": [ {
+                "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "PublishedBucketName" } ] ]
+              } ]
+            },
+            {
               "Effect": "Allow",
                 "Action": [ "s3:PutObject" ],
               "Resource": [ {
@@ -188,9 +226,9 @@
           "PolicyDocument": {
             "Statement": [ {
               "Effect": "Allow",
-              "Action": [ "sqs:ReceiveMessage", "sqs:DeleteMessage" ],
+              "Action": [ "sqs:ListQueues", "sqs:GetQueueAttributes", "sqs:ReceiveMessage", "sqs:DeleteMessage" ],
               "Resource": [ {
-                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2::", { "Ref": "IncomingQueueName" }, "/*" ] ]
+                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2::", { "Ref": "IncomingQueueName" } ] ]
               } ]
             } ]
           }
@@ -214,6 +252,7 @@
         "SecurityGroups":     [ { "Ref": "ProcessIncomingSecurityGroup" } ],
         "IamInstanceProfile": { "Ref": "ProcessIncomingIAMProfile" },
         "InstanceType":       { "Ref": "ProcessIncomingInstanceType" },
+        "SpotPrice":          "0.20",
         "BlockDeviceMappings": [
           { "DeviceName": "/dev/xvdb", "VirtualName": "ephemeral0" },
           { "DeviceName": "/dev/xvdc", "VirtualName": "ephemeral1" },
@@ -227,11 +266,23 @@
           "echo 'DEVICE /dev/xvdb /dev/xvdc /dev/xvdd /dev/xvde' >> /etc/mdadm/mdadm.conf",
           "mdadm --detail --scan >> /etc/mdadm/mdadm.conf",
           "mkfs.ext3 -T largefile /dev/md0",
+          "mkdir -p /mnt",
           "mount /dev/md0 /mnt",
-          "mkdir -p /mnt/telemetry",
+          "mkdir -p /mnt/telemetry/log",
           "mkdir -p /mnt/telemetry/processed",
           "mkdir -p /mnt/telemetry/work",
-          "chown -R ubuntu:ubuntu /mnt/telemetry"
+          "chown -R ubuntu:ubuntu /mnt/telemetry",
+          "if [ ! -e '/var/log/telemetry' ]; then",
+          "  ln -s /mnt/telemetry/log /var/log/telemetry",
+          "fi",
+          { "Fn::Join": [ "", [
+            "echo '{\"incoming_bucket\":\"", { "Ref": "IncomingBucketName" }, "\",",
+            "\"incoming_queue\":\"", { "Ref": "IncomingQueueName" }, "\",",
+            "\"publish_bucket\":\"", { "Ref": "PublishedBucketName" }, "\",",
+            "\"aws_region\":\"", { "Ref": "AWS::Region" }, "\"}' > /etc/mozilla/telemetry_aws.json"
+          ] ] },
+          "echo 'start on runlevel [2345]' >> /etc/init/telemetry-incoming.conf",
+          "start telemetry-incoming"
         ] ] } }
       }
     },
