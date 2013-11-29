@@ -42,9 +42,10 @@ class Exporter:
                     aws_access_key_id=self.aws_key,
                     aws_secret_access_key=self.aws_secret_key)
 
-            # This gets the queue if it already exists, otherwise creates it
-            # using the supplied default timeout (in seconds).
+            # This gets the queue if it already exists, otherwise returns null
             self.q_incoming = conn.get_queue(self.queue)
+            if self.q_incoming is None:
+                raise ValueError("Failed to get queue " + self.queue)
         self.s3loader = s3util.Loader(self.data_dir, self.bucket, self.aws_key, self.aws_secret_key)
 
         # Make sure the target S3 bucket exists.
