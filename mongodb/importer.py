@@ -3,8 +3,9 @@ import lzma
 import sys
 import json
 import argparse
-
 import telemetry.util.timer as timer
+
+from telemetry.persist import StorageLayout
 from datetime import datetime
 from multiprocessing import Process, Queue, cpu_count
 from pymongo import MongoClient
@@ -43,7 +44,7 @@ class MongoImporter:
     def _enqueue_filenames(self, input_directory):
         for root, _, files in os.walk(input_directory):
             for f in files:
-                if not f.endswith("lzma"):
+                if not f.endswith(StorageLayout.COMPRESSED_SUFFIX):
                     continue
 
                 fullpath = os.path.join(root, f)
@@ -70,6 +71,8 @@ class MongoImporter:
                 content = f.readlines()
                 for line in content:
                     payload = json.loads(line[37:].decode("utf-8"))
+                    # Field names cannot contain dots
+                    # http://docs.mongodb.org/manual/reference/limits/#Restrictions%20on%20Field%20Names
                     self._replace_dots(payload)
                     payloads.append(payload)
 
