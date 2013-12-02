@@ -36,7 +36,6 @@ def find_min_idx(stuff):
 
 class Job:
     """A class for orchestrating a Telemetry MapReduce job"""
-    DOWNLOAD_BATCH_SIZE = 100
     # 1. read input filter
     # 2. generate filtered list of local input files
     # 2a. generate filtered list of remote input files
@@ -86,33 +85,30 @@ class Job:
             print "Partition %d contained %d (%+d)" % (i, partitions[i], float(partitions[i]) - avg)
 
     def fetch_remotes(self, remotes):
-        # TODO: download remotes in groups of size DOWNLOAD_BATCH_SIZE
+        # TODO: fetch remotes inside Mappers, and process each one as it becomes available.
         remote_names = [ r["name"] for r in remotes if r["type"] == "remote" ]
 
         # TODO: check cache first.
         result = 0
+        if len(remote_names) == 0:
+            return result
 
         fetch_cwd = os.path.join(self._work_dir, "cache")
-        if len(remote_names) > 0:
-            if not os.path.isdir(fetch_cwd):
-                os.makedirs(fetch_cwd)
-            fetch_cmd = ["/usr/local/bin/s3funnel"]
-            fetch_cmd.append(self._bucket_name)
-            fetch_cmd.append("get")
-            if self._aws_key is not None:
-                fetch_cmd.append("-a")
-                fetch_cmd.append(self._aws_key)
-            if self._aws_secret_key is not None:
-                fetch_cmd.append("-s")
-                fetch_cmd.append(self._aws_secret_key)
-            fetch_cmd.append("-t")
-            fetch_cmd.append("8")
-            start = datetime.now()
-            result = subprocess.call(fetch_cmd + remote_names, cwd=fetch_cwd)
-            duration_sec = timer.delta_sec(start)
-            downloaded_bytes = sum([ r["size"] for r in remotes if r["type"] == "remote" ])
-            downloaded_mb = float(downloaded_bytes) / 1024.0 / 1024.0
-            print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
+        if not os.path.isdir(fetch_cwd):
+            os.makedirs(fetch_cwd)
+        loader = s3util.Loader(fetch_cwd, self._bucket_name)
+        start = datetime.now()
+        downloaded_bytes = 0
+        for local, remote, err in loader.get_list(remote_names):
+            if err is None:
+                print "Downloaded", remote
+                downloaded_bytes += os.path.getsize(local)
+            else:
+                print "Failed to download", remote
+                result += 1
+        duration_sec = timer.delta_sec(start)
+        downloaded_mb = float(downloaded_bytes) / 1024.0 / 1024.0
+        print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
         return result
 
     def dedupe_remotes(self, remote_files, local_files):
