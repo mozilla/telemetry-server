@@ -12,7 +12,10 @@ try:
     import simplejson as json
 except ImportError:
     import json
-from telemetry_schema import TelemetrySchema
+try:
+    from telemetry_schema import TelemetrySchema
+except ImportError:
+    from telemetry.telemetry_schema import TelemetrySchema
 import time
 import logging
 
@@ -64,7 +67,7 @@ class StorageLayout:
         if not os.path.exists(dirname):
             try:
                 os.makedirs(dirname)
-            except OSError, e:
+            except OSError as e:
                 # errno 17 means "directory exists". This is a race condition
                 # in a multi-process environment, and can safely be ignored.
                 if e.errno != 17:
