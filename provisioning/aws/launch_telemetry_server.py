@@ -64,6 +64,7 @@ class TelemetryServerLauncher(Launcher):
         # Install some more:
         self.install_nodejs_bin()
         self.install_heka()
+        self.install_histogram_tools(instance)
 
         # Create log dir (within base_dir, but symlinked to /var/log):
         self.create_log_dir()
