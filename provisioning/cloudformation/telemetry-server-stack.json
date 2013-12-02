@@ -113,9 +113,11 @@
           "PolicyDocument": {
             "Statement": [ {
               "Effect": "Allow",
-              "Action": [ "sqs:ListQueues", "sqs:GetQueueAttributes", "sqs:SendMessage" ],
+              "Action": [ "sqs:ListQueues", "sqs:GetQueueAttributes",
+                          "sqs:ChangeMessageVisibility", "sqs:GetQueueUrl",
+                          "sqs:SendMessage" ],
               "Resource": [ {
-                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2::", { "Ref": "IncomingQueueName" } ] ]
+                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2:*:", { "Ref": "IncomingQueueName" } ] ]
               } ]
             } ]
           }
@@ -226,9 +228,11 @@
           "PolicyDocument": {
             "Statement": [ {
               "Effect": "Allow",
-              "Action": [ "sqs:ListQueues", "sqs:GetQueueAttributes", "sqs:ReceiveMessage", "sqs:DeleteMessage" ],
+              "Action": [ "sqs:ListQueues", "sqs:GetQueueAttributes",
+                          "sqs:ReceiveMessage", "sqs:DeleteMessage",
+                          "sqs:ChangeMessageVisibility", "sqs:GetQueueUrl" ],
               "Resource": [ {
-                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2::", { "Ref": "IncomingQueueName" } ] ]
+                "Fn::Join": [ "", [ "arn:aws:sqs:us-west-2:*:", { "Ref": "IncomingQueueName" } ] ]
               } ]
             } ]
           }
@@ -266,6 +270,8 @@
           "echo 'DEVICE /dev/xvdb /dev/xvdc /dev/xvdd /dev/xvde' >> /etc/mdadm/mdadm.conf",
           "mdadm --detail --scan >> /etc/mdadm/mdadm.conf",
           "mkfs.ext3 -T largefile /dev/md0",
+          "# pause briefly to let md0 get ready",
+          "sleep 3",
           "mkdir -p /mnt",
           "mount /dev/md0 /mnt",
           "mkdir -p /mnt/telemetry/log",
