@@ -8,6 +8,7 @@
 
 #include "HistogramConverter.h"
 #include "TelemetryConstants.h"
+#include "Logger.h"
 
 #include <iostream>
 #include <memory>
@@ -30,25 +31,25 @@ bool ConvertHistogramData(HistogramCache& aCache, RapidjsonDocument& aDoc)
 {
   const RapidjsonValue& info = aDoc["info"];
   if (!info.IsObject()) {
-    //cerr << "ConvertHistogramData - missing info object\n";
+    LOGGER(error) << "missing info object";
     return false;
   }
 
   const RapidjsonValue& revision = info["revision"];
   if (!revision.IsString()) {
-    //cerr << "ConvertHistogramData - missing info.revision\n";
+    LOGGER(error) << "missing info.revision";
     return false;
   }
 
   RapidjsonValue& histograms = aDoc["histograms"];
   if (!histograms.IsObject()) {
-    //cerr << "ConvertHistogramData - missing hintograms object\n";
+    LOGGER(error) << "missing histograms object";
     return false;
   }
 
   RapidjsonValue& ver = aDoc["ver"];
   if (!ver.IsInt() || ver.GetInt() != 1) {
-    //cerr << "ConvertHistogramData - missing ver\n";
+    LOGGER(error) << "missing ver";
     return false;
   }
 
@@ -65,7 +66,7 @@ bool ConvertHistogramData(HistogramCache& aCache, RapidjsonDocument& aDoc)
           ver.SetInt(-1);
         }
       } else {
-        cerr << "ConvertHistogramData - histogram not found: " << revision.GetString() << endl;
+        LOGGER(error) << "histogram not found, " << revision.GetString();
         result = false;
       }
     }
@@ -73,7 +74,7 @@ bool ConvertHistogramData(HistogramCache& aCache, RapidjsonDocument& aDoc)
   case 2: // already converted
     break;
   default:
-    cerr << "ConvertHistogramData - invalid version\n";
+    LOGGER(error) << "invalid version";
     result = false;
     break;
   }
@@ -88,20 +89,20 @@ bool RewriteValues(const HistogramDefinition* aDef,
 {
   const RapidjsonValue& values = aData["values"];
   if (!values.IsObject()) {
-    cerr << "RewriteValues - value object not found\n";
+    LOGGER(error) << "value object not found";
     return false;
   }
   for (RapidjsonValue::ConstMemberIterator it = values.MemberBegin();
        it != values.MemberEnd(); ++it) {
     if (!it->value.IsInt()) {
-      cerr << "RewriteValues - invalid value object\n";
+      LOGGER(error) << "invalid value object";
       return false;
     }
     long lb = strtol(it->name.GetString(), nullptr, 10);
     int i = it->value.GetInt();
     int index = aDef->GetBucketIndex(lb);
     if (index == -1) {
-      cerr << "RewriteValues - invalid bucket lower bound\n";
+      LOGGER(error) << "invalid bucket lower bound";
       return false;
     }
     aRewrite[index] = i;
@@ -160,10 +161,10 @@ bool RewriteHistogram(shared_ptr<HistogramSpecification>& aHist, RapidjsonValue&
           }
         }
       } else {
-        //cerr << "RewriteHistogram - histogram definitition lookup failed: " << name << endl;
+        LOGGER(error) << "histogram definition lookup failed, " << name;
       }
     } else {
-      cerr << "RewriteHistogram - not a histogram object\n";
+      LOGGER(error) << "not a histogram object";
     }
   }
   return result;

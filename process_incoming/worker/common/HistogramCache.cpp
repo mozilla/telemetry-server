@@ -7,6 +7,7 @@
 /// @brief Histogram cache implementation @file
 
 #include "HistogramCache.h"
+#include "Logger.h"
 
 #include <boost/asio.hpp>
 
@@ -53,7 +54,7 @@ HistogramCache::FindHistogram(const std::string& aRevisionKey)
     }
     catch (const exception& e) {
       ++mMetrics.mConnectionErrors.mValue;
-      cerr << "LoadHistogram - " << e.what() << endl;
+      LOGGER(error) << e.what();
     }
   }
   return h;
@@ -170,8 +171,7 @@ HistogramCache::LoadHistogram(const std::string& aRevisionKey)
     }
     catch (exception &e){
       ++mMetrics.mInvalidHistograms.mValue;
-      cerr << "LoadHistogram - invalid histogram specification: " 
-        << aRevisionKey << endl;
+      LOGGER(error) << "invalid histogram specification, " << aRevisionKey;
       return shared_ptr<HistogramSpecification>();
     }
   } else {

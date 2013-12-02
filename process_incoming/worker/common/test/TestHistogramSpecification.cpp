@@ -43,11 +43,11 @@ BOOST_AUTO_TEST_CASE(test_invalid_file)
   ifstream ifs(fn.c_str());
   string json((istream_iterator<char>(ifs)), istream_iterator<char>());
   try {
-    HistogramSpecification h(json); 
+    HistogramSpecification h(json);
     BOOST_FAIL("exception expected");
   }
   catch (const exception& e) {
-    BOOST_REQUIRE_EQUAL(e.what(), "json parse failed: Expect either an object" 
+    BOOST_REQUIRE_EQUAL(e.what(), "json parse failed: Expect either an object"
                         " or array at root");
   }
 }
@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(test_invalid_schema)
   ifstream ifs(fn.c_str());
   string json((istream_iterator<char>(ifs)), istream_iterator<char>());
   try {
-    HistogramSpecification h(json); 
+    HistogramSpecification h(json);
     BOOST_FAIL("exception expected");
   }
   catch (const exception& e) {
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(test_missing_kind)
   ifstream ifs(fn.c_str());
   string json((istream_iterator<char>(ifs)), istream_iterator<char>());
   try {
-    HistogramSpecification h(json); 
+    HistogramSpecification h(json);
     BOOST_FAIL("exception expected");
   }
   catch (const exception& e) {
@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(test_invalid_kind)
   ifstream ifs(fn.c_str());
   string json((istream_iterator<char>(ifs)), istream_iterator<char>());
   try {
-    HistogramSpecification h(json); 
+    HistogramSpecification h(json);
     BOOST_FAIL("exception expected");
   }
   catch (const exception& e) {

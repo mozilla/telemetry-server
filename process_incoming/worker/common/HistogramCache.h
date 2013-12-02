@@ -4,9 +4,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/** @file 
+/** @file
 Retrieves the requested histogram revision from cache.  If not cached checks for
-and loads the histogram file from disk and adds it to the cache. 
+and loads the histogram file from disk and adds it to the cache.
 */
 
 #ifndef mozilla_telemetry_Histogram_Cache_h
@@ -31,22 +31,22 @@ public:
   HistogramCache(const std::string& aHistogramServer);
 
   /**
-   * Retrieves the requested histogram revision from cache.  If not cached it 
-   * will attempt to load the file from the histogram server and add it to the 
-   * cache. 
-   * 
+   * Retrieves the requested histogram revision from cache.  If not cached it
+   * will attempt to load the file from the histogram server and add it to the
+   * cache.
+   *
    * @param aRevision RevisionKey of the histogram file to load.
-   * 
+   *
    * @return const Histogram* nullptr if load fails
    */
   std::shared_ptr<HistogramSpecification>
   FindHistogram(const std::string& aRevisionKey);
 
   /**
-   * Rolls up the internal metric data into the fields element of the provided 
-   * message. The metrics are reset after each call. 
-   * 
-   * @param aMsg The message fields element will be cleared and then populated 
+   * Rolls up the internal metric data into the fields element of the provided
+   * message. The metrics are reset after each call.
+   *
+   * @param aMsg The message fields element will be cleared and then populated
    *             with the HistogramCache metrics.
    */
   void GetMetrics(message::Message& aMsg);
@@ -72,9 +72,9 @@ private:
 
   /**
    * Retrieves the requested histogram revision from the histogram server.
-   * 
+   *
    * @param aRevisionKey Revision of the histogram file to load.
-   * 
+   *
    * @return const Histogram* nullptr if load fails
    */
   std::shared_ptr<HistogramSpecification>

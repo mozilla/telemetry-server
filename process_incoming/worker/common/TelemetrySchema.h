@@ -4,9 +4,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/** @file 
-Accessor and utility functions functions for the telemetry_schema.json data 
-structure. 
+/** @file
+Accessor and utility functions functions for the telemetry_schema.json data
+structure.
 */
 
 
@@ -31,28 +31,28 @@ class TelemetrySchema
 public:
   /**
    * Loads the specified telemetry schema json file from disk
-   * 
+   *
    * @param fileName Fully qualified name of telemetry file.
-   * 
+   *
    */
   TelemetrySchema(const boost::filesystem::path& aFilename);
 
   /**
-   * Constructs the storage layout path based on the configured schema and 
-   * the histogram info object values. 
-   * 
+   * Constructs the storage layout path based on the configured schema and
+   * the histogram info object values.
+   *
    * @param aDoc Histogram object.
-   * 
-   * @return boost::filesystem::path 
+   *
+   * @return boost::filesystem::path
    */
   std::string GetDimensionPath(const RapidjsonDocument& aDoc,
                                uint64_t aTimestamp);
 
   /**
-   * Rolls up the internal metric data into the fields element of the provided 
-   * message. The metrics are reset after each call. 
-   * 
-   * @param aMsg The message fields element will be cleared and then populated 
+   * Rolls up the internal metric data into the fields element of the provided
+   * message. The metrics are reset after each call.
+   *
+   * @param aMsg The message fields element will be cleared and then populated
    *             with the TelemetrySchema metrics.
    */
   void GetMetrics(message::Message& aMsg);
@@ -89,9 +89,9 @@ private:
 
   /**
    * Loads the histogram definitions/verifies the schema
-   * 
+   *
    * @param aValue "histograms" object from the JSON document.
-   * 
+   *
    */
   void LoadDimensions(const RapidjsonDocument& aDoc);
 

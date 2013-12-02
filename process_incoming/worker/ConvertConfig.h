@@ -24,9 +24,9 @@ struct ConvertConfig
   int                     mCompressionPreset;
 };
 
-/** 
+/**
  * Loads the converter configuration from disk.
- * 
+ *
  * @param aFile Filename containing the JSON configuration.
  * @param aConfig Structure to populate with the configuration.
  */

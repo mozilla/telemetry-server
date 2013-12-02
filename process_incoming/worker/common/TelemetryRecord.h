@@ -13,6 +13,7 @@
 #include "Metric.h"
 #include "TelemetryConstants.h"
 
+#include <istream>
 #include <boost/utility.hpp>
 #include <cstdint>
 #include <rapidjson/document.h>
@@ -40,10 +41,10 @@ public:
   RapidjsonDocument& GetDocument();
 
   /**
-   * Rolls up the internal metric data into the fields element of the provided 
-   * message. The metrics are reset after each call. 
-   * 
-   * @param aMsg The message fields element will be cleared and then populated 
+   * Rolls up the internal metric data into the fields element of the provided
+   * message. The metrics are reset after each call.
+   *
+   * @param aMsg The message fields element will be cleared and then populated
    *             with the TelemetryRecord metrics.
    */
   void GetMetrics(message::Message& aMsg);

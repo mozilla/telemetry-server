@@ -22,5 +22,9 @@ add_executable(TestTelemetrySchema TestTelemetrySchema.cpp)
 target_link_libraries(TestTelemetrySchema telemetry ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
 ADD_TEST(TestTelemetrySchema TestTelemetrySchema)
 
+add_executable(TestRecordWriter TestRecordWriter.cpp)
+target_link_libraries(TestRecordWriter telemetry ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
+ADD_TEST(TestRecordWriter TestRecordWriter)
+
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/TestConfig.in.h ${CMAKE_CURRENT_BINARY_DIR}/TestConfig.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
