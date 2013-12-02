@@ -37,6 +37,17 @@ We have implemented a lightweight [MapReduce framework][6] that uses the Operati
 
 For data stored on multiple machines, each machine will run a combine phase, with the final reduce combining output for the entire cluster.
 
+Mongodb Importer
+----------------
+Telemetry data can be optionally imported into mongodb. The benefits of doing that is
+the reduced time to run multiple map-reduce jobs on the same dataset, as mongodb keeps
+as much data as possible in memory.
+
+1. Start mongodb, e.g. `mongod --nojournal`
+2. Fetch a dataset from S3, e.g. `aws s3 cp s3://... /mnt/yourdataset --recursive`
+3. Import the dataset, e.g. `python3 -m mongodb.importer /mnt/yourdataset`
+4. Run a map-reduce job, e.g. `mongo localhost/telemetry mongodb/examples/osdistribution.js`
+
 Plumbing
 -----------
 Once we have the converter and MapReduce framework available, we can easily consume from the existing Telemetry data source. This will mark the first point that the new dashboards can be fed with live data.
