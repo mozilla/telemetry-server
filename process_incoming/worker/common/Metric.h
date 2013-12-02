@@ -4,8 +4,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/** @file 
-Generic structure for tracking runtime statistics. 
+/** @file
+Generic structure for tracking runtime statistics.
 */
 
 #ifndef mozilla_telemetry_Metric_h
@@ -32,15 +32,15 @@ struct Metric
 
 /**
  * Helper function to ture a Metric struct into a Heka message field.
- * 
+ *
  * @param aMsg Heka protobuf message to add the field to.
  * @param aMetric Metric to be converted to a field.
  */
 void ConstructField(message::Message &aMsg, Metric& aMetric);
 
 /**
- * Writes a Heka protobuf message with proper framing for stream output. 
- *  
+ * Writes a Heka protobuf message with proper framing for stream output.
+ *
  * @param os Output stream receiving the message.
  * @param aMsg Message to be framed, encoded, and written.
  */

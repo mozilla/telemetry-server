@@ -83,29 +83,29 @@ class Header : public ::google::protobuf::Message {
  public:
   Header();
   virtual ~Header();
-  
+
   Header(const Header& from);
-  
+
   inline Header& operator=(const Header& from) {
     CopyFrom(from);
     return *this;
   }
-  
+
   inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const {
     return _unknown_fields_;
   }
-  
+
   inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields() {
     return &_unknown_fields_;
   }
-  
+
   static const ::google::protobuf::Descriptor* descriptor();
   static const Header& default_instance();
-  
+
   void Swap(Header* other);
-  
+
   // implements Message ----------------------------------------------
-  
+
   Header* New() const;
   void CopyFrom(const ::google::protobuf::Message& from);
   void MergeFrom(const ::google::protobuf::Message& from);
@@ -113,7 +113,7 @@ class Header : public ::google::protobuf::Message {
   void MergeFrom(const Header& from);
   void Clear();
   bool IsInitialized() const;
-  
+
   int ByteSize() const;
   bool MergePartialFromCodedStream(
       ::google::protobuf::io::CodedInputStream* input);
@@ -126,11 +126,11 @@ class Header : public ::google::protobuf::Message {
   void SharedDtor();
   void SetCachedSize(int size) const;
   public:
-  
+
   ::google::protobuf::Metadata GetMetadata() const;
-  
+
   // nested types ----------------------------------------------------
-  
+
   typedef Header_HmacHashFunction HmacHashFunction;
   static const HmacHashFunction MD5 = Header_HmacHashFunction_MD5;
   static const HmacHashFunction SHA1 = Header_HmacHashFunction_SHA1;
@@ -154,23 +154,23 @@ class Header : public ::google::protobuf::Message {
       HmacHashFunction* value) {
     return Header_HmacHashFunction_Parse(name, value);
   }
-  
+
   // accessors -------------------------------------------------------
-  
+
   // required uint32 message_length = 1;
   inline bool has_message_length() const;
   inline void clear_message_length();
   static const int kMessageLengthFieldNumber = 1;
   inline ::google::protobuf::uint32 message_length() const;
   inline void set_message_length(::google::protobuf::uint32 value);
-  
+
   // optional .message.Header.HmacHashFunction hmac_hash_function = 3 [default = MD5];
   inline bool has_hmac_hash_function() const;
   inline void clear_hmac_hash_function();
   static const int kHmacHashFunctionFieldNumber = 3;
   inline ::message::Header_HmacHashFunction hmac_hash_function() const;
   inline void set_hmac_hash_function(::message::Header_HmacHashFunction value);
-  
+
   // optional string hmac_signer = 4;
   inline bool has_hmac_signer() const;
   inline void clear_hmac_signer();
@@ -181,14 +181,14 @@ class Header : public ::google::protobuf::Message {
   inline void set_hmac_signer(const char* value, size_t size);
   inline ::std::string* mutable_hmac_signer();
   inline ::std::string* release_hmac_signer();
-  
+
   // optional uint32 hmac_key_version = 5;
   inline bool has_hmac_key_version() const;
   inline void clear_hmac_key_version();
   static const int kHmacKeyVersionFieldNumber = 5;
   inline ::google::protobuf::uint32 hmac_key_version() const;
   inline void set_hmac_key_version(::google::protobuf::uint32 value);
-  
+
   // optional bytes hmac = 6;
   inline bool has_hmac() const;
   inline void clear_hmac();
@@ -199,7 +199,7 @@ class Header : public ::google::protobuf::Message {
   inline void set_hmac(const void* value, size_t size);
   inline ::std::string* mutable_hmac();
   inline ::std::string* release_hmac();
-  
+
   // @@protoc_insertion_point(class_scope:message.Header)
  private:
   inline void set_has_message_length();
@@ -212,22 +212,22 @@ class Header : public ::google::protobuf::Message {
   inline void clear_has_hmac_key_version();
   inline void set_has_hmac();
   inline void clear_has_hmac();
-  
+
   ::google::protobuf::UnknownFieldSet _unknown_fields_;
-  
+
   ::google::protobuf::uint32 message_length_;
   int hmac_hash_function_;
   ::std::string* hmac_signer_;
   ::std::string* hmac_;
   ::google::protobuf::uint32 hmac_key_version_;
-  
+
   mutable int _cached_size_;
   ::google::protobuf::uint32 _has_bits_[(5 + 31) / 32];
-  
+
   friend void  protobuf_AddDesc_message_2eproto();
   friend void protobuf_AssignDesc_message_2eproto();
   friend void protobuf_ShutdownFile_message_2eproto();
-  
+
   void InitAsDefaultInstance();
   static Header* default_instance_;
 };
@@ -237,29 +237,29 @@ class Field : public ::google::protobuf::Message {
  public:
   Field();
   virtual ~Field();
-  
+
   Field(const Field& from);
-  
+
   inline Field& operator=(const Field& from) {
     CopyFrom(from);
     return *this;
   }
-  
+
   inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const {
     return _unknown_fields_;
   }
-  
+
   inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields() {
     return &_unknown_fields_;
   }
-  
+
   static const ::google::protobuf::Descriptor* descriptor();
   static const Field& default_instance();
-  
+
   void Swap(Field* other);
-  
+
   // implements Message ----------------------------------------------
-  
+
   Field* New() const;
   void CopyFrom(const ::google::protobuf::Message& from);
   void MergeFrom(const ::google::protobuf::Message& from);
@@ -267,7 +267,7 @@ class Field : public ::google::protobuf::Message {
   void MergeFrom(const Field& from);
   void Clear();
   bool IsInitialized() const;
-  
+
   int ByteSize() const;
   bool MergePartialFromCodedStream(
       ::google::protobuf::io::CodedInputStream* input);
@@ -280,11 +280,11 @@ class Field : public ::google::protobuf::Message {
   void SharedDtor();
   void SetCachedSize(int size) const;
   public:
-  
+
   ::google::protobuf::Metadata GetMetadata() const;
-  
+
   // nested types ----------------------------------------------------
-  
+
   typedef Field_ValueType ValueType;
   static const ValueType STRING = Field_ValueType_STRING;
   static const ValueType BYTES = Field_ValueType_BYTES;
@@ -311,9 +311,9 @@ class Field : public ::google::protobuf::Message {
       ValueType* value) {
     return Field_ValueType_Parse(name, value);
   }
-  
+
   // accessors -------------------------------------------------------
-  
+
   // required string name = 1;
   inline bool has_name() const;
   inline void clear_name();
@@ -324,14 +324,14 @@ class Field : public ::google::protobuf::Message {
   inline void set_name(const char* value, size_t size);
   inline ::std::string* mutable_name();
   inline ::std::string* release_name();
-  
+
   // optional .message.Field.ValueType value_type = 2 [default = STRING];
   inline bool has_value_type() const;
   inline void clear_value_type();
   static const int kValueTypeFieldNumber = 2;
   inline ::message::Field_ValueType value_type() const;
   inline void set_value_type(::message::Field_ValueType value);
-  
+
   // optional string representation = 3;
   inline bool has_representation() const;
   inline void clear_representation();
@@ -342,7 +342,7 @@ class Field : public ::google::protobuf::Message {
   inline void set_representation(const char* value, size_t size);
   inline ::std::string* mutable_representation();
   inline ::std::string* release_representation();
-  
+
   // repeated string value_string = 4;
   inline int value_string_size() const;
   inline void clear_value_string();
@@ -358,7 +358,7 @@ class Field : public ::google::protobuf::Message {
   inline void add_value_string(const char* value, size_t size);
   inline const ::google::protobuf::RepeatedPtrField< ::std::string>& value_string() const;
   inline ::google::protobuf::RepeatedPtrField< ::std::string>* mutable_value_string();
-  
+
   // repeated bytes value_bytes = 5;
   inline int value_bytes_size() const;
   inline void clear_value_bytes();
@@ -374,7 +374,7 @@ class Field : public ::google::protobuf::Message {
   inline void add_value_bytes(const void* value, size_t size);
   inline const ::google::protobuf::RepeatedPtrField< ::std::string>& value_bytes() const;
   inline ::google::protobuf::RepeatedPtrField< ::std::string>* mutable_value_bytes();
-  
+
   // repeated int64 value_integer = 6 [packed = true];
   inline int value_integer_size() const;
   inline void clear_value_integer();
@@ -386,7 +386,7 @@ class Field : public ::google::protobuf::Message {
       value_integer() const;
   inline ::google::protobuf::RepeatedField< ::google::protobuf::int64 >*
       mutable_value_integer();
-  
+
   // repeated double value_double = 7 [packed = true];
   inline int value_double_size() const;
   inline void clear_value_double();
@@ -398,7 +398,7 @@ class Field : public ::google::protobuf::Message {
       value_double() const;
   inline ::google::protobuf::RepeatedField< double >*
       mutable_value_double();
-  
+
   // repeated bool value_bool = 8 [packed = true];
   inline int value_bool_size() const;
   inline void clear_value_bool();
@@ -410,7 +410,7 @@ class Field : public ::google::protobuf::Message {
       value_bool() const;
   inline ::google::protobuf::RepeatedField< bool >*
       mutable_value_bool();
-  
+
   // @@protoc_insertion_point(class_scope:message.Field)
  private:
   inline void set_has_name();
@@ -419,9 +419,9 @@ class Field : public ::google::protobuf::Message {
   inline void clear_has_value_type();
   inline void set_has_representation();
   inline void clear_has_representation();
-  
+
   ::google::protobuf::UnknownFieldSet _unknown_fields_;
-  
+
   ::std::string* name_;
   ::std::string* representation_;
   ::google::protobuf::RepeatedPtrField< ::std::string> value_string_;
@@ -433,14 +433,14 @@ class Field : public ::google::protobuf::Message {
   ::google::protobuf::RepeatedField< bool > value_bool_;
   mutable int _value_bool_cached_byte_size_;
   int value_type_;
-  
+
   mutable int _cached_size_;
   ::google::protobuf::uint32 _has_bits_[(8 + 31) / 32];
-  
+
   friend void  protobuf_AddDesc_message_2eproto();
   friend void protobuf_AssignDesc_message_2eproto();
   friend void protobuf_ShutdownFile_message_2eproto();
-  
+
   void InitAsDefaultInstance();
   static Field* default_instance_;
 };
@@ -450,29 +450,29 @@ class Message : public ::google::protobuf::Message {
  public:
   Message();
   virtual ~Message();
-  
+
   Message(const Message& from);
-  
+
   inline Message& operator=(const Message& from) {
     CopyFrom(from);
     return *this;
   }
-  
+
   inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const {
     return _unknown_fields_;
   }
-  
+
   inline ::google::protobuf::UnknownFieldSet* mutable_unknown_fields() {
     return &_unknown_fields_;
   }
-  
+
   static const ::google::protobuf::Descriptor* descriptor();
   static const Message& default_instance();
-  
+
   void Swap(Message* other);
-  
+
   // implements Message ----------------------------------------------
-  
+
   Message* New() const;
   void CopyFrom(const ::google::protobuf::Message& from);
   void MergeFrom(const ::google::protobuf::Message& from);
@@ -480,7 +480,7 @@ class Message : public ::google::protobuf::Message {
   void MergeFrom(const Message& from);
   void Clear();
   bool IsInitialized() const;
-  
+
   int ByteSize() const;
   bool MergePartialFromCodedStream(
       ::google::protobuf::io::CodedInputStream* input);
@@ -493,13 +493,13 @@ class Message : public ::google::protobuf::Message {
   void SharedDtor();
   void SetCachedSize(int size) const;
   public:
-  
+
   ::google::protobuf::Metadata GetMetadata() const;
-  
+
   // nested types ----------------------------------------------------
-  
+
   // accessors -------------------------------------------------------
-  
+
   // required bytes uuid = 1;
   inline bool has_uuid() const;
   inline void clear_uuid();
@@ -510,14 +510,14 @@ class Message : public ::google::protobuf::Message {
   inline void set_uuid(const void* value, size_t size);
   inline ::std::string* mutable_uuid();
   inline ::std::string* release_uuid();
-  
+
   // required int64 timestamp = 2;
   inline bool has_timestamp() const;
   inline void clear_timestamp();
   static const int kTimestampFieldNumber = 2;
   inline ::google::protobuf::int64 timestamp() const;
   inline void set_timestamp(::google::protobuf::int64 value);
-  
+
   // optional string type = 3;
   inline bool has_type() const;
   inline void clear_type();
@@ -528,7 +528,7 @@ class Message : public ::google::protobuf::Message {
   inline void set_type(const char* value, size_t size);
   inline ::std::string* mutable_type();
   inline ::std::string* release_type();
-  
+
   // optional string logger = 4;
   inline bool has_logger() const;
   inline void clear_logger();
@@ -539,14 +539,14 @@ class Message : public ::google::protobuf::Message {
   inline void set_logger(const char* value, size_t size);
   inline ::std::string* mutable_logger();
   inline ::std::string* release_logger();
-  
+
   // optional int32 severity = 5;
   inline bool has_severity() const;
   inline void clear_severity();
   static const int kSeverityFieldNumber = 5;
   inline ::google::protobuf::int32 severity() const;
   inline void set_severity(::google::protobuf::int32 value);
-  
+
   // optional string payload = 6;
   inline bool has_payload() const;
   inline void clear_payload();
@@ -557,7 +557,7 @@ class Message : public ::google::protobuf::Message {
   inline void set_payload(const char* value, size_t size);
   inline ::std::string* mutable_payload();
   inline ::std::string* release_payload();
-  
+
   // optional string env_version = 7;
   inline bool has_env_version() const;
   inline void clear_env_version();
@@ -568,14 +568,14 @@ class Message : public ::google::protobuf::Message {
   inline void set_env_version(const char* value, size_t size);
   inline ::std::string* mutable_env_version();
   inline ::std::string* release_env_version();
-  
+
   // optional int32 pid = 8;
   inline bool has_pid() const;
   inline void clear_pid();
   static const int kPidFieldNumber = 8;
   inline ::google::protobuf::int32 pid() const;
   inline void set_pid(::google::protobuf::int32 value);
-  
+
   // optional string hostname = 9;
   inline bool has_hostname() const;
   inline void clear_hostname();
@@ -586,7 +586,7 @@ class Message : public ::google::protobuf::Message {
   inline void set_hostname(const char* value, size_t size);
   inline ::std::string* mutable_hostname();
   inline ::std::string* release_hostname();
-  
+
   // repeated .message.Field fields = 10;
   inline int fields_size() const;
   inline void clear_fields();
@@ -598,7 +598,7 @@ class Message : public ::google::protobuf::Message {
       fields() const;
   inline ::google::protobuf::RepeatedPtrField< ::message::Field >*
       mutable_fields();
-  
+
   // @@protoc_insertion_point(class_scope:message.Message)
  private:
   inline void set_has_uuid();
@@ -619,9 +619,9 @@ class Message : public ::google::protobuf::Message {
   inline void clear_has_pid();
   inline void set_has_hostname();
   inline void clear_has_hostname();
-  
+
   ::google::protobuf::UnknownFieldSet _unknown_fields_;
-  
+
   ::std::string* uuid_;
   ::google::protobuf::int64 timestamp_;
   ::std::string* type_;
@@ -632,14 +632,14 @@ class Message : public ::google::protobuf::Message {
   ::std::string* env_version_;
   ::std::string* hostname_;
   ::google::protobuf::RepeatedPtrField< ::message::Field > fields_;
-  
+
   mutable int _cached_size_;
   ::google::protobuf::uint32 _has_bits_[(10 + 31) / 32];
-  
+
   friend void  protobuf_AddDesc_message_2eproto();
   friend void protobuf_AssignDesc_message_2eproto();
   friend void protobuf_ShutdownFile_message_2eproto();
-  
+
   void InitAsDefaultInstance();
   static Message* default_instance_;
 };

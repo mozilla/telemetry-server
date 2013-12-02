@@ -12,7 +12,7 @@
 #include <string>
 
 namespace mozilla {
-namespace telemetry { 
+namespace telemetry {
 extern const unsigned kVersionMajor;
 extern const unsigned kVersionMinor;
 extern const unsigned kVersionPatch;

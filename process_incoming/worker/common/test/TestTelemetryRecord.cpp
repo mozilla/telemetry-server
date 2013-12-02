@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_CASE(test_read)
   istringstream iss(data);
   TelemetryRecord tr;
   for (int i = 0; i < 2; ++i) {
-    BOOST_REQUIRE_EQUAL(true, tr.Read(iss)); 
+    BOOST_REQUIRE_EQUAL(true, tr.Read(iss));
     BOOST_REQUIRE_EQUAL(1, tr.GetTimestamp());
     BOOST_REQUIRE_EQUAL("abcd", tr.GetPath());
     BOOST_REQUIRE_EQUAL(8, tr.GetDocument()["a"].GetInt());
@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(test_exceed_pathlength)
   istringstream iss(data);
   TelemetryRecord tr;
   for (int i = 0; i < 2; ++i) {
-    BOOST_REQUIRE_EQUAL(true, tr.Read(iss)); 
+    BOOST_REQUIRE_EQUAL(true, tr.Read(iss));
     BOOST_REQUIRE_EQUAL(1, tr.GetTimestamp());
     BOOST_REQUIRE_EQUAL("abcd", tr.GetPath());
     BOOST_REQUIRE_EQUAL(8, tr.GetDocument()["a"].GetInt());
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(test_short_pathlength)
   istringstream iss(data);
   TelemetryRecord tr;
 
-  BOOST_REQUIRE_EQUAL(true, tr.Read(iss)); 
+  BOOST_REQUIRE_EQUAL(true, tr.Read(iss));
   BOOST_REQUIRE_EQUAL(1, tr.GetTimestamp());
   BOOST_REQUIRE_EQUAL("abcd", tr.GetPath());
   BOOST_REQUIRE_EQUAL(8, tr.GetDocument()["a"].GetInt());

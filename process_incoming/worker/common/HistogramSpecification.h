@@ -4,8 +4,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/** @file 
-Accessor and utility functions for the Histogram.json data structure. 
+/** @file
+Accessor and utility functions for the Histogram.json data structure.
  */
 
 #ifndef mozilla_telemetry_HistogramSpecification_h
@@ -25,9 +25,9 @@ Accessor and utility functions for the Histogram.json data structure.
 namespace mozilla {
 namespace telemetry {
 
-/** 
+/**
  * Stores a specific histogram definition within a histogram file
- * 
+ *
  */
 class HistogramDefinition : boost::noncopyable
 {
@@ -36,18 +36,18 @@ public:
   HistogramDefinition(const RapidjsonValue& aValue);
 
   /**
-   * Returns the index of the associated bucket based on the bucket's lower 
-   * bound. 
-   * 
+   * Returns the index of the associated bucket based on the bucket's lower
+   * bound.
+   *
    * @param aLowerBound The lower bound of the data stored in this bucket
-   * 
+   *
    * @return int The bucket index or -1 if the lower bound is invalid.
    */
   int GetBucketIndex(long aLowerBound) const;
 
   /**
    * Returns the number of counter buckets in the definition.
-   * 
+   *
    * @return int Number of buckets.
    */
   int GetBucketCount() const;
@@ -85,20 +85,20 @@ struct Cstring_hash : std::unary_function<char*, std::size_t>
   }
 };
 
-/** 
+/**
  * Stores the set of histogram definitions within a histogram file.
- * 
+ *
  */
 class HistogramSpecification : boost::noncopyable
 {
 public:
   /**
    * Loads the specified Histogram.json into memory.
-   * 
+   *
    * @param aJSON JSON histogram data.
-   * 
+   *
    * @return
-   * 
+   *
    */
   HistogramSpecification(const std::string& aJSON);
   ~HistogramSpecification();
@@ -106,9 +106,9 @@ public:
 
   /**
    * Retrieve a specific histogram definition by name.
-   * 
+   *
    * @param aName Histogram name.
-   * 
+   *
    * @return HistogramDefinition Histogram definition or nullptr if the
    * definition is not found.
    */
@@ -118,9 +118,9 @@ private:
 
   /**
    * Loads the histogram definitions/verifies the schema
-   * 
+   *
    * @param aValue "histograms" object from the JSON document.
-   * 
+   *
    */
   void LoadDefinitions(const RapidjsonDocument& aDoc);
 
