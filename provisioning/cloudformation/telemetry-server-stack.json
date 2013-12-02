@@ -42,10 +42,10 @@
 
   "Mappings": {
     "Region2WebServerAMI": {
-      "us-west-2": { "AMI": "ami-ac24419c" }
+      "us-west-2": { "AMI": "ami-c82643f8" }
     },
     "Region2ProcessIncomingAMI": {
-      "us-west-2": { "AMI": "ami-ac24419c" }
+      "us-west-2": { "AMI": "ami-c82643f8" }
     }
   },
 
