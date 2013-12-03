@@ -189,6 +189,7 @@ Resources:
         - {Ref: workerSecurityGroup}
       UserData:       {'Fn::Base64': {'Fn::Join': ['', [
               "#!/bin/bash\n",
+              "sudo apt-get -y update\n",
               "sudo apt-get -y install python-pip\n",
               "sudo pip install --upgrade boto\n",
               "cd /home/ubuntu\n",
@@ -204,8 +205,8 @@ Resources:
               "chown ubuntu /mnt/work/\n",
               "sudo -u ubuntu python manager.py -q '",
                 {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]},
-                "' -w /mnt/work/\n",
-              "sudo shutdown -h now\n"
+                "' -w /mnt/work/\n"
+              #"sudo shutdown -h now\n"
             ]
           ]
         }
@@ -250,6 +251,16 @@ Resources:
       Cooldown:                 60
       ScalingAdjustment:        15
 
+  workerFullSpeedPolicy:
+    Type:                       AWS::AutoScaling::ScalingPolicy
+    DependsOn:
+      - workerAutoScaleGroup
+    Properties:
+      AdjustmentType:           ChangeInCapacity
+      AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
+      Cooldown:                 60
+      ScalingAdjustment:        {Ref: maxWorkers}
+
   workerScaleDownPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
     DependsOn:
@@ -277,16 +288,16 @@ Resources:
       - telemetryAnalysisInput
       - workerQuickStartPolicy
     Properties:
-      AlarmDescription:         Scale up if 100+ message are added at once
+      AlarmDescription:         Scale up if 50+ message are added at once
       Namespace:                AWS/SQS
       MetricName:               NumberOfMessagesSent
       Dimensions:
         - Name:     QueueName
           Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
       Statistic:                Sum
-      Period:                   120
-      EvaluationPeriods:        1
-      Threshold:                100
+      Period:                   60
+      EvaluationPeriods:        2
+      Threshold:                50
       ComparisonOperator:       GreaterThanThreshold
       AlarmActions:
         - {Ref: workerQuickStartPolicy}
@@ -310,6 +321,27 @@ Resources:
       ComparisonOperator:       GreaterThanThreshold
       AlarmActions:
         - {Ref: workerScaleUpPolicy}
+
+  messageOverloadAlarm:
+    Type:                       AWS::CloudWatch::Alarm
+    DependsOn:
+      - telemetryAnalysisInput
+      - workerFullSpeedPolicy
+    Properties:
+      AlarmDescription:         Scale up if more than 1000 messages
+      Namespace:                AWS/SQS
+      MetricName:               ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name:     QueueName
+          Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
+      Statistic:                Sum
+      Period:                   60
+      EvaluationPeriods:        1
+      Threshold:                1000
+      ComparisonOperator:       GreaterThanThreshold
+      AlarmActions:
+        - {Ref: workerFullSpeedPolicy}
+
 
   notEnoughMessagesAlarm:
     Type:                       AWS::CloudWatch::Alarm

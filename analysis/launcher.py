@@ -36,7 +36,9 @@ class AnalysisJob:
     def get_filtered_files(self):
         conn = S3Connection(self.aws_key, self.aws_secret_key)
         bucket = conn.get_bucket(self.input_bucket)
-        return self.list_partitions(bucket)
+        for k,s in self.list_partitions(bucket):
+            if k.split('/')[-1].split('.')[1] < '20131104':
+                yield (k, s)
 
     def get_filtered_files_old(self):
         """ Get tuples of name and size for all input files """
