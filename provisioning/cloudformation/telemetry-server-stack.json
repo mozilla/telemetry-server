@@ -33,6 +33,11 @@
       "Type":        "String",
       "Default":     "m1.small"
     },
+    "NotificationEmail": {
+      "Description": "Email address to send AutoScale activity",
+      "Type":        "String",
+      "Default":     "mozilla-telemetry@markreid.org"
+    },
     "ProcessIncomingInstanceType": {
       "Description": "Type of EC2 instance to launch for Process Incoming nodes",
       "Type":        "String",
@@ -50,6 +55,14 @@
   },
 
   "Resources": {
+    "TelemetryServerAutoScaleTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "telemetry-server-auto-scale-activity",
+        "Subscription": [ { "Endpoint": { "Ref": "NotificationEmail" }, "Protocol": "email" } ]
+      }
+    },
+
     "WebServerGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
@@ -57,7 +70,14 @@
         "LaunchConfigurationName": { "Ref": "WebServerLaunchConfig" },
         "MinSize":                 "2",
         "MaxSize":                 "10",
-        "LoadBalancerNames":       [ { "Ref": "LoadBalancer" } ]
+        "LoadBalancerNames":       [ { "Ref": "LoadBalancer" } ],
+        "NotificationConfiguration": {
+          "TopicARN": { "Ref": "TelemetryServerAutoScaleTopic" },
+          "NotificationTypes": [
+            "autoscaling:EC2_INSTANCE_LAUNCH", "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+            "autoscaling:EC2_INSTANCE_TERMINATE", "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ]
+        }
       },
       "UpdatePolicy": {
         "AutoScalingRollingUpdate": {
@@ -160,7 +180,118 @@
         "AvailabilityZones":       { "Fn::GetAZs": "" },
         "LaunchConfigurationName": { "Ref": "ProcessIncomingLaunchConfig" },
         "MinSize":                 "1",
-        "MaxSize":                 "5"
+        "MaxSize":                 "5",
+        "NotificationConfiguration": {
+          "TopicARN": { "Ref": "TelemetryServerAutoScaleTopic" },
+          "NotificationTypes": [
+            "autoscaling:EC2_INSTANCE_LAUNCH", "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+            "autoscaling:EC2_INSTANCE_TERMINATE", "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ]
+        }
+      }
+    },
+
+    "ProcessIncomingHighLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if more than 32 messages available: scale up",
+        "Namespace":          "AWS/SQS",
+        "MetricName":         "ApproximateNumberOfMessagesVisible",
+        "Statistic":          "Maximum",
+        "Period":             "60",
+        "EvaluationPeriods":  "10",
+        "Threshold":          "32",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions":   [ { "Name": "QueueName", "Value": { "Ref": "IncomingQueueName" } } ],
+        "AlarmActions": [ { "Ref": "ProcessIncomingScaleUpPolicy" } ]
+      }
+    },
+
+    "ProcessIncomingScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "ProcessIncomingGroup" },
+        "Cooldown": "900",
+        "ScalingAdjustment": "1"
+      }
+    },
+
+    "ProcessIncomingLowLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if fewer than 10 messages available: scale down",
+        "Namespace":          "AWS/SQS",
+        "MetricName":         "ApproximateNumberOfMessagesVisible",
+        "Statistic":          "Maximum",
+        "Period":             "60",
+        "EvaluationPeriods":  "10",
+        "Threshold":          "10",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions":   [ { "Name": "QueueName", "Value": { "Ref": "IncomingQueueName" } } ],
+        "AlarmActions": [ { "Ref": "ProcessIncomingScaleDownPolicy" } ]
+      }
+    },
+
+    "ProcessIncomingScaleDownPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "ProcessIncomingGroup" },
+        "Cooldown": "60",
+        "ScalingAdjustment": "-1"
+      }
+    },
+
+    "WebServerHighLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if CPU load is too high: scale up",
+        "Namespace":          "AWS/EC2",
+        "MetricName":         "CPUUtilization",
+        "Statistic":          "Average",
+        "Period":             "30",
+        "EvaluationPeriods":  "6",
+        "Threshold":          "90",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions":   [ { "Name": "AutoScalingGroupName", "Value": { "Ref": "WebServerGroup" } } ],
+        "AlarmActions": [ { "Ref": "WebServerScaleUpPolicy" } ]
+      }
+    },
+
+    "WebServerScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "WebServerGroup" },
+        "Cooldown": "120",
+        "ScalingAdjustment": "1"
+      }
+    },
+
+    "WebServerLowLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if CPU load is too low: scale down",
+        "Namespace":          "AWS/EC2",
+        "MetricName":         "CPUUtilization",
+        "Statistic":          "Average",
+        "Period":             "30",
+        "EvaluationPeriods":  "6",
+        "Threshold":          "70",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions":   [ { "Name": "AutoScalingGroupName", "Value": { "Ref": "WebServerGroup" } } ],
+        "AlarmActions": [ { "Ref": "WebServerScaleDownPolicy" } ]
+      }
+    },
+
+    "WebServerScaleDownPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "WebServerGroup" },
+        "Cooldown": "300",
+        "ScalingAdjustment": "-1"
       }
     },
 
