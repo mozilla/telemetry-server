@@ -8,7 +8,6 @@ FILES = $(shell find * -name "*.py") \
 		$(shell find * -name "*.html")
 
 telemetry-analysis-debug-service.tar.gz: $(FILES)
-	echo $(FILES)
 	tar -czf $@ $^
 
 debug-service-stack.json: debug-service-stack.yaml

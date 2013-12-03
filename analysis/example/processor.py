@@ -8,7 +8,7 @@ class RowCountingProcessor:
   def set_output_folder(self, folder):
       self.output_folder = folder
 
-  def scan(self, key, value):
+  def scan(self, key, dims, value):
       self.values_counted += 1
 
   def write_output(self):

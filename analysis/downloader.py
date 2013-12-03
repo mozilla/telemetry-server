@@ -1,41 +1,39 @@
 from multiprocessing import Process
 from boto.s3.connection import S3Connection
-from boto.s3.key import Key
-import os, sys
 from traceback import print_exc
+from utils import mkdirp
+import os, sys
 
 class DownloaderProcess(Process):
     """ Worker process that download files from queue to folder """
     def __init__(self, input_queue, output_queue,
-                       work_folder,
-                       aws_key, aws_secret_key):
+                       work_folder, aws_cred):
         super(DownloaderProcess, self).__init__()
-        self._input_queue = input_queue
-        self._output_queue = output_queue
-        self._work_folder = work_folder
-        self._input_bucket = "telemetry-published-v1"
-        self._aws_key = aws_key
-        self._aws_secret_key = aws_secret_key
-        self._conn = S3Connection(self._aws_key, self._aws_secret_key)
-        self._bucket = self._conn.get_bucket(self._input_bucket)
+        self.input_queue = input_queue
+        self.output_queue = output_queue
+        self.work_folder = work_folder
+        mkdirp(self.work_folder)
+        self.input_bucket = "telemetry-published-v1"
+        self.aws_cred = aws_cred
+        self.s3 = S3Connection(**self.aws_cred)
+        self.bucket = self.s3.get_bucket(self.input_bucket, validate = False)
 
     def run(self):
         while True:
-            filepath = self._input_queue.get()
-            self.download(filepath)
+            prefix = self.input_queue.get()
+            self.download(prefix)
 
-    def download(self, filepath):
-        # Get filename from path
-        filename = os.path.basename(filepath)
-        # Get target filepath
-        target = os.path.join(self._work_folder, filename)
+    def download(self, prefix):
+        # Get filename from prefix
+        filename = os.path.basename(prefix)
+        # Get target path
+        target = os.path.join(self.work_folder, filename)
         # Download file
         retries = 1
         success = False
         while retries < 3:
             try:
-                k = Key(self._bucket)
-                k.key = filepath
+                k = self.bucket.get_key(prefix)
                 k.get_contents_to_filename(target)
                 success = True
                 break
@@ -46,7 +44,7 @@ class DownloaderProcess(Process):
 
         if success:
             # Put file to output query
-            self._output_queue.put((target, filepath))
+            self.output_queue.put((prefix, target))
         else:
-            print >> sys.stderr, "Failed to download: %s" % filepath
-            self._output_queue.put((None, filepath))
+            print >> sys.stderr, "Failed to download: %s" % prefix
+            self.output_queue.put((prefix, None))
