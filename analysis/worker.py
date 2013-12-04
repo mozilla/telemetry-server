@@ -53,13 +53,13 @@ class AnalysisWorker(Process):
         # Extract job_bundle
         self.processor_path = os.path.join(self.work_folder, "code")
         mkdirp(self.processor_path)
-        tar = tarfile.open("job_bundle_target")
+        tar = tarfile.open(job_bundle_target)
         tar.extractall(path = self.processor_path)
         tar.close()
 
         # Create processor
         self.processor = Popen(
-            ['./processor', self.output_folder],
+            ['./processor', os.path.relpath(self.output_folder, self.processor_path)],
             cwd = self.processor_path,
             bufsize = 1,
             stdin = PIPE,
@@ -86,17 +86,23 @@ class AnalysisWorker(Process):
         self.processor.stdin.close()
         self.processor.wait()
 
-        # Put output files to uploaders
-        for path, folder, files in os.walk(self.output_folder):
-            for f in files:
-                source = os.path.join(path, f)
-                target = os.path.relpath(os.path.join(path, f), self.output_folder)
-                self.output_queue.put((source, target))
+        # Check return code
+        if self.processor.returncode == 0:
+            # Put output files to uploaders
+            for path, folder, files in os.walk(self.output_folder):
+                for f in files:
+                    source = os.path.join(path, f)
+                    target = os.path.relpath(os.path.join(path, f), self.output_folder)
+                    self.output_queue.put((source, target))
 
-        # Put finished message
-        self.output_queue.put(True)
+            # Put finished message
+            self.output_queue.put(True)
+        else:
+            print >> sys.stderr, "Processor exited non-zero, task failed"
+            self.output_queue.put(False)
 
     def process_file(self, prefix, path):
+        path = os.path.relpath(path, self.processor_path)
         self.processor.stdin.write("%s\t%s\n" % (prefix, path))
 
 def main():
@@ -135,11 +141,13 @@ def main():
     output_queue = Queue()
 
     # Put input files in queue
+    nb_files = 0
     for path, folder, files in os.walk(data_dir):
         for f in files:
             source = os.path.join(path, f)
             vname = os.path.relpath(os.path.join(path, f), data_dir)
             input_queue.put((vname, source))
+            nb_files += 1
 
     # The empty set of AWS credentials
     aws_cred = {
@@ -151,7 +159,7 @@ def main():
     job_bundle = (None, cfg.job_bundle)
 
     # Start analysis worker
-    worker = AnalysisWorker(job_bundle, 1, aws_cred,
+    worker = AnalysisWorker(job_bundle, nb_files, aws_cred,
                             input_queue, output_queue,
                             work_dir)
     worker.start()

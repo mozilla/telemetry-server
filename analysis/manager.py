@@ -11,6 +11,7 @@ from traceback import print_exc
 from downloader import DownloaderProcess
 from time import sleep
 import os, sys
+from utils import mkdirp
 
 NUMBER_DOWNLOADERS = 2
 
@@ -112,6 +113,9 @@ class Manager(Thread):
         processing_queue = Queue()
         upload_queue = Queue()
 
+        # Ensure workdir exits
+        mkdirp(self.work_dir)
+
         # Create downloaders
         downloaders = []
         for i in xrange(0, NUMBER_DOWNLOADERS):
@@ -175,6 +179,9 @@ class Manager(Thread):
             downloader.terminate()
         # Kill worker
         worker.terminate()
+
+        # Clear work folder
+        rmtree(self.work_dir, ignore_errors = True)
 
 def main():
     p = ArgumentParser(
