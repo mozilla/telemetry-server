@@ -25,7 +25,7 @@ class AnalysisJob:
         # Bucket with intermediate data for this analysis job
         self.analysis_bucket = "jonasfj-telemetry-analysis"
 
-        self.s3_code_path = "batch-jobs/" + self.job_id + ".egg"
+        self.s3_code_path = "batch-jobs/" + self.job_id + ".tar.gz"
 
         # S3 region of operation
         self.aws_region = "us-west-2"

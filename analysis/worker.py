@@ -7,12 +7,12 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from multiprocessing import Process, Queue
 from traceback import print_exc
 from subprocess import Popen, PIPE
-from zipimport import zipimporter
 from utils import mkdirp
 from boto.s3.connection import S3Connection
 from shutil import rmtree, copyfile, copytree
 from pkg_resources import WorkingSet
 from time import sleep
+import tarfile
 import os, sys
 
 class AnalysisWorker(Process):
@@ -40,7 +40,7 @@ class AnalysisWorker(Process):
         mkdirp(self.work_folder)
         mkdirp(self.output_folder)
 
-        job_bundle_target = os.path.join(self.work_folder, "job_bundle.egg")
+        job_bundle_target = os.path.join(self.work_folder, "job_bundle.tar.gz")
         # If job_bundle_bucket is None then the bundle is stored locally
         if self.job_bundle_bucket == None:
             copyfile(self.job_bundle_prefix, job_bundle_target)
@@ -50,19 +50,22 @@ class AnalysisWorker(Process):
             key = bucket.get_key(self.job_bundle_prefix)
             key.get_contents_to_filename(job_bundle_target)
 
-        # Add job bundle (.egg) to sys.path
-        sys.path.append(job_bundle_target)
+        # Extract job_bundle
+        self.processor_path = os.path.join(self.work_folder, "code")
+        mkdirp(self.processor_path)
+        tar = tarfile.open("job_bundle_target")
+        tar.extractall(path = self.processor_path)
+        tar.close()
 
-        # Search for processor entry in telemetry.analysis
-        # These are provided plugins (.egg files)
-        sys.path.append(job_bundle_target)
-        w = WorkingSet([job_bundle_target])
-        for entry in w.iter_entry_points(group = 'telemetry.analysis',
-                                         name = 'processor'):
-            self.processorClass = entry.load()
-            break
-        # Instantiate processor
-        self.processor = self.processorClass(self.output_folder)
+        # Create processor
+        self.processor = Popen(
+            ['./processor', self.output_folder],
+            cwd = self.processor_path,
+            bufsize = 1,
+            stdin = PIPE,
+            stdout = sys.stdout,
+            stderr = sys.stderr
+        )
 
     def run(self):
         try:
@@ -80,7 +83,8 @@ class AnalysisWorker(Process):
 
     def finish(self):
         # Ask processor to write output
-        self.processor.flush()
+        self.processor.stdin.close()
+        self.processor.wait()
 
         # Put output files to uploaders
         for path, folder, files in os.walk(self.output_folder):
@@ -93,50 +97,7 @@ class AnalysisWorker(Process):
         self.output_queue.put(True)
 
     def process_file(self, prefix, path):
-        if self.processorClass.INTERFACE is 'raw-files':
-            errors = self.processor.process(prefix, path)
-        elif self.processorClass.INTERFACE in ('raw-payloads', 'parsed-json'):
-            parse_json = (self.processorClass.INTERFACE == 'parsed-json')
-
-            # Find dimensions
-            dims = prefix.split('/')
-            dims += dims.pop().split('.')[:2]
-
-            # Open a compressor
-            raw_handle = open(path, "rb")
-            decompressor = Popen(
-                ['xz', '-d', '-c'],
-                bufsize = 65536,
-                stdin = raw_handle,
-                stdout = PIPE,
-                stderr = sys.stderr
-            )
-
-            # Process each line
-            line_nb = 0
-            errors = 0
-            for line in decompressor.stdout:
-                line_nb += 1
-                try:
-                    uid, payload = line.split("\t", 1)
-                    if parse_json:
-                        payload = json.loads(payload)
-                    self.processor.process(uid, dims, payload)
-                except:
-                    print >> sys.stderr, ("Bad input line: %i of %s" %
-                                          (line_nb, prefix))
-                    print_exc(file = sys.stderr)
-                    errors += 1
-
-            # Close decompressor
-            decompressor.stdout.close()
-            raw_handle.close()
-        else:
-            print "Processor interface: %s unknown" % self.processorClass.INTERFACE
-        if errors > 0:
-            print "Processor failed to handle %i rows" % errors
-        os.remove(path)
-
+        self.processor.stdin.write("%s\t%s\n" % (prefix, path))
 
 def main():
     """ Run the worker with a job_bundle on a local input-file for debugging """
