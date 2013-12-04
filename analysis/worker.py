@@ -116,8 +116,8 @@ def main():
         help = "The analysis bundle to run"
     )
     p.add_argument(
-        "-d", "--data",
-        help = "Input data folder to process"
+        "-f", "--input",
+        help = "File with 'prefix <TAB> path' for files to process"
     )
     p.add_argument(
         "-w", "--work-dir",
@@ -132,9 +132,7 @@ def main():
     work_dir = os.path.join(cfg.work_dir, "work-folder")
     data_dir = os.path.join(cfg.work_dir, "data-folder")
     mkdirp(work_dir)
-
-    # Copy input file
-    copytree(cfg.data, data_dir)
+    mkdirp(data_dir)
 
     # Setup queues
     input_queue = Queue()
@@ -142,11 +140,12 @@ def main():
 
     # Put input files in queue
     nb_files = 0
-    for path, folder, files in os.walk(data_dir):
-        for f in files:
-            source = os.path.join(path, f)
-            vname = os.path.relpath(os.path.join(path, f), data_dir)
-            input_queue.put((vname, source))
+    with open(cfg.input, 'r') as input:
+        for line in input:
+            prefix, path = line.strip().split('\t')
+            source = os.path.join(data_dir, "file-%i" % nb_files)
+            copyfile(path, source)
+            input_queue.put((prefix, source))
             nb_files += 1
 
     # The empty set of AWS credentials
