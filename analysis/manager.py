@@ -8,12 +8,13 @@ from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 from worker import AnalysisWorker
 from traceback import print_exc
+from shutil import rmtree
 from downloader import DownloaderProcess
 from time import sleep
 import os, sys
 from utils import mkdirp
 
-NUMBER_DOWNLOADERS = 2
+NUMBER_DOWNLOADERS = 6
 
 IDLE_WAIT_BEFORE_SHUTDOWN = 5 * 60
 
