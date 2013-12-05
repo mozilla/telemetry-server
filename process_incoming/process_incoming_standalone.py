@@ -448,7 +448,7 @@ def main():
         except S3ResponseError:
             logger.log("Bucket {0} not found.  Attempting to create it.".format(config["publish_bucket"]))
             publish_bucket = conn.create_bucket(config["publish_bucket"])
-        s3downloader = s3util.Loader(args.work_dir, config["incoming_bucket"], poolsize=num_cpus)
+        s3downloader = s3util.Loader(args.work_dir, config["incoming_bucket"], poolsize=num_cpus, aws_key=config.get("aws_key", None), aws_secret_key=config.get("aws_secret_key", None))
 
     raw_readers = None
     compressors = None
