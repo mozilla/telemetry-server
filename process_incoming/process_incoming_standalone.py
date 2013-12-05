@@ -8,6 +8,7 @@
 import argparse
 import uuid
 import multiprocessing
+import logging
 from multiprocessing import Process, Queue
 import Queue as Q
 import simplejson as json
@@ -43,6 +44,11 @@ def terminate(logger, processes, label):
     for p in processes:
         p.terminate()
     logger.log("{0} Done.".format(label))
+
+def finish_queue(queue, num_procs):
+    for i in range(num_procs):
+        queue.put(PipeStep.SENTINEL)
+    queue.close()
 
 class InterruptProcessingError(Exception):
     def __init__(self, msg):
@@ -272,7 +278,8 @@ class CompressCompletedStep(PipeStep):
         filename = record
         base_ends = filename.find(".log") + 4
         if base_ends < 4:
-            logging.warn("Bad filename encountered, skipping: " + filename)
+            self.log("Bad filename encountered, skipping: " + filename)
+            self.bad_records += 1
             return
         basename = filename[0:base_ends]
         # Get a unique name for the compressed file:
@@ -393,6 +400,8 @@ def start_workers(logger, count, name, clazz, q_in, more_args):
 
 def main():
     signal.signal(signal.SIGINT, handle_sigint)
+    # Turn on mp logging
+    multiprocessing.log_to_stderr(logging.DEBUG)
     parser = argparse.ArgumentParser(description='Process incoming Telemetry data', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-c", "--config", help="AWS Configuration file (json)", required=True, type=file)
 
@@ -527,9 +536,8 @@ def main():
             raw_readers = start_workers(logger, num_cpus, "Reader", ReadRawStep, raw_files,
                     (completed_files, args.log_file, schema, converter, storage, args.bad_data_log))
 
-            # Tell readers when to stop:
-            for i in range(num_cpus):
-                raw_files.put(PipeStep.SENTINEL)
+            # Tell readers to stop when they get to the end:
+            finish_queue(raw_files, num_cpus)
 
             # Compress completed files.
             compressors = start_workers(logger, num_cpus, "Compressor", CompressCompletedStep,
@@ -544,15 +552,13 @@ def main():
                     if f.endswith(".log"):
                         completed_files.put(os.path.join(root, f))
 
-            # Tell compressors when to stop:
-            for i in range(num_cpus):
-                completed_files.put(PipeStep.SENTINEL)
+            # Tell compressors to stop:
+            finish_queue(completed_files, num_cpus)
 
             wait_for(logger, compressors, "Compressors")
 
-            # Tell exporters when to stop:
-            for i in range(num_cpus):
-                compressed_files.put(PipeStep.SENTINEL)
+            # Tell exporters to stop:
+            finish_queue(compressed_files, num_cpus)
 
             try:
                 # Export compressed files to S3.
