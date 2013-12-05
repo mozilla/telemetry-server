@@ -34,6 +34,7 @@ import signal
 def wait_for(logger, processes, label):
     logger.log("Waiting for {0}...".format(label))
     for p in processes:
+        logger.log("Joining pid {0}...".format(p.pid))
         p.join()
     logger.log("{0} Done.".format(label))
 
@@ -222,12 +223,18 @@ class ReadRawStep(PipeStep):
                 except Exception, e:
                     err_message = str(e)
 
-                    # We don't need to write these bad records out - we know
-                    # why they are being skipped.
-                    if err_message != "Missing in payload: info.revision":
+                    if err_message == "Missing in payload: info.revision":
+                        # We don't need to write these bad records out - we know
+                        # why they are being skipped.
+                        self.bad_records += 1
+                    elif err_message == "Invalid revision URL: /rev/":
+                        # We do want to log these payloads, but we don't want
+                        # the full stack trace.
+                        self.write_bad_record(key, dims, data, err_message, "Conversion Error")
+                    else:
                         # TODO: recognize other common failure modes and handle them gracefully.
-                        self.write_bad_record(key, dims, data, err_message, "Conversion Error:")
-                        traceback.print_exc()
+                        self.write_bad_record(key, dims, data, err_message, "Conversion Error")
+                        self.log(traceback.format_exc())
 
                 if self.print_stats:
                     this_update = datetime.now()
@@ -371,6 +378,7 @@ class ExportCompressedStep(PipeStep):
             # TODO: add to a "failures" queue, save them or something?
 
 def start_workers(logger, count, name, clazz, q_in, more_args):
+    logger.log("Starting {0}s...".format(name))
     workers = []
     for i in range(count):
         w = Process(
