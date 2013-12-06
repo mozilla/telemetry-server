@@ -76,6 +76,9 @@ class Launcher(object):
         sudo("echo 'limit nofile 10000 40000' >> " + c_file)
         sudo("echo 'script' >> " + c_file)
 
+    def append_suid_script(self, c_file, line):
+        sudo("echo '    {1}' >> {0}".format(c_file, line))
+
     def end_suid_script(self, c_file):
         sudo("echo 'end script' >> {0}".format(c_file))
         sudo("echo 'respawn' >> {0}".format(c_file))
@@ -94,7 +97,8 @@ class Launcher(object):
     def install_telemetry_code(self, instance):
         home = "/home/" + self.ssl_user
         with cd(home):
-            run("git clone https://github.com/mreid-moz/telemetry-server.git")
+            # Hardcoded jonasfj for testing... remove this before merging!!!
+            run("git clone https://github.com/jonasfj/telemetry-server.git")
 
     def install_histogram_tools(self, instance):
         home = "/home/" + self.ssl_user
