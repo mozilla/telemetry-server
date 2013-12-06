@@ -35,7 +35,7 @@ import signal
 def wait_for(logger, processes, label):
     logger.log("Waiting for {0}...".format(label))
     for p in processes:
-        logger.log("Joining pid {0}...".format(p.pid))
+        logger.log("Joining pid {0} (alive: {1})...".format(p.pid, p.is_alive()))
         p.join()
     logger.log("{0} Done.".format(label))
 
@@ -237,6 +237,8 @@ class ReadRawStep(PipeStep):
                         # We do want to log these payloads, but we don't want
                         # the full stack trace.
                         self.write_bad_record(key, dims, data, err_message, "Conversion Error")
+                    elif err_message.startswith("JSONDecodeError: Invalid control character"):
+                        self.write_bad_record(key, dims, data, err_message, "Conversion Error")
                     else:
                         # TODO: recognize other common failure modes and handle them gracefully.
                         self.write_bad_record(key, dims, data, err_message, "Conversion Error")
@@ -319,7 +321,6 @@ class CompressCompletedStep(PipeStep):
         os.remove(tmp_name)
         sec = timer.delta_sec(start)
         self.log("Compressed %s as %s in %.2fs. Size before: %.2fMB, after: %.2fMB (r: %.2fMB/s, w: %.2fMB/s)" % (filename, comp_name, sec, raw_mb, comp_mb, (raw_mb/sec), (comp_mb/sec)))
-        self.q_out.put(comp_name)
 
 
 class ExportCompressedStep(PipeStep):
@@ -390,6 +391,7 @@ def start_workers(logger, count, name, clazz, q_in, more_args):
     for i in range(count):
         w = Process(
                 target=clazz,
+                name="{0}-{1}".format(name, i),
                 args=(i, name, q_in) + more_args)
         workers.append(w)
         w.start()
@@ -530,7 +532,6 @@ def main():
                 raw_files.put(l)
 
             completed_files = Queue()
-            compressed_files = Queue()
 
             # Begin reading raw input
             raw_readers = start_workers(logger, num_cpus, "Reader", ReadRawStep, raw_files,
@@ -541,7 +542,7 @@ def main():
 
             # Compress completed files.
             compressors = start_workers(logger, num_cpus, "Compressor", CompressCompletedStep,
-                    completed_files, (compressed_files, args.log_file))
+                    completed_files, (None, args.log_file))
 
             wait_for(logger, raw_readers, "Raw Readers")
 
@@ -554,16 +555,18 @@ def main():
 
             # Tell compressors to stop:
             finish_queue(completed_files, num_cpus)
-
             wait_for(logger, compressors, "Compressors")
-
-            # Tell exporters to stop:
-            finish_queue(compressed_files, num_cpus)
 
             try:
                 # Export compressed files to S3.
+                compressed_files = Queue()
                 exporters = start_workers(logger, num_cpus, "Exporter", ExportCompressedStep,
                         compressed_files, (args.log_file, args.output_dir, config, args.dry_run))
+                for root, dirs, files in os.walk(args.output_dir):
+                    for f in files:
+                        if f.endswith(StorageLayout.COMPRESSED_SUFFIX):
+                            compressed_files.put(os.path.join(root, f))
+                finish_queue(compressed_files, num_cpus)
                 wait_for(logger, exporters, "Exporters")
             except InterruptProcessingError, e:
                 logger.log("Received shutdown request... waiting for exporters to finish")
