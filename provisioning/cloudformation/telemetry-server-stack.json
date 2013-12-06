@@ -33,10 +33,10 @@
       "Type":        "String",
       "Default":     "m1.small"
     },
-    "ProcessIncomingInstanceType": {
-      "Description": "Type of EC2 instance to launch for Process Incoming nodes",
+    "NotificationEmail": {
+      "Description": "Email address to send AutoScale activity",
       "Type":        "String",
-      "Default":     "c1.xlarge"
+      "Default":     "mozilla-telemetry@markreid.org"
     }
   },
 
@@ -45,11 +45,19 @@
       "us-west-2": { "AMI": "ami-c82643f8" }
     },
     "Region2ProcessIncomingAMI": {
-      "us-west-2": { "AMI": "ami-c82643f8" }
+      "us-west-2": { "AMI": "ami-4a1e7b7a" }
     }
   },
 
   "Resources": {
+    "TelemetryServerAutoScaleTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "telemetry-server-auto-scale-activity",
+        "Subscription": [ { "Endpoint": { "Ref": "NotificationEmail" }, "Protocol": "email" } ]
+      }
+    },
+
     "WebServerGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
@@ -57,7 +65,19 @@
         "LaunchConfigurationName": { "Ref": "WebServerLaunchConfig" },
         "MinSize":                 "2",
         "MaxSize":                 "10",
-        "LoadBalancerNames":       [ { "Ref": "LoadBalancer" } ]
+        "LoadBalancerNames":       [ { "Ref": "LoadBalancer" } ],
+        "NotificationConfiguration": {
+          "TopicARN": { "Ref": "TelemetryServerAutoScaleTopic" },
+          "NotificationTypes": [
+            "autoscaling:EC2_INSTANCE_LAUNCH", "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+            "autoscaling:EC2_INSTANCE_TERMINATE", "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ]
+        },
+        "Tags": [
+          { "Key": "Application", "Value": "telemetry-server",      "PropagateAtLaunch": true },
+          { "Key": "Name",        "Value": "telemetry-webserver",   "PropagateAtLaunch": true },
+          { "Key": "Owner",       "Value": { "Ref": "SSHKeyName" }, "PropagateAtLaunch": true }
+        ]
       },
       "UpdatePolicy": {
         "AutoScalingRollingUpdate": {
@@ -160,7 +180,123 @@
         "AvailabilityZones":       { "Fn::GetAZs": "" },
         "LaunchConfigurationName": { "Ref": "ProcessIncomingLaunchConfig" },
         "MinSize":                 "1",
-        "MaxSize":                 "5"
+        "MaxSize":                 "5",
+        "NotificationConfiguration": {
+          "TopicARN": { "Ref": "TelemetryServerAutoScaleTopic" },
+          "NotificationTypes": [
+            "autoscaling:EC2_INSTANCE_LAUNCH", "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+            "autoscaling:EC2_INSTANCE_TERMINATE", "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ]
+        },
+        "Tags": [
+          { "Key": "Application", "Value": "telemetry-server",           "PropagateAtLaunch": true },
+          { "Key": "Name",        "Value": "telemetry-process-incoming", "PropagateAtLaunch": true },
+          { "Key": "Owner",       "Value": { "Ref": "SSHKeyName" },      "PropagateAtLaunch": true }
+        ]
+      }
+    },
+
+    "ProcessIncomingHighLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if more than 32 messages available: scale up",
+        "Namespace":          "AWS/SQS",
+        "MetricName":         "ApproximateNumberOfMessagesVisible",
+        "Statistic":          "Maximum",
+        "Period":             "60",
+        "EvaluationPeriods":  "10",
+        "Threshold":          "32",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions":   [ { "Name": "QueueName", "Value": { "Ref": "IncomingQueueName" } } ],
+        "AlarmActions": [ { "Ref": "ProcessIncomingScaleUpPolicy" } ]
+      }
+    },
+
+    "ProcessIncomingScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "ProcessIncomingGroup" },
+        "Cooldown": "900",
+        "ScalingAdjustment": "1"
+      }
+    },
+
+    "ProcessIncomingLowLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if fewer than 10 messages available: scale down",
+        "Namespace":          "AWS/SQS",
+        "MetricName":         "ApproximateNumberOfMessagesVisible",
+        "Statistic":          "Maximum",
+        "Period":             "60",
+        "EvaluationPeriods":  "10",
+        "Threshold":          "10",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions":   [ { "Name": "QueueName", "Value": { "Ref": "IncomingQueueName" } } ],
+        "AlarmActions": [ { "Ref": "ProcessIncomingScaleDownPolicy" } ]
+      }
+    },
+
+    "ProcessIncomingScaleDownPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "ProcessIncomingGroup" },
+        "Cooldown": "60",
+        "ScalingAdjustment": "-1"
+      }
+    },
+
+    "WebServerHighLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if CPU load is too high: scale up",
+        "Namespace":          "AWS/EC2",
+        "MetricName":         "CPUUtilization",
+        "Statistic":          "Average",
+        "Period":             "60",
+        "EvaluationPeriods":  "3",
+        "Threshold":          "90",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions":   [ { "Name": "AutoScalingGroupName", "Value": { "Ref": "WebServerGroup" } } ],
+        "AlarmActions": [ { "Ref": "WebServerScaleUpPolicy" } ]
+      }
+    },
+
+    "WebServerScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "WebServerGroup" },
+        "Cooldown": "120",
+        "ScalingAdjustment": "1"
+      }
+    },
+
+    "WebServerLowLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if CPU load is too low: scale down",
+        "Namespace":          "AWS/EC2",
+        "MetricName":         "CPUUtilization",
+        "Statistic":          "Average",
+        "Period":             "60",
+        "EvaluationPeriods":  "3",
+        "Threshold":          "70",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions":   [ { "Name": "AutoScalingGroupName", "Value": { "Ref": "WebServerGroup" } } ],
+        "AlarmActions": [ { "Ref": "WebServerScaleDownPolicy" } ]
+      }
+    },
+
+    "WebServerScaleDownPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "WebServerGroup" },
+        "Cooldown": "300",
+        "ScalingAdjustment": "-1"
       }
     },
 
@@ -255,19 +391,17 @@
         "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMI" ] },
         "SecurityGroups":     [ { "Ref": "ProcessIncomingSecurityGroup" } ],
         "IamInstanceProfile": { "Ref": "ProcessIncomingIAMProfile" },
-        "InstanceType":       { "Ref": "ProcessIncomingInstanceType" },
+        "InstanceType":       "c3.xlarge",
         "SpotPrice":          "0.20",
         "BlockDeviceMappings": [
           { "DeviceName": "/dev/xvdb", "VirtualName": "ephemeral0" },
-          { "DeviceName": "/dev/xvdc", "VirtualName": "ephemeral1" },
-          { "DeviceName": "/dev/xvdd", "VirtualName": "ephemeral2" },
-          { "DeviceName": "/dev/xvde", "VirtualName": "ephemeral3" }
+          { "DeviceName": "/dev/xvdc", "VirtualName": "ephemeral1" }
         ],
         "UserData": { "Fn::Base64": { "Fn::Join": [ "\n", [
           "#!/bin/bash",
           "umount /mnt",
-          "yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices=4 /dev/xvdb /dev/xvdc /dev/xvdd /dev/xvde",
-          "echo 'DEVICE /dev/xvdb /dev/xvdc /dev/xvdd /dev/xvde' >> /etc/mdadm/mdadm.conf",
+          "yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices=2 /dev/xvdb /dev/xvdc",
+          "echo 'DEVICE /dev/xvdb /dev/xvdc' >> /etc/mdadm/mdadm.conf",
           "mdadm --detail --scan >> /etc/mdadm/mdadm.conf",
           "mkfs.ext3 -T largefile /dev/md0",
           "# pause briefly to let md0 get ready",
