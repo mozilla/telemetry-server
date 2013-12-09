@@ -2,14 +2,16 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+require "circular_buffer"
+
 local rows        = 1440
 local sec_per_row = 60
 
 request = circular_buffer.new(rows, 4, sec_per_row, true)
 local SUCCESS           = request:set_header(1, "Success"     , "count")
 local FAILURE           = request:set_header(2, "Failure"     , "count")
-local AVG_REQUEST_SIZE  = request:set_header(3, "Request Size", "B" , "avg")
-local AVG_REQUEST_TIME  = request:set_header(4, "Request Time", "ms", "avg")
+local AVG_REQUEST_SIZE  = request:set_header(3, "Request Size", "B", "none")
+local AVG_REQUEST_TIME  = request:set_header(4, "Request Time", "ms", "none")
 
 sums = circular_buffer.new(rows, 3, sec_per_row)
 local REQUESTS     = sums:set_header(1, "Requests"    , "count")
@@ -41,7 +43,7 @@ end
 
 function timer_event(ns)
     -- advance the buffers so the graphs will continue to advance without new data
-    -- request:add(ns, 1, 0) 
+    -- request:add(ns, 1, 0)
     -- sums:add(ns, 1, 0)
 
     local title = "Request Statistics"

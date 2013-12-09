@@ -5,7 +5,6 @@ max_timer_inject = 100
 max_process_duration = 500000
 
 [ProtobufDecoder]
-pool_size = 1
 encoding_name = "PROTOCOL_BUFFER"
 
 [TCP:5565]
@@ -21,7 +20,7 @@ type = "SandboxManagerFilter"
 message_signer = "telemetry"
 message_matcher = "Type == 'heka.control.sandbox'"
 working_directory = "sandbox"
-max_filters = 100
+max_filters = 10
 
 [TelemetryServerInput]
 type = "LogfileInput"
@@ -31,34 +30,9 @@ seek_journal_name = "telemetry-server.journal"
 use_seek_journal = true 
 
 [TelemetryServerDecoder]
-type = "PayloadJsonDecoder"
-pool_size = 1
-timestamp_layout = "2006-01-02T15:04:05.999Z"
-
-#{"url":"/submit/telemetry/60dfb8c5-9966-4fd8-9b82-3a5ec2ac3d6a/saved-session/Firefox/23.0.1/release/20130814063812","duration_ms":0.547324,"code":200,"size":4819,"level":"info","message":"OK","timestamp":"2013-09-10T20:43:17.217Z"}
-
-[TelemetryServerDecoder.json_map]
-Timestamp = "$.timestamp"
-Severity = "$.level"
-url = "$.url"
-duration = "$.duration_ms"
-code = "$.code"
-size = "$.size"
-message = "$.message"
-
-[TelemetryServerDecoder.severity_map]
-debug = 1
-warning = 2
-info = 3
-
-[TelemetryServerDecoder.message_fields]
-Type = "TelemetryServerLog"
-Payload = ""
-url = "%url%"
-duration|ms = "%duration%"
-code = "%code%"
-size|B = "%size%"
-message = "%message%"
+type = "SandboxDecoder"
+script_type = "lua"
+filename = "telemetry_server.lua"
 
 [TelemetryFilter]
 type = "SandboxFilter"
@@ -106,6 +80,7 @@ type = "DashboardOutput"
 address = ":4352"
 ticker_interval = 10
 working_directory = "dashboard"
+static_directory = "/usr/share/heka/dasher"
 
 [AMQPOutput]
 url = "amqp://guest:guest@10.250.68.186"
