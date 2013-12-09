@@ -10,11 +10,11 @@ import re
 import os
 import sys
 import time
+import simplejson as json
 from telemetry.persist import StorageLayout
 from datetime import datetime
-import telemetry.util.files as fileutil
 import telemetry.util.timer as timer
-import subprocess
+import telemetry.util.s3 as s3util
 from boto.s3.connection import S3Connection
 from boto.sqs.message import Message
 from boto.exception import S3ResponseError
@@ -23,105 +23,45 @@ import boto.sqs
 
 class Exporter:
     """A class for exporting archived payloads to long-term storage (Amazon S3)"""
-    S3F_PATH = "/usr/local/bin/s3funnel"
-    S3F_THREADS = 8
     UPLOADABLE_PATTERN = re.compile("^.*\\" + StorageLayout.COMPRESSED_SUFFIX + "$")
     # Minimum size in bytes (to support skipping truncated files)
     MIN_UPLOADABLE_SIZE = 50
 
-    def __init__(self, bucket, aws_key, aws_secret_key, aws_region, batch_size, pattern, queue=None, keep_backups=False, remove_files=True):
-        self.bucket = bucket
-        self.queue = queue
-        self.aws_key = aws_key
-        self.aws_secret_key = aws_secret_key
-        self.aws_region = aws_region
-        self.batch_size = batch_size
+    def __init__(self, config, data_dir, pattern, keep_backups=False):
+        self.bucket = config["incoming_bucket"]
+        self.queue = config.get("incoming_queue", None)
+        self.aws_key = config.get("aws_key", None)
+        self.aws_secret_key = config.get("aws_secret_key", None)
+        self.aws_region = config.get("aws_region", None)
+        self.data_dir = data_dir
         self.pattern = pattern
-        self.remove_files = remove_files
         self.keep_backups = keep_backups
-        self.q_incoming = None
-        self.s3f_cmd = [Exporter.S3F_PATH, bucket, "put", "-a", aws_key,
-                "-s", aws_secret_key, "-t", str(Exporter.S3F_THREADS),
-                "--put-only-new", "--put-full-path"]
-
-    def export_batch(self, data_dir, conn, bucket, files):
-        # Time the s3funnel call:
-        start = datetime.now()
-        result = subprocess.call(self.s3f_cmd + files, cwd=data_dir)
-        sec = timer.delta_sec(start)
-
-        total_size = 0
-        if result == 0:
-            # Success! Verify each file's checksum, then truncate it.
-            for f in files:
-                # Verify checksum and track cumulative size so we can figure out MB/s
-                full_filename = os.path.join(data_dir, f)
-                md5, size = fileutil.md5file(full_filename)
-                if size < Exporter.MIN_UPLOADABLE_SIZE:
-                    # Check file size again when uploading in case it has been
-                    # concurrently uploaded / truncated elsewhere.
-                    print "Skipping upload for tiny file:", f
-                    continue
-
-                total_size += size
-
-                # f is the key name - it does not include the full path to the
-                # data dir. Try to fetch it a couple of times
-                for i in range(3):
-                    key = bucket.get_key(f)
-                    if key is not None:
-                        break
-                if key is None:
-                    print "ERROR: Failed to fetch key:", f
-                    result = -2
-                    continue
-
-                # Strip quotes from md5
-                remote_md5 = key.etag[1:-1]
-                if md5 != remote_md5:
-                    print "ERROR: %s failed checksum verification: Local=%s, Remote=%s" % (f, md5, remote_md5)
-                    result = -1
-                else:
-                    # Validation passed. Time to clean up the file.
-                    if self.keep_backups:
-                        # Keep a copy of the original, just in case.
-                        os.rename(full_filename, full_filename + ".uploaded")
-
-                    # Create / Truncate: we must keep the original file around to
-                    # properly calculate the next archived log number, ie if we
-                    # are uploading whatever.log.5.lzma, the next one should still
-                    # be whatever.log.6.lzma.
-                    # TODO: if we switch to using UUIDs in the filename, we can
-                    #       stop keeping the dummy files around.
-                    if self.remove_files:
-                        if not self.keep_backups:
-                            os.remove(full_filename)
-                            # Otherwise it was renamed already.
-                    else:
-                        h = open(full_filename, "w")
-                        h.close()
-                    # Send a message to SQS
-                    self.enqueue_incoming(f)
-        else:
-            print "Failed to upload one or more files in the current batch. Error code was", result
-
-        total_mb = float(total_size) / 1024.0 / 1024.0
-        print "Transferred %.2fMB in %.2fs (%.2fMB/s)" % (total_mb, sec, total_mb / sec)
-        return result
-
-    def enqueue_incoming(self, filename):
-        if self.queue is None:
-            return
-
-        if self.q_incoming is None:
-            # Get a connection to the Queue if needed.
+        if self.queue is not None:
+            # Get a connection to the Queue
             conn = boto.sqs.connect_to_region(self.aws_region,
                     aws_access_key_id=self.aws_key,
                     aws_secret_access_key=self.aws_secret_key)
 
-            # This gets the queue if it already exists, otherwise creates it
-            # using the supplied default timeout (in seconds).
-            self.q_incoming = conn.create_queue(self.queue, 90 * 60)
+            # This gets the queue if it already exists, otherwise returns null
+            self.q_incoming = conn.get_queue(self.queue)
+            if self.q_incoming is None:
+                raise ValueError("Failed to get queue " + self.queue)
+        self.s3loader = s3util.Loader(self.data_dir, self.bucket, self.aws_key, self.aws_secret_key)
+
+        # Make sure the target S3 bucket exists.
+        s3conn = S3Connection(self.aws_key, self.aws_secret_key)
+        try:
+            print "Verifying that we can write to", self.bucket
+            b = s3conn.get_bucket(self.bucket)
+            print "Looks good!"
+        except S3ResponseError:
+            print "Bucket", self.bucket, "not found.  Attempting to create it."
+            b = s3conn.create_bucket(self.bucket)
+
+    def enqueue_incoming(self, filename):
+        success = False
+        if self.queue is None:
+            return success
 
         m = Message()
         m.set_body(filename)
@@ -132,19 +72,11 @@ class Exporter:
                 status = self.q_incoming.write(m)
                 if status:
                     print "Successfully enqueued", filename
+                    success = True
                     break
             except Exception, e:
                 print "Failed to enqueue:", filename, "Error:", e
-
-    def batches(self, batch_size, one_list):
-        split = []
-        current = 0
-        while current + batch_size < len(one_list):
-            split.append(one_list[current:current+batch_size])
-            current += batch_size
-        if current < len(one_list):
-            split.append(one_list[current:])
-        return split
+        return success
 
     def strip_data_dir(self, data_dir, full_file):
         if full_file.startswith(data_dir):
@@ -175,64 +107,54 @@ class Exporter:
                         #       would save on transfer time/cost to check here.
         return uploadables
 
-    def export(self, data_dir, uploadables):
+    def export(self, uploadables):
         if len(uploadables) == 0:
             print "Nothing to do!"
             return 0
+        print "Found", len(uploadables), "files"
 
-        # Split into batches
-        batches = self.batches(self.batch_size, uploadables)
-        print "Found", len(uploadables), "files:", len(batches), "batches of size", len(batches[0])
-
-        # Make sure the target S3 bucket exists.
-        conn = S3Connection(self.aws_key, self.aws_secret_key)
-        try:
-            print "Verifying that we can write to", self.bucket
-            bucket = conn.get_bucket(self.bucket)
-            print "Looks good!"
-        except S3ResponseError:
-            print "Bucket", self.bucket, "not found.  Attempting to create it."
-            bucket = conn.create_bucket(self.bucket)
-
-        # Export each batch
         fail_count = 0
-        batch_count = 0
-        for batch in batches:
-            batch_count += 1
-            print "Exporting batch", batch_count, "of", len(batches)
-            try:
-                batch_response = self.export_batch(data_dir, conn, bucket, batch)
-                if batch_response != 0:
-                    print "Batch", batch_count, "failed: returned", batch_response
-                    fail_count += 1
-            except S3ResponseError, e:
-                print "Batch", batch_count, "failed:", e
-                fail_count += 1
+        start = datetime.now()
+        total_size = 0
+        for local, remote, err in self.s3loader.put_list(uploadables):
+            if err is None:
+                # Great Success! Delete it locally.
+                total_size += os.path.getsize(local)
+                if self.keep_backups:
+                    # Keep a copy of the original, just in case.
+                    os.rename(local, local + ".uploaded")
+                else:
+                    os.remove(local)
+                # Send a message to SQS
+                # TODO: verify that it succeeded.
+                self.enqueue_incoming(remote)
 
-        # Return zero for overall success or the number of batches with errors.
+            else:
+                fail_count += 1
+                print "Failed to upload '{0}' to bucket {1} as '{2}':".format(local, self.bucket, remote), err
+        sec = timer.delta_sec(start)
+        total_mb = float(total_size) / 1024.0 / 1024.0
+        print "Transferred %.2fMB in %.2fs (%.2fMB/s)" % (total_mb, sec, total_mb / sec)
+        # TODO: log the transfer stats properly.
+
+        # Return zero for overall success or the number of failures.
         return fail_count
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Export Telemetry data")
     parser.add_argument("-d", "--data-dir", help="Path to the root of the telemetry data", required=True)
     parser.add_argument("-p", "--file-pattern", help="Filenames must match this regular expression to be uploaded", default=Exporter.UPLOADABLE_PATTERN)
-    parser.add_argument("-b", "--bucket", help="S3 Bucket name", required=True)
+    parser.add_argument("-c", "--config", help="AWS Config file", required=True, type=file)
+    parser.add_argument("-b", "--bucket", help="S3 Bucket name")
     parser.add_argument("-q", "--queue", help="SQS Queue name")
-    parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
-    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
-    parser.add_argument("-r", "--aws-region", help="AWS Region", default="us-west-2")
+    parser.add_argument("-k", "--aws-key", help="AWS Key")
+    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key")
+    parser.add_argument("-r", "--aws-region", help="AWS Region")
     parser.add_argument("-l", "--loop", help="Run in a loop and keep watching for more files to export", action="store_true")
-    parser.add_argument("--remove-files", help="Remove files after successfully uploading (default is to truncate them)", action="store_true")
     parser.add_argument("--keep-backups", help="Keep original files after uploading (rename them to X.uploaded)", action="store_true")
-    parser.add_argument("-B", "--batch-size", help="Number of files to upload at a time", default=8)
     args = parser.parse_args()
 
     # Validate args:
-    if not os.path.isfile(Exporter.S3F_PATH):
-        print "ERROR: s3funnel not found at", s3f_path
-        print "You can get it from github: https://github.com/sstoiana/s3funnel"
-        return -1
-
     if not os.path.isdir(args.data_dir):
         print "ERROR:", args.data_dir, "is not a valid directory"
         parser.print_help()
@@ -245,10 +167,29 @@ def main(argv=None):
         print "ERROR: invalid file pattern:", args.file_pattern, " (must be a valid regex)"
         return 3
 
-    exporter = Exporter(args.bucket, args.aws_key, args.aws_secret_key, args.aws_region, args.batch_size, pattern, args.queue, args.keep_backups, args.remove_files)
+    config = None
+    try:
+        config = json.load(args.config)
+    except Exception, e:
+        print "ERROR: could not parse config file:", e
+        return 4
+
+    # Override config file with args if present:
+    if args.bucket is not None:
+        config["incoming_bucket"] = args.bucket
+    if args.queue is not None:
+        config["incoming_queue"] = args.queue
+    if args.aws_key is not None:
+        config["aws_key"] = args.aws_key
+    if args.aws_secret_key is not None:
+        config["aws_secret_key"] = args.aws_secret_key
+    if args.aws_region is not None:
+        config["aws_region"] = args.aws_region
+
+    exporter = Exporter(config, args.data_dir, pattern, args.keep_backups)
 
     if not args.loop:
-        return exporter.export(args.data_dir, exporter.find_uploadables(args.data_dir))
+        return exporter.export(exporter.find_uploadables(args.data_dir))
 
     while True:
         uploadables = exporter.find_uploadables(args.data_dir)
@@ -260,10 +201,9 @@ def main(argv=None):
         print "Processing", len(uploadables), "uploadables:"
         for u in uploadables:
             print "  ", u
-        err_count = exporter.export(args.data_dir, uploadables)
+        err_count = exporter.export(uploadables)
         if err_count > 0:
             print "ERROR: There were", err_count, "errors uploading."
-
 
 if __name__ == "__main__":
     sys.exit(main())

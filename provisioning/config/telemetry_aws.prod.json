@@ -1,0 +1,6 @@
+{
+  "incoming_bucket": "telemetry-incoming-v2",
+  "incoming_queue": "telemetry-incoming-v1",
+  "publish_bucket": "telemetry-published-v1",
+  "aws_region": "us-west-2"
+}

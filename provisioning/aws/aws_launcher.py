@@ -36,6 +36,12 @@ class Launcher(object):
         parser.add_argument("-n", "--instance-name", help="Overrides the 'name' specified in the configuration file")
         return parser
 
+    def get_instance(self):
+        return self.instance
+
+    def get_connection(self):
+        return self.conn
+
     def configure_raid(self, instance):
         if "ephemeral_map" in self.config:
             # Following advice from here:
@@ -54,6 +60,26 @@ class Launcher(object):
             sudo("mkfs.ext3 -T largefile /dev/md0")
             sudo("mount /dev/md0 /mnt")
 
+    def create_log_dir(self):
+        # Create log dir (within base_dir, but symlinked to /var/log):
+        base_dir = self.config.get("base_dir", "/mnt/telemetry")
+        log_dir = base_dir + "/log"
+        run("mkdir {0}".format(log_dir))
+        sudo("ln -s {0} /var/log/telemetry".format(log_dir))
+
+    def start_suid_script(self, c_file, username):
+        sudo("echo 'setuid {1}' > {0}".format(c_file, username))
+        sudo("echo 'setgid {1}' >> {0}".format(c_file, username))
+        # Set the ulimit for # open files in the upstart scripts (since the
+        # ones set in limits.conf don't seem to apply here). This is required
+        # for the node.js telemetry http server.
+        sudo("echo 'limit nofile 10000 40000' >> " + c_file)
+        sudo("echo 'script' >> " + c_file)
+
+    def end_suid_script(self, c_file):
+        sudo("echo 'end script' >> {0}".format(c_file))
+        sudo("echo 'respawn' >> {0}".format(c_file))
+
     def install_apt_dependencies(self, instance):
         print "Installing apt dependencies"
         aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm")
@@ -63,13 +89,7 @@ class Launcher(object):
         sudo('pip install simplejson boto fabric')
 
     def install_misc_dependencies(self, instance):
-        print "Installing other dependencies"
-        # By default, install S3Funnel
-        home = "/home/" + self.ssl_user
-        with cd(home):
-            run("git clone https://github.com/sstoiana/s3funnel.git")
-        with cd(home + "/s3funnel"):
-            sudo("python setup.py install")
+        pass
 
     def install_telemetry_code(self, instance):
         home = "/home/" + self.ssl_user
@@ -125,6 +145,8 @@ class Launcher(object):
         else:
             print "Creating instance..."
             conn, instance = aws_util.create_instance(self.config, self.aws_key, self.aws_secret_key)
+        self.conn = conn
+        self.instance = instance
 
         print "Ready to connect..."
         try:

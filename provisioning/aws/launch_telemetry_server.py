@@ -6,6 +6,8 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from aws_launcher import Launcher
+import aws_util
+import simplejson as json
 from fabric.api import *
 import fabric.network
 import sys
@@ -43,18 +45,6 @@ class TelemetryServerLauncher(Launcher):
         run("wget http://people.mozilla.org/~mreid/{0}".format(heka_pkg))
         sudo("dpkg -i {0}".format(heka_pkg))
 
-    def start_suid_script(self, c_file, username):
-        sudo("echo 'setuid {1}' > {0}".format(c_file, username))
-        sudo("echo 'setgid {1}' >> {0}".format(c_file, username))
-        # Set the ulimit for # open files in the upstart scripts (since the
-        # ones set in limits.conf don't seem to apply here)
-        sudo("echo 'limit nofile 10000 40000' >> " + c_file)
-        sudo("echo 'script' >> " + c_file)
-
-    def end_suid_script(self, c_file):
-        sudo("echo 'end script' >> {0}".format(c_file))
-        sudo("echo 'respawn' >> {0}".format(c_file))
-
     def create_logrotate_config(self, lr_file, target_log, create=True):
         sudo("echo '%s {' > %s" % (target_log, lr_file))
         sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
@@ -75,23 +65,19 @@ class TelemetryServerLauncher(Launcher):
         # Install some more:
         self.install_nodejs_bin()
         self.install_heka()
+        self.install_histogram_tools(instance)
 
         # Create log dir (within base_dir, but symlinked to /var/log):
-        base_dir = self.config.get("base_dir", "/mnt/telemetry")
-        log_dir = base_dir + "/log"
-        run("mkdir {0}".format(log_dir))
-        sudo("ln -s {0} /var/log/telemetry".format(log_dir))
+        self.create_log_dir()
 
         # Create data dir:
-        run("mkdir {0}/data".format(base_dir))
-
-        # Install security certificate for running 'process incoming':
-        run("mkdir -p ~/.ssh/aws")
-        put("~/.ssh/aws/mreid.pem", "~/.ssh/aws/mreid.pem")
+        base_dir = self.config.get("base_dir", "/mnt/telemetry")
+        with cd(base_dir):
+            run("mkdir data work processed")
 
         # Increase limits on open files.
         sudo("echo '*                soft    nofile          10000' > /etc/security/limits.conf")
-        sudo("echo '*                hard    nofile          30000' >> /etc/security/limits.conf")
+        sudo("echo '*                hard    nofile          40000' >> /etc/security/limits.conf")
 
         # Each fabric 'run' starts a separate shell, so the limits above should
         # be set correctly. However, we actually need to disconnect from SSH to
@@ -102,10 +88,10 @@ class TelemetryServerLauncher(Launcher):
         run("echo 'Hard limit:'; ulimit -H -n")
 
         # Setup logrotate for the stats log and process-incoming log
-        self.create_logrotate_config("/etc/logrotate.d/telemetry",
+        self.create_logrotate_config("/etc/logrotate.d/telemetry-server",
                 "/var/log/telemetry/telemetry-server.log")
         self.create_logrotate_config("/etc/logrotate.d/telemetry-incoming",
-                "/var/log/telemetry/telemetry-incoming.out", False)
+                "/var/log/telemetry/telemetry-incoming.log")
 
         # Create startup scripts:
         code_base = "/home/" + self.ssl_user + "/telemetry-server"
@@ -114,11 +100,12 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '    cd {1}/http' >> {0}".format(c_file, code_base))
         sudo("echo '    /usr/local/bin/node ./server.js ./server_config.json >> /var/log/telemetry/telemetry-server.out' >> {0}".format(c_file))
         self.end_suid_script(c_file)
-        sudo("echo 'start on runlevel [2345]' >> {0}".format(c_file))
+        #sudo("echo 'start on runlevel [2345]' >> {0}".format(c_file))
+        # Automatically stop on shutdown.
         sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
 
         c_file = "/etc/init/telemetry-export.conf"
-        base_export_command = "/usr/bin/python -u -m telemetry.util.export -d {0}/data -p '^telemetry.log.*[.]finished$' -k '{1}' -s '{2}' -r '{3}' -b '{4}' -q '{5}' --remove-file".format(base_dir, self.aws_key, self.aws_secret_key, self.config["region"], self.config.get("incoming_bucket", "telemetry-incoming"), self.config.get("incoming_queue", "telemetry-incoming"))
+        base_export_command = "/usr/bin/python -u -m telemetry.util.export -d {0}/data -p '^telemetry.log.*[.]finished$' --config /etc/mozilla/telemetry_aws.json".format(base_dir)
 
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
@@ -134,20 +121,23 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'start on started telemetry-server' >> {0}".format(c_file))
         sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
 
-        # Install a specific aws_incoming.json to use
-        process_incoming_config = self.config.get("process_incoming_config", "aws_incoming.json")
-        put(process_incoming_config, code_base + "/provisioning/aws/aws_incoming.json")
-
         c_file = "/etc/init/telemetry-incoming.conf"
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
-        sudo("echo \"    /usr/bin/python -u -m provisioning.aws.process_incoming_queue -k '{1}' -s '{2}' provisioning/aws/aws_incoming.json >> /var/log/telemetry/telemetry-incoming.out\" >> {0}".format(c_file, self.aws_key, self.aws_secret_key))
+        sudo("echo \"    /usr/bin/python -u -m process_incoming.process_incoming_standalone -c /etc/mozilla/telemetry_aws.json -w {1}/work -o {1}/processed -t telemetry/telemetry_schema.json -l /var/log/telemetry/telemetry-incoming.log\" >> {0}".format(c_file, base_dir))
         # NOTE: Don't automatically start/stop this service, since we only want
         #       to start it on "primary" nodes, and we only want to stop it in
         #       safe parts of the process-incoming code.
         self.end_suid_script(c_file)
+        # We trap SIGINT and shutdown cleanly (if we're in the middle of
+        # publishing, we continue until it's done).
+        sudo("echo 'kill signal INT' >> {0}".format(c_file))
+        # Wait up to 10 minutes for the current exports to finish.
+        sudo("echo 'kill timeout 600' >> {0}".format(c_file))
+        # Automatically stop on shutdown.
+        sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
 
         c_file = "/etc/init/telemetry-heka.conf"
         self.start_suid_script(c_file, self.ssl_user)
@@ -158,6 +148,18 @@ class TelemetryServerLauncher(Launcher):
         # Start/stop this in lock step with telemetry-server
         sudo("echo 'start on started telemetry-server' >> {0}".format(c_file))
         sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
+
+        # Install the default config file:
+        sudo("mkdir -p /etc/mozilla")
+        prod_aws_config_file = "provisioning/config/telemetry_aws.prod.json"
+        if self.config.get("add_aws_credentials", False):
+            # add aws credentials
+            prod_aws_config = json.load(prod_aws_config_file)
+            prod_aws_config["aws_key"] = self.aws_key
+            prod_aws_config["aws_secret_key"] = self.aws_secret_key
+            sudo("echo '{0}' >> /etc/mozilla/telemetry_aws.json".format(json.dumps(prod_aws_config)))
+        else:
+            aws_util.install_file(prod_aws_config_file, "/etc/mozilla/telemetry_aws.json")
 
     def run(self, instance):
         # Start up HTTP server
