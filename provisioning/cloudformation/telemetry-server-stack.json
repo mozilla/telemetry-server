@@ -45,7 +45,7 @@
       "us-west-2": { "AMI": "ami-c82643f8" }
     },
     "Region2ProcessIncomingAMI": {
-      "us-west-2": { "AMI": "ami-0e95f03e" }
+      "us-west-2": { "AMI": "ami-6697f256" }
     }
   },
 
