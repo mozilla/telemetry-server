@@ -48,7 +48,6 @@ def terminate(logger, processes, label):
 def finish_queue(queue, num_procs):
     for i in range(num_procs):
         queue.put(PipeStep.SENTINEL)
-    queue.close()
 
 class InterruptProcessingError(Exception):
     def __init__(self, msg):
