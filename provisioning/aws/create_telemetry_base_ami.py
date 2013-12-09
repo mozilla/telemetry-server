@@ -32,7 +32,11 @@ def main():
         print "Creating an AMI..."
         # Create an AMI (after stopping the instance)
         # Give it a good name telemetry-base-yyyymmdd
-        ami_name = "telemetry-base-{0}".format(date.today().strftime("%Y%m%d"))
+        base_name = "telemetry-base"
+        if instance.virtualization_type == "hvm":
+            base_name += "-hvm"
+
+        ami_name = "{0}-{1}".format(base_name, date.today().strftime("%Y%m%d"))
         ami_desc = 'Pre-loaded image for telemetry nodes. Knows how to run all the core services, but does not auto-start them on boot.'
         # This automatically stops the image first (unless you tell it not to)
         ami_id = conn.create_image(instance.id, ami_name, description=ami_desc)
