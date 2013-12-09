@@ -30,9 +30,9 @@ class Launcher(object):
 
     def get_arg_parser(self):
         parser = argparse.ArgumentParser(description='Launch AWS EC2 instances')
-        parser.add_argument("config", help="JSON File containing configuration", type=file)
-        parser.add_argument("-k", "--aws-key", help="AWS Key", required=True)
-        parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required=True)
+        parser.add_argument("config", help="JSON File containing configuration", type = file)
+        parser.add_argument("-k", "--aws-key", help="AWS Key", required = False, default = None)
+        parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required = False, default = None)
         parser.add_argument("-n", "--instance-name", help="Overrides the 'name' specified in the configuration file")
         return parser
 
@@ -76,6 +76,9 @@ class Launcher(object):
         sudo("echo 'limit nofile 10000 40000' >> " + c_file)
         sudo("echo 'script' >> " + c_file)
 
+    def append_suid_script(self, c_file, line):
+        sudo("echo '    {1}' >> {0}".format(c_file, line))
+
     def end_suid_script(self, c_file):
         sudo("echo 'end script' >> {0}".format(c_file))
         sudo("echo 'respawn' >> {0}".format(c_file))
@@ -86,7 +89,7 @@ class Launcher(object):
 
     def install_python_dependencies(self, instance):
         print "Installing python dependencies"
-        sudo('pip install simplejson boto fabric')
+        sudo('pip install --upgrade simplejson boto fabric')
 
     def install_misc_dependencies(self, instance):
         pass
@@ -94,7 +97,7 @@ class Launcher(object):
     def install_telemetry_code(self, instance):
         home = "/home/" + self.ssl_user
         with cd(home):
-            run("git clone https://github.com/mreid-moz/telemetry-server.git")
+            run("git clone https://github.com/mozilla/telemetry-server.git")
 
     def install_histogram_tools(self, instance):
         home = "/home/" + self.ssl_user

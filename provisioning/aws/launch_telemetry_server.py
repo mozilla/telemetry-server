@@ -149,12 +149,22 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'start on started telemetry-server' >> {0}".format(c_file))
         sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
 
+        # Service configuration for telemetry-analysis
+        c_file = "/etc/init/telemetry-analysis.conf"
+        self.start_suid_script(c_file, self.ssl_user)
+        self.append_suid_script(c_file, "cd {0}".format(code_base))
+        self.append_suid_script(c_file, "python -m analysis.manager -q `cat /etc/telemetry-analysis-input-queue` -w /mnt/work/")
+        self.end_suid_script(c_file)
+        sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
+
         # Install the default config file:
         sudo("mkdir -p /etc/mozilla")
         prod_aws_config_file = "provisioning/config/telemetry_aws.prod.json"
         if self.config.get("add_aws_credentials", False):
             # add aws credentials
-            prod_aws_config = json.load(prod_aws_config_file)
+            fin = open(prod_aws_config_file)
+            prod_aws_config = json.load(fin)
+            fin.close()
             prod_aws_config["aws_key"] = self.aws_key
             prod_aws_config["aws_secret_key"] = self.aws_secret_key
             sudo("echo '{0}' >> /etc/mozilla/telemetry_aws.json".format(json.dumps(prod_aws_config)))

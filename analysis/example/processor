@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Number of rows counted
+rows=0;
+
+# Read stdin line by line
+while read -r line; do
+
+  # Skip empty-lines, last line may be empty
+  if [ "$line" == "" ]; then
+    continue;
+  fi;
+
+  # Split input
+  prefix=`echo "$line" | cut -f 1`;
+  path=`echo "$line" | cut -f 2`;
+
+  # Count number of rows
+  new_rows=`xz -dc $path | wc -l`;
+  rows=$(($rows + $new_rows));
+
+  # Delete input file
+  rm $path;
+done;
+
+# Output aggregated values to files in folder provided as first argument
+echo "$rows" > $1/rows_counted.txt;
