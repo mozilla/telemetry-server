@@ -7,6 +7,7 @@
 
 from aws_launcher import Launcher
 import aws_util
+import simplejson as json
 from fabric.api import *
 import fabric.network
 import sys
@@ -150,7 +151,15 @@ class TelemetryServerLauncher(Launcher):
 
         # Install the default config file:
         sudo("mkdir -p /etc/mozilla")
-        aws_util.install_file("provisioning/config/telemetry_aws.prod.json", "/etc/mozilla/telemetry_aws.json")
+        prod_aws_config_file = "provisioning/config/telemetry_aws.prod.json"
+        if self.config.get("add_aws_credentials", False):
+            # add aws credentials
+            prod_aws_config = json.load(prod_aws_config_file)
+            prod_aws_config["aws_key"] = self.aws_key
+            prod_aws_config["aws_secret_key"] = self.aws_secret_key
+            sudo("echo '{0}' >> /etc/mozilla/telemetry_aws.json".format(json.dumps(prod_aws_config)))
+        else:
+            aws_util.install_file(prod_aws_config_file, "/etc/mozilla/telemetry_aws.json")
 
     def run(self, instance):
         # Start up HTTP server
