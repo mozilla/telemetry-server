@@ -402,8 +402,6 @@ def start_workers(logger, count, name, clazz, q_in, more_args):
 
 def main():
     signal.signal(signal.SIGINT, handle_sigint)
-    # Turn on mp logging
-    multiprocessing.log_to_stderr(logging.DEBUG)
     parser = argparse.ArgumentParser(description='Process incoming Telemetry data', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-c", "--config", help="AWS Configuration file (json)", required=True, type=file)
 
@@ -416,7 +414,12 @@ def main():
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
     parser.add_argument("-D", "--dry-run", help="Don't modify remote files", action="store_true")
+    parser.add_argument("-v", "--verbose", help="Print more detailed output", action="store_true")
     args = parser.parse_args()
+
+    if args.verbose:
+        # Turn on mp logging
+        multiprocessing.log_to_stderr(logging.DEBUG)
 
     config = json.load(args.config)
     # TODO: allow commandline args to override config values.
