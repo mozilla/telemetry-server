@@ -2,4 +2,22 @@
 
 state: {{ instance_state }}<br>
 public dns: {{ public_dns }}<br>
-terminate it here: {{ terminate_url }}
+terminate it here: {{ terminate_url }}<br>
+ssh into the server with the user 'ubuntu', ie<br>
+<pre>
+$ ssh -i my-private-key ubuntu@{{ public_dns }}
+</pre><br>
+Note, wait 5min before SSH'ing in, it'll report ready before it really is!<br>
+
+Configure awscli, if you want to use it<br>
+<pre>
+$ mkdir .aws
+$ echo -e "[default]\nregion = us-west-2" > .aws/config
+</pre><br>
+Now you can use awscli to list files:
+<pre>
+$ aws s3 ls s3://telemetry-published-v1
+</pre><br>
+
+Good luck :)<br>
+<i>Oh, by the way, we'll kill your instance in 24 hours!</i>

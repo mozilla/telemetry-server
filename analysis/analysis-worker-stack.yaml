@@ -5,6 +5,7 @@ Description: >
   outputs a queue to which analysis tasks can be submitted. Pool of spot workers
   will automatically scale to do the work.
 
+
 ################################################################################
 
 Parameters:
@@ -35,35 +36,17 @@ Parameters:
   spotPrice:
     Description:              Spot price for workers
     Type:                     String
-    Default:                  0.1
+    Default:                  0.2
 
-  sourcesBucket:
-    Description:              Bucket containing sources and templates
+  maxWorkers:
+    Description:              Maximum number of workers
     Type:                     String
-    Default:                  telemetry-code
+    Default:                  50
 
-  sourcesVersion:
-    Description:              Version of sources to load from sources bucket
+  imageId:
+    Description:              Image id of AMI to use
     Type:                     String
-    Default:                  '1'
-
-################################################################################
-
-Mappings:
-
-  # A map from region to 64 bit Ubuntu 13.04 backed by instance storage
-  # We use instance storage to avoid stability issues with EBS also we don't
-  # have to pay for IO. We'll initialize these with CloudInit, later.
-  # See: http://cloud-images.ubuntu.com/locator/ec2/
-  regionToAMI:
-    ap-northeast-1:           {AMI: ami-7f41da7e}
-    ap-southeast-1:           {AMI: ami-3af8b268}
-    ap-southeast-2:           {AMI: ami-a5960a9f}
-    eu-west-1:                {AMI: ami-2adc3c5d}
-    sa-east-1:                {AMI: ami-f1dd7bec}
-    us-east-1:                {AMI: ami-3d257954}
-    us-west-1:                {AMI: ami-20e5d265}
-    us-west-2:                {AMI: ami-2460f914}
+    Default:                  'ami-08563338'
 
 
 ################################################################################
@@ -90,6 +73,8 @@ Resources:
   # IAM role for analysis workers
   workerIAMRole:
     Type:                     AWS::IAM::Role
+    DependsOn:
+      - telemetryAnalysisInput
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -101,98 +86,75 @@ Resources:
               - 'sts:AssumeRole'
       Path:                   /telemetry/analysis/
       Policies:
-        # Grant access to analysis-worker tarball in sourcesBucket
-        - PolicyName:         workerSourcesBucketAccessPolicy
+        # Grant read access to telemetry-published-v1
+        - PolicyName:         telemetryPublishedAccess
           PolicyDocument:
             Statement:
               - Effect:       Allow
                 Action:
                   - 's3:GetObject'
-                Resource:     {"Fn::Join": ["", [
-                                'arn:aws:s3:::',
-                                {Ref: sourcesBucket},
-                                /v,
-                                {Ref: sourcesVersion},
-                                /analysis-worker.tar.gz
-                              ]]}
+                Resource:
+                  - 'arn:aws:s3:::telemetry-published-v1/*'
+        - PolicyName:         inputQueueAccess
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 'sqs:*'
+                Resource:     '*'
+        - PolicyName:         analysisBucketAccess
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:*'
+                Resource:
+                  - 'arn:aws:s3:::jonasfj-telemetry-analysis'
+                  - 'arn:aws:s3:::jonasfj-telemetry-analysis/*'
 
   # IAM instance profile granting workerIAMRole to workers
   workerInstanceProfile:
     Type:                     AWS::IAM::InstanceProfile
+    DependsOn:
+      - workerIAMRole
     Properties:
       Path:                   /telemetry/analysis/
       Roles:
-        - workerIAMRole
+        - {Ref: workerIAMRole}
+
+  # Security group for service server, http and ssh (well, disable ssh later)
+  workerSecurityGroup:
+    Type:                     AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:       telemetry-analysis worker security group
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
 
   # Worker launch configuration, decides how a worker is launched.
   workerLaunchConfig:
     Type:                     AWS::AutoScaling::LaunchConfiguration
     DependsOn:
-      - sourcesBucketCfnPolicy
+      - workerInstanceProfile
+      - telemetryAnalysisInput
+      - workerSecurityGroup
     Metadata:
       Comment:                telemetry-analysis worker
-      AWS::CloudFormation::Init:
-        config:
-          sources:
-            /home/ubuntu:     {'Fn::Join': ["",
-                                [
-                                  "http://",
-                                  {Ref: sourcesBucket},
-                                  .s3.amazonaws.com/v,
-                                  {Ref: sourcesVersion},
-                                  /analysis-worker.tar.gz
-                                ]
-                              ]}
-          commands:
-            run:
-              command: {'Fn::Join': [" ", [
-                "python",
-                "manager.py",
-                "-k",
-                {Ref: workerKeys},
-                "-s",
-                {'Fn::GetAtt': [workerKeys, SecretAccessKey]},
-                "-w",
-                ".........",
-                "-q",
-                {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
-              ]]}
-              cwd:            '/home/ubuntu'
-              ignoreErrors:   false
     Properties:
       KeyName:                  {Ref: keyName}
       SpotPrice:                {Ref: spotPrice}
-      ImageId:                  {'Fn::FindInMap': [
-                                    'regionToAMI',
-                                    {Ref: 'AWS::Region'},
-                                    'AMI'
-                                ]}
+      ImageId:                  {Ref: imageId}
       InstanceType:             {Ref: instanceType}
       IamInstanceProfile:       {Ref: workerInstanceProfile}
-      UserData:                 {'Fn::Base64': {'Fn::Join': ['', [
-              "#!/bin/bash\n",
-              "sudo apt-get -y install python-setuptools\n",
-              "sudo easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz",
-              "cfn-init ",
-              "  --stack ",       {Ref: 'AWS::StackName'},
-              "  --resource workerLaunchConfig ",
-              "  --access-key ",  {Ref: "cfnKeys"},
-              "  --secret-key ",  {'Fn::GetAtt': [cfnKeys, SecretAccessKey]},
-              "  --region ",      {Ref: 'AWS::Region'}, "\n"
-            ]
-          ]
-        }
-      }
+      SecurityGroups:
+        - {Ref: workerSecurityGroup}
       UserData:       {'Fn::Base64': {'Fn::Join': ['', [
-              "#!/bin/bash -x\n",
-              "sudo apt-get -y python-yaml python-boto xz-utils s3cmd",
-              "cfn-init ",
-              "  --stack ",       {Ref: 'AWS::StackName'},
-              "  --resource workerLaunchConfig ",
-              "  --access-key ",  {Ref: "cfnKeys"},
-              "  --secret-key ",  {'Fn::GetAtt': [cfnKeys, SecretAccessKey]},
-              "  --region ",      {Ref: 'AWS::Region'}, "\n",
-              "cfn-signal -e $? '", {Ref: "MyWaitHandle"}, "'\n"
+              "#!/bin/bash\n",
+              "echo '",
+                {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]},
+                "' > /etc/telemetry-analysis-input-queue\n",
+              "mkdir /mnt/work",
+              "chown ubuntu /mnt/work",
+              "start telemetry-analysis"
             ]
           ]
         }
@@ -202,68 +164,50 @@ Resources:
   # polices, the scaling policies are activated by CloudWatch alarms.
   workerAutoScaleGroup:
     Type:                       AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - workerLaunchConfig
     Properties:
       AvailabilityZones:        {'Fn::GetAZs': ''}
       LaunchConfigurationName:  {Ref: workerLaunchConfig}
       MinSize:                  0
-      MaxSize:                  20
+      MaxSize:                  {Ref: maxWorkers}
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize:           10
+        MinInstancesInService:  0
+        PauseTime:              "PT0S"
 
   # Scaling policies, these are sort of actions that can be executed by a
   # CloudWatch alarm
   workerScaleUpPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
+    DependsOn:
+      - workerAutoScaleGroup
     Properties:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
       Cooldown:                 60
       ScalingAdjustment:        1
 
-  workerQuickStartPolicy:
-    Type:                       AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType:           ChangeInCapacity
-      AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
-      Cooldown:                 60
-      ScalingAdjustment:        10
-
   workerScaleDownPolicy:
     Type:                       AWS::AutoScaling::ScalingPolicy
+    DependsOn:
+      - workerAutoScaleGroup
     Properties:
       AdjustmentType:           ChangeInCapacity
       AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
       Cooldown:                 60
       ScalingAdjustment:        -1
 
-  workerQuickKillPolicy:
-    Type:                       AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType:           ChangeInCapacity
-      AutoScalingGroupName:     {Ref: workerAutoScaleGroup}
-      Cooldown:                 60
-      ScalingAdjustment:        -10
 
   # CloudWatch alarms, these execute scaling policies
-  manyMessagesAddedAlarm:
+  messagesAvailableAlarm:
     Type:                       AWS::CloudWatch::Alarm
+    DependsOn:
+      - telemetryAnalysisInput
+      - workerScaleUpPolicy
     Properties:
-      AlarmDescription:         Scale up if 100+ message are added at once
-      Namespace:                AWS/SQS
-      MetricName:               NumberOfMessagesSent
-      Dimensions:
-        - Name:     QueueName
-          Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
-      Statistic:                Sum
-      Period:                   900
-      EvaluationPeriods:        1
-      Threshold:                100
-      ComparisonOperator:       GreaterThanThreshold
-      AlarmActions:
-        - {Ref: workerQuickStartPolicy}
-
-  tooManyMessagesAlarm:
-    Type:                       AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription:         Scale up if more than 10 messages
+      AlarmDescription:         Scale up if messages are available
       Namespace:                AWS/SQS
       MetricName:               ApproximateNumberOfMessagesVisible
       Dimensions:
@@ -271,14 +215,17 @@ Resources:
           Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
       Statistic:                Sum
       Period:                   60
-      EvaluationPeriods:        10
-      Threshold:                1
+      EvaluationPeriods:        5
+      Threshold:                0
       ComparisonOperator:       GreaterThanThreshold
       AlarmActions:
         - {Ref: workerScaleUpPolicy}
 
   notEnoughMessagesAlarm:
     Type:                       AWS::CloudWatch::Alarm
+    DependsOn:
+      - telemetryAnalysisInput
+      - workerScaleDownPolicy
     Properties:
       AlarmDescription:         Scale down, if not enought messages
       Namespace:                AWS/SQS
@@ -288,28 +235,11 @@ Resources:
           Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
       Statistic:                Sum
       Period:                   60
-      EvaluationPeriods:        10
-      Threshold:                1
+      EvaluationPeriods:        5
+      Threshold:                10
       ComparisonOperator:       GreaterThanThreshold
       AlarmActions:
         - {Ref: workerScaleDownPolicy}
-
-  totalStarvationAlarm:
-    Type:                       AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription:         Kill lot of workers if they poll to much
-      Namespace:                AWS/SQS
-      MetricName:               NumberOfEmptyReceives
-      Dimensions:
-        - Name:     QueueName
-          Value:    {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]}
-      Statistic:                Sum
-      Period:                   900
-      EvaluationPeriods:        1
-      Threshold:                5000
-      ComparisonOperator:       GreaterThanThreshold
-      AlarmActions:
-        - {Ref: workerQuickKillPolicy}
 
 ################################################################################
 

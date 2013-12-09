@@ -38,9 +38,9 @@ def connect_sqs(region, aws_key, aws_secret_key):
 
 def create_instance(config, aws_key=None, aws_secret_key=None):
     if aws_key is None:
-        aws_key = config["aws_key"]
+        aws_key = config.get("aws_key", None)
     if aws_secret_key is None:
-        aws_secret_key = config["aws_secret_key"]
+        aws_secret_key = config.get("aws_secret_key", None)
 
     conn = connect(config["region"], aws_key, aws_secret_key)
     itype = config.get("instance_type", "m1.large")

@@ -1,0 +1,2 @@
+saved_session/Firefox/nightly/22.0a1/20130226031002.20131011.v2.log.e28a4032eb744f089a1828ac7399e5d8.lzma	input/ss-ff-n-22.lzma
+saved_session/Firefox/nightly/28.0a1/20131029030201.20131029.v2.log.0ab8723b6fb3455bb34b04d97482fda2.lzma	input/ss-ff-n-28.lzma

@@ -113,8 +113,8 @@ Resources:
                   - 'ec2:RunInstances'
                   - 'ec2:DescribeInstances'
                   - 'ec2:TerminateInstances'
-                  - '*'     # this is definitely suboptimal, but it works
-                Resource:     '*' # I think this works, probably not best :)
+                  - '*'     # try ec2:*
+                Resource:     '*' # try: arn:aws:ec2:*
         - PolicyName:         putObjectTemporaryBucketPolicy
           PolicyDocument:
             Statement:
@@ -242,23 +242,16 @@ Resources:
               - 'sts:AssumeRole'
       Path:                   /telemetry/analysis/debug-instance/
       Policies:
-        # Grant list access to telemetry-published-v1
-        - PolicyName:         telemetryPublishedDebugAccess
-          PolicyDocument:
-            Statement:
-              - Effect:       Allow
-                Action:
-                  - 's3:ListBucket'
-                Resource:
-                  - 'arn:aws:s3:::telemetry-published-v1'
         # Grant read access to telemetry-published-v1
         - PolicyName:         telemetryPublishedDebugAccess
           PolicyDocument:
             Statement:
               - Effect:       Allow
                 Action:
+                  - 's3:ListBucket'
                   - 's3:GetObject'
                 Resource:
+                  - 'arn:aws:s3:::telemetry-published-v1'
                   - 'arn:aws:s3:::telemetry-published-v1/*'
         # Grant access to read from temporary bucket, we store SSH keys here
         - PolicyName:         getObjectTemporaryBucketPolicy
