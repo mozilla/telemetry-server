@@ -150,8 +150,6 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
 
         # Service configuration for telemetry-analysis
-        sudo("echo '    /usr/local/bin/node ./server.js ./server_config.json >> /var/log/telemetry/telemetry-server.out' >> {0}".format(c_file))
-
         c_file = "/etc/init/telemetry-analysis.conf"
         self.start_suid_script(c_file, self.ssl_user)
         self.append_suid_script(c_file, "cd {0}".format(code_base))
