@@ -162,7 +162,9 @@ class TelemetryServerLauncher(Launcher):
         prod_aws_config_file = "provisioning/config/telemetry_aws.prod.json"
         if self.config.get("add_aws_credentials", False):
             # add aws credentials
-            prod_aws_config = json.load(prod_aws_config_file)
+            fin = open(prod_aws_config_file)
+            prod_aws_config = json.load(fin)
+            fin.close()
             prod_aws_config["aws_key"] = self.aws_key
             prod_aws_config["aws_secret_key"] = self.aws_secret_key
             sudo("echo '{0}' >> /etc/mozilla/telemetry_aws.json".format(json.dumps(prod_aws_config)))
