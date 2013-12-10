@@ -34,10 +34,12 @@ class AnalysisJob:
 
 
     def get_filtered_files(self):
+        print "This is hacked to launch everything!!!"
+        print "Just remove the if k.split().... in get_filtered_files()"
         conn = S3Connection(self.aws_key, self.aws_secret_key)
         bucket = conn.get_bucket(self.input_bucket)
         for k,s in self.list_partitions(bucket):
-            if k.split('/')[-1].split('.')[1] < '20131104':
+            if k.split('/')[-1].split('.')[1] < '20131209':
                 yield (k, s)
 
     def get_filtered_files_old(self):
