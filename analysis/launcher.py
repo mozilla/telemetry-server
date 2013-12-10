@@ -21,6 +21,7 @@ class AnalysisJob:
         self.input_bucket = "telemetry-published-v1"
         self.job_name = cfg.name
         self.job_owner = cfg.owner
+        self.date_limit = cfg.date_limit
 
         # Bucket with intermediate data for this analysis job
         self.analysis_bucket = "jonasfj-telemetry-analysis"
@@ -34,13 +35,17 @@ class AnalysisJob:
 
 
     def get_filtered_files(self):
-        print "This is hacked to launch everything!!!"
-        print "Just remove the if k.split().... in get_filtered_files()"
         conn = S3Connection(self.aws_key, self.aws_secret_key)
         bucket = conn.get_bucket(self.input_bucket)
-        for k,s in self.list_partitions(bucket):
-            if k.split('/')[-1].split('.')[1] < '20131209':
-                yield (k, s)
+        # date_limit is a hack that makes it easy to launch everything before
+        # a given date... say to back process all we have in the bucket...
+        if self.date_limit != None:
+          for k,s in self.list_partitions(bucket):
+              if k.split('/')[-1].split('.')[1] < self.date_limit:
+                  yield (k, s)
+        else:
+          for k,s in self.list_partitions(bucket):
+              yield (k, s)
 
     def get_filtered_files_old(self):
         """ Get tuples of name and size for all input files """
@@ -213,6 +218,11 @@ def main():
         "-q", "--sqs-queue",
         help = "SQS input queue for analysis worker stack",
         required = True
+    )
+    p.add_argument(
+        "-d", "--date_limit",
+        help = "Launch only things submitted before this date, format YYYYMMDD",
+        default = None       
     )
     job = AnalysisJob(p.parse_args())
     job.setup()
