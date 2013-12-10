@@ -46,7 +46,7 @@ Parameters:
   imageId:
     Description:              Image id of AMI to use
     Type:                     String
-    Default:                  'ami-08563338'
+    Default:                  'ami-c2f194f2'
 
 
 ################################################################################
