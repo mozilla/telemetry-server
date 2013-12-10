@@ -42,10 +42,13 @@
 
   "Mappings": {
     "Region2WebServerAMI": {
-      "us-west-2": { "AMI": "ami-c82643f8" }
+      "us-west-2": { "AMIpv": "ami-22e98c12" }
     },
     "Region2ProcessIncomingAMI": {
-      "us-west-2": { "AMI": "ami-6697f256" }
+      "us-west-2": {
+        "AMIpv":  "ami-22e98c12",
+        "AMIhvm": "ami-6697f256"
+      }
     }
   },
 
@@ -149,7 +152,7 @@
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Properties": {
         "KeyName":            { "Ref": "SSHKeyName" },
-        "ImageId":            { "Fn::FindInMap": [ "Region2WebServerAMI", { "Ref": "AWS::Region" }, "AMI" ] },
+        "ImageId":            { "Fn::FindInMap": [ "Region2WebServerAMI", { "Ref": "AWS::Region" }, "AMIpv" ] },
         "SecurityGroups":     [ "telemetry" ],
         "IamInstanceProfile": { "Ref": "WebServerIAMProfile" },
         "InstanceType":       { "Ref": "WebServerInstanceType" },
@@ -326,7 +329,7 @@
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Properties": {
         "KeyName":            { "Ref": "SSHKeyName" },
-        "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMI" ] },
+        "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMIpv" ] },
         "SecurityGroups":     [ { "Ref": "ProcessIncomingSecurityGroup" } ],
         "IamInstanceProfile": { "Ref": "ProcessIncomingIAMProfile" },
         "InstanceType":       "m1.xlarge",
@@ -507,7 +510,7 @@
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Properties": {
         "KeyName":            { "Ref": "SSHKeyName" },
-        "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMI" ] },
+        "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMIhvm" ] },
         "SecurityGroups":     [ { "Ref": "ProcessIncomingSecurityGroup" } ],
         "IamInstanceProfile": { "Ref": "ProcessIncomingIAMProfile" },
         "InstanceType":       "c3.xlarge",
