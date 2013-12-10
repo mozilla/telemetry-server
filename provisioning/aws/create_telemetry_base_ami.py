@@ -5,6 +5,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+# Example invocation:
+# $ cd /path/to/telemetry-server
+# $ python -m provisioning.aws.create_telemetry_base_ami -k "my_aws_key" -s "my_aws_secret" provisioning/aws/telemetry_server_base.pv.json
+
 from launch_telemetry_server import TelemetryServerLauncher
 from fabric.api import *
 import fabric.network
