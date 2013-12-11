@@ -35,8 +35,9 @@ def main():
 
         print "Creating an AMI..."
         # Create an AMI (after stopping the instance)
-        # Give it a good name telemetry-base-yyyymmdd
-        base_name = "telemetry-base"
+        # Give it a good name %s-yyyymmdd where %s is instance name stolen from
+        # launcher which reads it from config or commandline
+        base_name = launcher.config["name"]
         if instance.virtualization_type == "hvm":
             base_name += "-hvm"
 

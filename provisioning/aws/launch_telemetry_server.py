@@ -157,6 +157,9 @@ class TelemetryServerLauncher(Launcher):
         self.end_suid_script(c_file)
         sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
 
+        # Configure boto
+        aws_util.install_file("provisioning/config/boto.cfg", "/etc/boto.cfg")
+
         # Install the default config file:
         sudo("mkdir -p /etc/mozilla")
         prod_aws_config_file = "provisioning/config/telemetry_aws.prod.json"

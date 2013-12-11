@@ -46,7 +46,7 @@ Parameters:
   imageId:
     Description:              Image id of AMI to use
     Type:                     String
-    Default:                  'ami-08563338'
+    Default:                  'ami-c2f194f2'
 
 
 ################################################################################
@@ -152,9 +152,9 @@ Resources:
               "echo '",
                 {'Fn::GetAtt': [telemetryAnalysisInput, QueueName]},
                 "' > /etc/telemetry-analysis-input-queue\n",
-              "mkdir /mnt/work",
-              "chown ubuntu /mnt/work",
-              "start telemetry-analysis"
+              "mkdir /mnt/work\n",
+              "chown ubuntu /mnt/work\n",
+              "start telemetry-analysis\n"
             ]
           ]
         }
