@@ -158,11 +158,7 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
 
         # Configure boto
-        sudo("echo '%s' >> /etc/boto.cfg" % "[Boto]")
-        sudo("echo '%s' >> /etc/boto.cfg" % "debug = 0")
-        sudo("echo '%s' >> /etc/boto.cfg" % "num_retries = 20")
-        sudo("echo '%s' >> /etc/boto.cfg" % "metadata_service_timeout = 3.0")
-        sudo("echo '%s' >> /etc/boto.cfg" % "metadata_service_num_attempts = 20")
+        aws_util.install_file("provisioning/config/boto.cfg", "/etc/boto.cfg")
 
         # Install the default config file:
         sudo("mkdir -p /etc/mozilla")
