@@ -96,7 +96,7 @@ class Job:
         fetch_cwd = os.path.join(self._work_dir, "cache")
         if not os.path.isdir(fetch_cwd):
             os.makedirs(fetch_cwd)
-        loader = s3util.Loader(fetch_cwd, self._bucket_name)
+        loader = s3util.Loader(fetch_cwd, self._bucket_name, aws_key=self._aws_key, aws_secret_key=self._aws_secret_key)
         start = datetime.now()
         downloaded_bytes = 0
         for local, remote, err in loader.get_list(remote_names):
