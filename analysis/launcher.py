@@ -40,6 +40,7 @@ class AnalysisJob:
         # date_limit is a hack that makes it easy to launch everything before
         # a given date... say to back process all we have in the bucket...
         if self.date_limit != None:
+          print "Launching limiting to before " + self.date_limit
           for k,s in self.list_partitions(bucket):
               if k.split('/')[-1].split('.')[1] < self.date_limit:
                   yield (k, s)
@@ -98,8 +99,7 @@ class AnalysisJob:
 
 
     def generate_tasks(self):
-        """ Generates SQS tasks, we batch small files into a single task """
-        uid = str(uuid4())
+        """ Generates SQS tasks, we batch small files into a single task """        
         taskid = 1
         taskfiles = []
         tasksize = 0
@@ -115,7 +115,7 @@ class AnalysisJob:
                 # faster to download when handling the job
                 taskfiles =  [f for f,s in sorted(taskfiles, key=lambda (f,s): s)]
                 yield {
-                    'id':               uid + "/" +  str(taskid),
+                    'id':               self.job_id + "/" +  str(taskid),
                     'name':             self.job_name,
                     'owner':            self.job_owner,
                     'code':             self.s3_code_path,
@@ -133,7 +133,7 @@ class AnalysisJob:
         if len(taskfiles) > 0:
             taskfiles =  [f for f,s in sorted(taskfiles, key=lambda (f,s): s)]
             yield {
-                'id':               uid + "/" + str(taskid),
+                'id':               self.job_id + "/" + str(taskid),
                 'name':             self.job_name,
                 'owner':            self.job_owner,
                 'code':             self.s3_code_path,
