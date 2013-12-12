@@ -151,7 +151,11 @@ class Job:
                 # Fetch the files we need for each mapper
                 print "Fetching remotes for partition", i
                 fetch_result = self.fetch_remotes(partitions[i])
-                print "Done with code", fetch_result
+                if fetch_result == 0:
+                    print "Remote files fetched successfully"
+                else:
+                    print "ERROR: Failed to fetch", fetch_result, "files."
+                    # TODO: Bail, since results will be unreliable?
                 p = Process(
                         target=Mapper,
                         args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
