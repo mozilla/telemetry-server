@@ -34,5 +34,10 @@ def map(k, d, v, cx):
     except Exception as e:
         cx.write(",".join(["Error", str(e), traceback.format_exc()] + d), 1)
 
+def setup_reduce(cx):
+    cx.field_separator = ","
+
 def reduce(k, v, cx):
     cx.write(k, sum(v))
+
+combine = reduce
