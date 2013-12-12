@@ -375,7 +375,7 @@ class Mapper:
 
 class Collector(dict):
     def __init__(self, combine_func=None, combine_size=50):
-        if combine_func is not None and callable(combine_func):
+        if callable(combine_func):
             self.combine = combine_func
         else:
             self.combine = self.dummy_combine
