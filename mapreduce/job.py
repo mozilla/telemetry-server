@@ -308,15 +308,17 @@ class Context:
 
 
 class TextContext(Context):
-    def __init__(self, out):
+    def __init__(self, out, field_separator="\t", record_separator="\n"):
         self._sink = open(out, "w")
         self._sinks = {0: self._sink}
+        self.field_separator = field_separator
+        self.record_separator = record_separator
 
     def write(self, key, value):
         self._sink.write(str(key))
-        self._sink.write("\t")
+        self._sink.write(self.field_separator)
         self._sink.write(str(value))
-        self._sink.write("\n")
+        self._sink.write(self.record_separator)
 
 
 class Mapper:
@@ -327,7 +329,7 @@ class Mapper:
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
-        if mapfunc is None or not callable(mapfunc):
+        if not callable(mapfunc):
             print "No map function!!!"
             sys.exit(1)
 
@@ -403,7 +405,11 @@ class Reducer:
         context = TextContext(output_file)
         reducefunc = getattr(module, 'reduce', None)
         combinefunc = getattr(module, 'combine', None)
-        if reducefunc is None or not callable(reducefunc):
+        setupreducefunc = getattr(module, 'setup_reduce', None)
+        if callable(setupreducefunc):
+            setupreducefunc(context)
+
+        if not callable(reducefunc):
             print "No reduce function (that's ok)"
         else:
             collected = Collector(combinefunc, Reducer.COMBINE_SIZE)
