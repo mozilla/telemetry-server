@@ -126,6 +126,11 @@ class Job:
         remote_files = self.dedupe_remotes(remote_files, files)
 
         file_count = len(files) + len(remote_files)
+
+        if file_count == 0:
+            print "Filter didn't match any files... nothing to do"
+            return
+
         # Not useful to have more mappers than input files.
         if file_count < self._num_mappers:
             print "Filter matched only %s input files (%s local in %s and %s " \
