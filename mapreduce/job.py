@@ -12,6 +12,7 @@ import os
 import json
 import marshal
 import traceback
+import errno
 from datetime import datetime
 from multiprocessing import Process
 from telemetry.telemetry_schema import TelemetrySchema
@@ -168,10 +169,20 @@ class Job:
             r.join()
 
         # Reducers are done.  Output results.
-        os.rename(os.path.join(self._work_dir, "reducer_0"), self._output_file)
-        if self._num_reducers > 1:
+        to_combine = 1
+        try:
+            os.rename(os.path.join(self._work_dir, "reducer_0"), self._output_file)
+        except OSError, e:
+            if e.errno != errno.EXDEV:
+                raise
+            else:
+                # OSError: [Errno 18] Invalid cross-device link (EXDEV == 18)
+                # We can't rename across devices :( Copy / delete instead.
+                to_combine = 0
+
+        if self._num_reducers > to_combine:
             out = open(self._output_file, "a")
-            for i in range(1, self._num_reducers):
+            for i in range(to_combine, self._num_reducers):
                 # FIXME: this reads the entire reducer output into memory
                 reducer_filename = os.path.join(self._work_dir, "reducer_" + str(i))
                 reducer_output = open(reducer_filename, "r")
