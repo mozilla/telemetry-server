@@ -10,6 +10,7 @@ import sys
 import os
 import re
 import urllib2
+import telemetry.util.files as fu
 
 # TODO:
 # [ ] Pre-fetch (and cache) all revisions of Histograms.json using something like:
@@ -118,13 +119,7 @@ class RevisionCache:
         try:
             fout = open(filename, 'w')
         except IOError:
-            try:
-                os.makedirs(os.path.dirname(filename))
-            except OSError, e:
-                # errno 17 means "directory exists". This is a race condition
-                # in a multi-process environment, and can safely be ignored.
-                if e.errno != 17:
-                    raise
+            fu.makedirs_concurrent(os.path.dirname(filename))
             fout = open(filename, 'w')
         fout.write(contents)
         fout.close()
