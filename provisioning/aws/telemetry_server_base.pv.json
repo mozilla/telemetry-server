@@ -1,0 +1,20 @@
+{
+  "ssl_user": "ubuntu",
+  "ssl_key_name": "mreid",
+  "ssl_key_path": "~/.ssh/aws/mreid.pem",
+  "ssl_retries": 10,
+  "base_dir": "/mnt/telemetry",
+  "instance_type": "t1.micro",
+  "image": "ami-ace67f9c",
+  "security_groups": ["telemetry"],
+  "region": "us-west-2",
+  "placement": "us-west-2c",
+  "shutdown_behavior": "stop",
+  "name": "telemetry-server-base-pv",
+  "default_tags": {
+    "Owner": "mreid",
+    "Application": "telemetry-server"
+  },
+  "add_aws_credentials": true,
+  "skip_termination": true
+}

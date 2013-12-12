@@ -5,6 +5,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+# Example invocation:
+# $ cd /path/to/telemetry-server
+# $ python -m provisioning.aws.create_telemetry_base_ami -k "my_aws_key" -s "my_aws_secret" provisioning/aws/telemetry_server_base.pv.json
+
 from launch_telemetry_server import TelemetryServerLauncher
 from fabric.api import *
 import fabric.network
@@ -31,8 +35,9 @@ def main():
 
         print "Creating an AMI..."
         # Create an AMI (after stopping the instance)
-        # Give it a good name telemetry-base-yyyymmdd
-        base_name = "telemetry-base"
+        # Give it a good name %s-yyyymmdd where %s is instance name stolen from
+        # launcher which reads it from config or commandline
+        base_name = launcher.config["name"]
         if instance.virtualization_type == "hvm":
             base_name += "-hvm"
 

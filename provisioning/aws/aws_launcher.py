@@ -25,6 +25,7 @@ class Launcher(object):
         self.aws_secret_key = args.aws_secret_key
         self.ssl_user = self.config.get("ssl_user", "ubuntu")
         self.ssl_key_path = self.config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
+        self.repo = args.repository
         if args.instance_name is not None:
             self.config["name"] = args.instance_name
 
@@ -34,6 +35,11 @@ class Launcher(object):
         parser.add_argument("-k", "--aws-key", help="AWS Key", required = False, default = None)
         parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", required = False, default = None)
         parser.add_argument("-n", "--instance-name", help="Overrides the 'name' specified in the configuration file")
+        parser.add_argument(
+          "-r", "--repository",
+          help    = "Repository to check telemetry-server out of",
+          default = "https://github.com/mozilla/telemetry-server.git"
+        )
         return parser
 
     def get_instance(self):
@@ -97,7 +103,7 @@ class Launcher(object):
     def install_telemetry_code(self, instance):
         home = "/home/" + self.ssl_user
         with cd(home):
-            run("git clone https://github.com/mozilla/telemetry-server.git")
+            run("git clone %s" % self.repo)
 
     def install_histogram_tools(self, instance):
         home = "/home/" + self.ssl_user

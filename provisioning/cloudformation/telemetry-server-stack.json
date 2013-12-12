@@ -42,10 +42,13 @@
 
   "Mappings": {
     "Region2WebServerAMI": {
-      "us-west-2": { "AMI": "ami-c82643f8" }
+      "us-west-2": { "AMIpv": "ami-22e98c12" }
     },
     "Region2ProcessIncomingAMI": {
-      "us-west-2": { "AMI": "ami-6697f256" }
+      "us-west-2": {
+        "AMIpv":  "ami-22e98c12",
+        "AMIhvm": "ami-6697f256"
+      }
     }
   },
 
@@ -149,7 +152,7 @@
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Properties": {
         "KeyName":            { "Ref": "SSHKeyName" },
-        "ImageId":            { "Fn::FindInMap": [ "Region2WebServerAMI", { "Ref": "AWS::Region" }, "AMI" ] },
+        "ImageId":            { "Fn::FindInMap": [ "Region2WebServerAMI", { "Ref": "AWS::Region" }, "AMIpv" ] },
         "SecurityGroups":     [ "telemetry" ],
         "IamInstanceProfile": { "Ref": "WebServerIAMProfile" },
         "InstanceType":       { "Ref": "WebServerInstanceType" },
@@ -245,6 +248,125 @@
         "AutoScalingGroupName": { "Ref": "ProcessIncomingGroup" },
         "Cooldown": "60",
         "ScalingAdjustment": "-1"
+      }
+    },
+
+    "ProcessIncomingOverflow1Group": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones":       { "Fn::GetAZs": "" },
+        "LaunchConfigurationName": { "Ref": "ProcessIncomingOverflow1LaunchConfig" },
+        "MinSize":                 "0",
+        "MaxSize":                 "3",
+        "NotificationConfiguration": {
+          "TopicARN": { "Ref": "TelemetryServerAutoScaleTopic" },
+          "NotificationTypes": [
+            "autoscaling:EC2_INSTANCE_LAUNCH", "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+            "autoscaling:EC2_INSTANCE_TERMINATE", "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ]
+        },
+        "Tags": [
+          { "Key": "Application", "Value": "telemetry-server",                      "PropagateAtLaunch": true },
+          { "Key": "Name",        "Value": "telemetry-process-incoming-overflow-1", "PropagateAtLaunch": true },
+          { "Key": "Owner",       "Value": { "Ref": "SSHKeyName" },                 "PropagateAtLaunch": true }
+        ]
+      }
+    },
+
+    "ProcessIncomingOverflow1HighLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if more than 100 messages available: scale up",
+        "Namespace":          "AWS/SQS",
+        "MetricName":         "ApproximateNumberOfMessagesVisible",
+        "Statistic":          "Maximum",
+        "Period":             "60",
+        "EvaluationPeriods":  "10",
+        "Threshold":          "100",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions":   [ { "Name": "QueueName", "Value": { "Ref": "IncomingQueueName" } } ],
+        "AlarmActions": [ { "Ref": "ProcessIncomingOverflow1ScaleUpPolicy" } ]
+      }
+    },
+
+    "ProcessIncomingOverflow1ScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "ProcessIncomingOverflow1Group" },
+        "Cooldown": "900",
+        "ScalingAdjustment": "1"
+      }
+    },
+
+    "ProcessIncomingOverflow1LowLoadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription":   "Alarm if fewer than 10 messages available: scale down",
+        "Namespace":          "AWS/SQS",
+        "MetricName":         "ApproximateNumberOfMessagesVisible",
+        "Statistic":          "Maximum",
+        "Period":             "60",
+        "EvaluationPeriods":  "10",
+        "Threshold":          "10",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions":   [ { "Name": "QueueName", "Value": { "Ref": "IncomingQueueName" } } ],
+        "AlarmActions": [ { "Ref": "ProcessIncomingOverflow1ScaleDownPolicy" } ]
+      }
+    },
+
+    "ProcessIncomingOverflow1ScaleDownPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": { "Ref": "ProcessIncomingOverflow1Group" },
+        "Cooldown": "60",
+        "ScalingAdjustment": "-1"
+      }
+    },
+
+    "ProcessIncomingOverflow1LaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "KeyName":            { "Ref": "SSHKeyName" },
+        "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMIpv" ] },
+        "SecurityGroups":     [ { "Ref": "ProcessIncomingSecurityGroup" } ],
+        "IamInstanceProfile": { "Ref": "ProcessIncomingIAMProfile" },
+        "InstanceType":       "m1.xlarge",
+        "SpotPrice":          "0.20",
+        "BlockDeviceMappings": [
+          { "DeviceName": "/dev/xvdb", "VirtualName": "ephemeral0" },
+          { "DeviceName": "/dev/xvdc", "VirtualName": "ephemeral1" },
+          { "DeviceName": "/dev/xvdd", "VirtualName": "ephemeral2" },
+          { "DeviceName": "/dev/xvde", "VirtualName": "ephemeral3" }
+        ],
+        "UserData": { "Fn::Base64": { "Fn::Join": [ "\n", [
+          "#!/bin/bash",
+          "umount /mnt",
+          "yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices=4 /dev/xvdb /dev/xvdc /dev/xvdd /dev/xvde",
+          "echo 'DEVICE /dev/xvdb /dev/xvdc /dev/xvdd /dev/xvde' >> /etc/mdadm/mdadm.conf",
+          "mdadm --detail --scan >> /etc/mdadm/mdadm.conf",
+          "mkfs.ext3 -T largefile /dev/md0",
+          "# pause briefly to let md0 get ready",
+          "sleep 3",
+          "mkdir -p /mnt",
+          "mount /dev/md0 /mnt",
+          "mkdir -p /mnt/telemetry/log",
+          "mkdir -p /mnt/telemetry/processed",
+          "mkdir -p /mnt/telemetry/work",
+          "chown -R ubuntu:ubuntu /mnt/telemetry",
+          "if [ ! -e '/var/log/telemetry' ]; then",
+          "  ln -s /mnt/telemetry/log /var/log/telemetry",
+          "fi",
+          { "Fn::Join": [ "", [
+            "echo '{\"incoming_bucket\":\"", { "Ref": "IncomingBucketName" }, "\",",
+            "\"incoming_queue\":\"", { "Ref": "IncomingQueueName" }, "\",",
+            "\"publish_bucket\":\"", { "Ref": "PublishedBucketName" }, "\",",
+            "\"aws_region\":\"", { "Ref": "AWS::Region" }, "\"}' > /etc/mozilla/telemetry_aws.json"
+          ] ] },
+          "echo 'start on runlevel [2345]' >> /etc/init/telemetry-incoming.conf",
+          "start telemetry-incoming"
+        ] ] } }
       }
     },
 
@@ -388,7 +510,7 @@
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Properties": {
         "KeyName":            { "Ref": "SSHKeyName" },
-        "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMI" ] },
+        "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMIhvm" ] },
         "SecurityGroups":     [ { "Ref": "ProcessIncomingSecurityGroup" } ],
         "IamInstanceProfile": { "Ref": "ProcessIncomingIAMProfile" },
         "InstanceType":       "c3.xlarge",
