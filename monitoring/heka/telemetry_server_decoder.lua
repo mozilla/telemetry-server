@@ -13,7 +13,7 @@
 --	Hostname: trink-x230
 --	Pid: 0
 --	UUID: 2be3ed98-89e8-4bd0-a7c4-9aebe8747a8b
---	Logger: jsonshort.log
+--	Logger: telemetry-server.log
 --	Payload:
 --	EnvVersion:
 --	Severity: 6
@@ -53,7 +53,7 @@ function process_message()
     local ts = lpeg.match(rfc3339.grammar, json.timestamp)
     msg.Timestamp = rfc3339.time_ns(ts)
 
-    msg.Severity = lpeg.match(rfc5424.severity, json.level) or "7"
+    msg.Severity = lpeg.match(rfc5424.severity, json.level)
     fields.url = json.url
     fields.duration.value = json.duration_ms
     fields.code = json.code
