@@ -11,9 +11,9 @@
 
 #include <stdlib.h>
 #include <fstream>
-#include <regex>
 
 #include <boost/test/unit_test.hpp>
+#include <boost/regex.hpp>
 
 using namespace std;
 using namespace mozilla::telemetry;
@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(test_converter)
   fs::path generated = it->path();
 
   string filename = generated.leaf().string();
-  regex reg(prefix + "\\.v2\\.log\\.[0-9a-f]{32}\\.xz");
+  boost::regex reg(prefix + "\\.v2\\.log\\.[0-9a-f]{32}\\.xz");
   BOOST_REQUIRE(regex_match(filename.begin(), filename.end(), reg));
 
   string command = "xz -d " + generated.string();
