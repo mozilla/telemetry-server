@@ -200,8 +200,9 @@ With the histogram server running:
 Ubuntu Notes
 ----
 ```
-apt-get install cmake libprotoc-dev zlib1g-dev libboost-system1.53-dev libboost-system1.53-dev libboost-system1.53-dev
-               libboost-filesystem1.53-dev libboost-thread1.53-dev libboost-test1.53-dev
+apt-get install cmake libprotoc-dev zlib1g-dev libboost-system1.54-dev \
+   libboost-filesystem1.54-dev libboost-thread1.54-dev libboost-test1.54-dev \
+   libboost-log1.54-dev protobuf-compiler libssl-dev liblzma-dev xz-utils
 ```
 
 `mapreduce/job.py`
