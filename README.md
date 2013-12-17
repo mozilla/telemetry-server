@@ -202,7 +202,8 @@ Ubuntu Notes
 ```
 apt-get install cmake libprotoc-dev zlib1g-dev libboost-system1.54-dev \
    libboost-filesystem1.54-dev libboost-thread1.54-dev libboost-test1.54-dev \
-   libboost-log1.54-dev protobuf-compiler libssl-dev liblzma-dev xz-utils
+   libboost-log1.54-dev libboost-regex1.54-dev protobuf-compiler libssl-dev \
+   liblzma-dev xz-utils
 ```
 
 `mapreduce/job.py`
