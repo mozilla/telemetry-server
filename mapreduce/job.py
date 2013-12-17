@@ -12,6 +12,7 @@ import os
 import json
 import marshal
 import traceback
+import errno
 from datetime import datetime
 from multiprocessing import Process
 from telemetry.telemetry_schema import TelemetrySchema
@@ -36,7 +37,6 @@ def find_min_idx(stuff):
 
 class Job:
     """A class for orchestrating a Telemetry MapReduce job"""
-    DOWNLOAD_BATCH_SIZE = 100
     # 1. read input filter
     # 2. generate filtered list of local input files
     # 2a. generate filtered list of remote input files
@@ -86,33 +86,30 @@ class Job:
             print "Partition %d contained %d (%+d)" % (i, partitions[i], float(partitions[i]) - avg)
 
     def fetch_remotes(self, remotes):
-        # TODO: download remotes in groups of size DOWNLOAD_BATCH_SIZE
+        # TODO: fetch remotes inside Mappers, and process each one as it becomes available.
         remote_names = [ r["name"] for r in remotes if r["type"] == "remote" ]
 
         # TODO: check cache first.
         result = 0
+        if len(remote_names) == 0:
+            return result
 
         fetch_cwd = os.path.join(self._work_dir, "cache")
-        if len(remote_names) > 0:
-            if not os.path.isdir(fetch_cwd):
-                os.makedirs(fetch_cwd)
-            fetch_cmd = ["/usr/local/bin/s3funnel"]
-            fetch_cmd.append(self._bucket_name)
-            fetch_cmd.append("get")
-            if self._aws_key is not None:
-                fetch_cmd.append("-a")
-                fetch_cmd.append(self._aws_key)
-            if self._aws_secret_key is not None:
-                fetch_cmd.append("-s")
-                fetch_cmd.append(self._aws_secret_key)
-            fetch_cmd.append("-t")
-            fetch_cmd.append("8")
-            start = datetime.now()
-            result = subprocess.call(fetch_cmd + remote_names, cwd=fetch_cwd)
-            duration_sec = timer.delta_sec(start)
-            downloaded_bytes = sum([ r["size"] for r in remotes if r["type"] == "remote" ])
-            downloaded_mb = float(downloaded_bytes) / 1024.0 / 1024.0
-            print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
+        if not os.path.isdir(fetch_cwd):
+            os.makedirs(fetch_cwd)
+        loader = s3util.Loader(fetch_cwd, self._bucket_name, aws_key=self._aws_key, aws_secret_key=self._aws_secret_key)
+        start = datetime.now()
+        downloaded_bytes = 0
+        for local, remote, err in loader.get_list(remote_names):
+            if err is None:
+                print "Downloaded", remote
+                downloaded_bytes += os.path.getsize(local)
+            else:
+                print "Failed to download", remote
+                result += 1
+        duration_sec = timer.delta_sec(start)
+        downloaded_mb = float(downloaded_bytes) / 1024.0 / 1024.0
+        print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
         return result
 
     def dedupe_remotes(self, remote_files, local_files):
@@ -129,6 +126,11 @@ class Job:
         remote_files = self.dedupe_remotes(remote_files, files)
 
         file_count = len(files) + len(remote_files)
+
+        if file_count == 0:
+            print "Filter didn't match any files... nothing to do"
+            return
+
         # Not useful to have more mappers than input files.
         if file_count < self._num_mappers:
             print "Filter matched only %s input files (%s local in %s and %s " \
@@ -149,7 +151,11 @@ class Job:
                 # Fetch the files we need for each mapper
                 print "Fetching remotes for partition", i
                 fetch_result = self.fetch_remotes(partitions[i])
-                print "Done with code", fetch_result
+                if fetch_result == 0:
+                    print "Remote files fetched successfully"
+                else:
+                    print "ERROR: Failed to fetch", fetch_result, "files."
+                    # TODO: Bail, since results will be unreliable?
                 p = Process(
                         target=Mapper,
                         args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
@@ -172,10 +178,20 @@ class Job:
             r.join()
 
         # Reducers are done.  Output results.
-        os.rename(os.path.join(self._work_dir, "reducer_0"), self._output_file)
-        if self._num_reducers > 1:
+        to_combine = 1
+        try:
+            os.rename(os.path.join(self._work_dir, "reducer_0"), self._output_file)
+        except OSError, e:
+            if e.errno != errno.EXDEV:
+                raise
+            else:
+                # OSError: [Errno 18] Invalid cross-device link (EXDEV == 18)
+                # We can't rename across devices :( Copy / delete instead.
+                to_combine = 0
+
+        if self._num_reducers > to_combine:
             out = open(self._output_file, "a")
-            for i in range(1, self._num_reducers):
+            for i in range(to_combine, self._num_reducers):
                 # FIXME: this reads the entire reducer output into memory
                 reducer_filename = os.path.join(self._work_dir, "reducer_" + str(i))
                 reducer_output = open(reducer_filename, "r")
@@ -301,15 +317,17 @@ class Context:
 
 
 class TextContext(Context):
-    def __init__(self, out):
+    def __init__(self, out, field_separator="\t", record_separator="\n"):
         self._sink = open(out, "w")
         self._sinks = {0: self._sink}
+        self.field_separator = field_separator
+        self.record_separator = record_separator
 
     def write(self, key, value):
         self._sink.write(str(key))
-        self._sink.write("\t")
+        self._sink.write(self.field_separator)
         self._sink.write(str(value))
-        self._sink.write("\n")
+        self._sink.write(self.record_separator)
 
 
 class Mapper:
@@ -320,7 +338,7 @@ class Mapper:
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
-        if mapfunc is None or not callable(mapfunc):
+        if not callable(mapfunc):
             print "No map function!!!"
             sys.exit(1)
 
@@ -366,7 +384,7 @@ class Mapper:
 
 class Collector(dict):
     def __init__(self, combine_func=None, combine_size=50):
-        if combine_func is not None and callable(combine_func):
+        if callable(combine_func):
             self.combine = combine_func
         else:
             self.combine = self.dummy_combine
@@ -396,7 +414,11 @@ class Reducer:
         context = TextContext(output_file)
         reducefunc = getattr(module, 'reduce', None)
         combinefunc = getattr(module, 'combine', None)
-        if reducefunc is None or not callable(reducefunc):
+        setupreducefunc = getattr(module, 'setup_reduce', None)
+        if callable(setupreducefunc):
+            setupreducefunc(context)
+
+        if not callable(reducefunc):
             print "No reduce function (that's ok)"
         else:
             collected = Collector(combinefunc, Reducer.COMBINE_SIZE)

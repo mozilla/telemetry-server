@@ -10,6 +10,7 @@ import struct
 import gzip
 import StringIO as StringIO
 import os
+import errno
 
 
 # might as well return the size too...
@@ -89,7 +90,7 @@ def makedirs_concurrent(target_dir):
     try:
         os.makedirs(target_dir)
     except OSError, e:
-        # errno 17 means "directory exists". This is a race condition
+        # errno EEXIST == 17 means "directory exists". This is a race condition
         # in a multi-process environment, and can safely be ignored.
-        if e.errno != 17:
+        if e.errno != errno.EEXIST:
             raise

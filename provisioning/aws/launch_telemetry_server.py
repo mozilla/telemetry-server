@@ -126,7 +126,7 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
-        sudo("echo \"    /usr/bin/python -u -m process_incoming.process_incoming_standalone -c /etc/mozilla/telemetry_aws.json -w {1}/work -o {1}/processed -t telemetry/telemetry_schema.json -l /var/log/telemetry/telemetry-incoming.log\" >> {0}".format(c_file, base_dir))
+        sudo("echo \"    /usr/bin/python -u -m process_incoming.process_incoming_standalone -c /etc/mozilla/telemetry_aws.json -w {1}/work -o {1}/processed -t telemetry/telemetry_schema.json -l /var/log/telemetry/telemetry-incoming.log >> /var/log/telemetry-incoming.out 2>&1\" >> {0}".format(c_file, base_dir))
         # NOTE: Don't automatically start/stop this service, since we only want
         #       to start it on "primary" nodes, and we only want to stop it in
         #       safe parts of the process-incoming code.
@@ -149,12 +149,25 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'start on started telemetry-server' >> {0}".format(c_file))
         sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
 
+        # Service configuration for telemetry-analysis
+        c_file = "/etc/init/telemetry-analysis.conf"
+        self.start_suid_script(c_file, self.ssl_user)
+        self.append_suid_script(c_file, "cd {0}".format(code_base))
+        self.append_suid_script(c_file, "python -m analysis.manager -q `cat /etc/telemetry-analysis-input-queue` -w /mnt/work/")
+        self.end_suid_script(c_file)
+        sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
+
+        # Configure boto
+        aws_util.install_file("provisioning/config/boto.cfg", "/etc/boto.cfg")
+
         # Install the default config file:
         sudo("mkdir -p /etc/mozilla")
         prod_aws_config_file = "provisioning/config/telemetry_aws.prod.json"
         if self.config.get("add_aws_credentials", False):
             # add aws credentials
-            prod_aws_config = json.load(prod_aws_config_file)
+            fin = open(prod_aws_config_file)
+            prod_aws_config = json.load(fin)
+            fin.close()
             prod_aws_config["aws_key"] = self.aws_key
             prod_aws_config["aws_secret_key"] = self.aws_secret_key
             sudo("echo '{0}' >> /etc/mozilla/telemetry_aws.json".format(json.dumps(prod_aws_config)))
