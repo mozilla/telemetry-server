@@ -33,6 +33,7 @@ use_seek_journal = true
 type = "SandboxDecoder"
 script_type = "lua"
 filename = "telemetry_server_decoder.lua"
+module_directory = "/usr/share/heka/lua_modules"
 
 [TelemetryServerMetrics]
 type = "SandboxFilter"
