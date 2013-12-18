@@ -15,7 +15,7 @@ include(externals)
 
 find_package (Threads)
 find_package(ZLIB REQUIRED)
-find_package(LZMA)
+find_package(LZMA REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Protobuf 2.3 REQUIRED)
 find_package(Boost 1.54.0 REQUIRED log filesystem system thread unit_test_framework regex)

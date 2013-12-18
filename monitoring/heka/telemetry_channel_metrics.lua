@@ -5,8 +5,8 @@
 require "circular_buffer"
 require "string"
 
-local rows = read_config("rows")
-local sec_per_row = read_config("sec_per_row")
+local rows = read_config("rows") or 1440
+local sec_per_row = read_config("sec_per_row") or 60
 local REQUESTS    = 1
 local TOTAL_SIZE  = 2
 

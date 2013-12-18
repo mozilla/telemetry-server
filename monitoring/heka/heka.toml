@@ -45,32 +45,6 @@ memory_limit = 1000000
 instruction_limit = 1000
 output_limit = 64000
 
-[TelemetryServerMetricsAggregator]
-type = "SandboxFilter"
-message_matcher = "Logger == 'TelemetryServerMetrics' && Fields[payload_type] == 'cbufd'"
-ticker_interval = 60
-script_type = "lua"
-filename = "lua_filters/cbufd_aggregator.lua"
-preserve_data = true
-memory_limit = 8000000
-instruction_limit = 100000
-output_limit = 64000
-
-[TelemetryServerMetricsHostAggregator]
-type = "SandboxFilter"
-message_matcher = "Logger == 'TelemetryServerMetrics' && Fields[payload_type] == 'cbufd'"
-ticker_interval = 60
-script_type = "lua"
-filename = "lua_filters/cbufd_host_aggregator.lua"
-preserve_data = true
-memory_limit = 8000000
-instruction_limit = 100000
-output_limit = 64000
-
-[TelemetryServerMetricsHostAggregator.config]
-max_hosts = 5
-max_rows = 60
-
 [TelemetryChannelMetrics]
 type = "SandboxFilter"
 message_matcher = "Type == 'TelemetryServerLog'"
@@ -106,18 +80,10 @@ type = "DashboardOutput"
 address = ":4352"
 ticker_interval = 10
 working_directory = "dashboard"
-static_directory = "../../../dasher"
+static_directory = "/usr/share/heka/dasher"
 
-#[AMQPOutput]
-#url = "amqp://guest:guest@10.250.68.186"
-#exchange = "testout"
-#exchangeType = "fanout"
-#message_matcher =  "Type == 'heka.sandbox-output' && Fields[payload_type] == 'cbufd'"
-
-#########
-# TESTING
-#########
-[LogOutput]
-type = "LogOutput"
-message_matcher = "FALSE"
-
+[AMQPOutput]
+url = "amqp://guest:guest@10.250.68.186"
+exchange = "testout"
+exchangeType = "fanout"
+message_matcher =  "Type == 'heka.sandbox-output' && Fields[payload_type] == 'cbufd'"

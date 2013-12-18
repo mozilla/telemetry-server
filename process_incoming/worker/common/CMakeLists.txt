@@ -23,7 +23,8 @@ ${PROTOBUF_LIBRARIES}
 ${ZLIB_LIBRARIES}
 ${OPENSSL_LIBRARIES}
 ${CMAKE_THREAD_LIBS_INIT}
-${LZMA_LIBRARIES})
+${LZMA_LIBRARIES}
+-lrt)
 
 configure_file(TelemetryConstants.in.cpp ${CMAKE_CURRENT_BINARY_DIR}/TelemetryConstants.cpp)
 
