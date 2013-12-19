@@ -9,3 +9,4 @@
 .idea/
 histogram_cache/
 histogram_tools.py
+.DS_Store
