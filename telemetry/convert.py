@@ -26,7 +26,6 @@ class BadPayloadError(Exception):
     def __init__(self, msg):
         self.msg = msg
 
-
 class Converter:
     """A class for converting incoming payloads to a more compact form"""
     VERSION_UNCONVERTED = 1
@@ -139,10 +138,12 @@ class Converter:
                         raise ValueError("Missing in payload: info.revision")
                 else:
                     revision = info.get("revision")
+                    if "histograms" not in json_dict:
+                        raise ValueError("Missing in payload: histograms")
                     try:
                         json_dict["histograms"] = self.rewrite_hists(revision, json_dict["histograms"])
-                    except KeyError:
-                        raise ValueError("Missing in payload: histograms")
+                    except DefinitionException, e:
+                        raise ValueError("Bad Histogram definition for revision {0}: {1}".format(revision, e))
                 json_dict["ver"] = Converter.VERSION_CONVERTED
             elif json_dict["ver"] != Converter.VERSION_CONVERTED:
                 raise ValueError("Unknown payload version: " + str(json_dict["ver"]))
