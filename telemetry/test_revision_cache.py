@@ -45,5 +45,6 @@ try:
     check_one_url('http://hg.mozilla.org/projects/ux/rev/b7d620677157')
     check_one_url('http://hg.mozilla.org/integration/fx-team/rev/dadec41b7cbc')
     check_one_url('http://hg.mozilla.org/integration/mozilla-inbound/rev/85cad21c5d48')
+    check_one_url('http://hg.mozilla.org/releases/mozilla-esr24/rev/bba10d0ca256')
 finally:
     shutil.rmtree(cache_dir)
