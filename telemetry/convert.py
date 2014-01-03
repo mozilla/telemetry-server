@@ -144,6 +144,8 @@ class Converter:
                         json_dict["histograms"] = self.rewrite_hists(revision, json_dict["histograms"])
                     except DefinitionException, e:
                         raise ValueError("Bad Histogram definition for revision {0}: {1}".format(revision, e))
+                    except KeyError, e:
+                        raise ValueError("Bad Histogram key for revision {0}: {1}".format(revision, e))
                 json_dict["ver"] = Converter.VERSION_CONVERTED
             elif json_dict["ver"] != Converter.VERSION_CONVERTED:
                 raise ValueError("Unknown payload version: " + str(json_dict["ver"]))
