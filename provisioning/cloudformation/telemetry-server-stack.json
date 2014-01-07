@@ -42,12 +42,12 @@
 
   "Mappings": {
     "Region2WebServerAMI": {
-      "us-west-2": { "AMIpv": "ami-22e98c12" }
+      "us-west-2": { "AMIpv": "ami-cc5e38fc" }
     },
     "Region2ProcessIncomingAMI": {
       "us-west-2": {
-        "AMIpv":  "ami-22e98c12",
-        "AMIhvm": "ami-6697f256"
+        "AMIpv":  "ami-cc5e38fc",
+        "AMIhvm": "ami-1e5f392e"
       }
     }
   },
@@ -513,7 +513,7 @@
         "ImageId":            { "Fn::FindInMap": [ "Region2ProcessIncomingAMI", { "Ref": "AWS::Region" }, "AMIhvm" ] },
         "SecurityGroups":     [ { "Ref": "ProcessIncomingSecurityGroup" } ],
         "IamInstanceProfile": { "Ref": "ProcessIncomingIAMProfile" },
-        "InstanceType":       "c3.2xlarge",
+        "InstanceType":       "c3.xlarge",
         "SpotPrice":          "0.20",
         "BlockDeviceMappings": [
           { "DeviceName": "/dev/xvdb", "VirtualName": "ephemeral0" },
