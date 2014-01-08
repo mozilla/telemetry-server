@@ -126,7 +126,7 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
-        sudo("echo \"    /usr/bin/python -u -m process_incoming.process_incoming_standalone -c /etc/mozilla/telemetry_aws.json -w {1}/work -o {1}/processed -t telemetry/telemetry_schema.json -l /var/log/telemetry/telemetry-incoming.log >> /var/log/telemetry-incoming.out 2>&1\" >> {0}".format(c_file, base_dir))
+        sudo("echo \"    /usr/bin/python -u -m process_incoming.process_incoming_standalone -c /etc/mozilla/telemetry_aws.json -w {1}/work -o {1}/processed -t telemetry/telemetry_schema.json -l /var/log/telemetry/telemetry-incoming.log >> /var/log/telemetry/telemetry-incoming.out 2>&1\" >> {0}".format(c_file, base_dir))
         # NOTE: Don't automatically start/stop this service, since we only want
         #       to start it on "primary" nodes, and we only want to stop it in
         #       safe parts of the process-incoming code.
