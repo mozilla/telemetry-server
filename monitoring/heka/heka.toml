@@ -2,7 +2,7 @@
 maxprocs = 4
 base_dir = "."
 max_timer_inject = 100
-max_process_duration = 500000
+max_process_duration = 1000000
 
 [ProtobufDecoder]
 encoding_name = "PROTOCOL_BUFFER"
