@@ -38,7 +38,7 @@ class TelemetryServerLauncher(Launcher):
             sudo("make install")
 
     def heka_pkg_name(self):
-        return "heka-0_4_0-linux-amd64.deb"
+        return "heka_0.5.0_amd64.deb"
 
     def install_heka(self):
         heka_pkg = self.heka_pkg_name()
