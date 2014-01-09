@@ -2,8 +2,11 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-local rows = read_config("rows")
-local sec_per_row = read_config("sec_per_row")
+require "circular_buffer"
+require "string"
+
+local rows = read_config("rows") or 1440
+local sec_per_row = read_config("sec_per_row") or 60
 local REQUESTS    = 1
 local TOTAL_SIZE  = 2
 
@@ -12,7 +15,7 @@ channels = {}
 local function add_channel(channel)
     channels[channel] = circular_buffer.new(rows, 2, sec_per_row, true)
     local c = channels[channel]
-    c:set_header(REQUESTS, "Requests") 
+    c:set_header(REQUESTS, "Requests")
     c:set_header(TOTAL_SIZE, "Total Size", "KiB")
     return c
 end
@@ -28,7 +31,7 @@ function process_message ()
     if not cnt then return 0 end -- outside the buffer
     if rs then
         rs = rs / 1024
-    else     
+    else
         rs = 0
     end
     all:add(ts, TOTAL_SIZE, rs)
