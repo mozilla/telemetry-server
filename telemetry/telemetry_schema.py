@@ -81,6 +81,12 @@ class TelemetrySchema:
         dims.append(file_dims.pop(0))
         return dims
 
+    def get_dimension_map(self, dims):
+        dim_map = {}
+        for i in range(len(self._dimensions)):
+            dim_map[self._dimensions[i]["field_name"]] = dims[i]
+        return dim_map
+
     def get_filename(self, basedir, dimensions, version=1):
         clean_dims = self.apply_schema(dimensions)
         submission_date = clean_dims.pop()
