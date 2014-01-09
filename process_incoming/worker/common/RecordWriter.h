@@ -98,8 +98,8 @@ private:
   struct Metrics {
     Metrics() :
       mGeneratedFiles("Generated Files"),
-      mUncompressedSize("Uncompressed Size"),
-      mCompressedSize("Compressed Size") { }
+      mUncompressedSize("Uncompressed Size", "B"),
+      mCompressedSize("Compressed Size", "B") { }
 
     Metric mGeneratedFiles;
     Metric mUncompressedSize;

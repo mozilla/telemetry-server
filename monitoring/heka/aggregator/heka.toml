@@ -1,0 +1,95 @@
+[hekad]
+maxprocs = 4
+base_dir = "." # TODO fix when running on the official aggregator box
+max_timer_inject = 100
+max_process_duration = 500000
+
+[ProtobufDecoder]
+encoding_name = "PROTOCOL_BUFFER"
+
+[TCP:5565]
+type = "TcpInput"
+parser_type = "message.proto"
+decoder = "ProtobufDecoder"
+address = ":5565"
+	[TCP:5565.signer.telemetry_0]
+	hmac_key = "TODO change on deploy" # TODO update on deploy
+
+[TelemetrySandboxManager]
+type = "SandboxManagerFilter"
+message_signer = "telemetry"
+message_matcher = "Type == 'heka.control.sandbox'"
+working_directory = "sandbox"
+max_filters = 10
+
+[AMQPInput]
+url = "amqp://guest:guest@10.250.68.186"
+exchange = "testout"
+exchangeType = "fanout"
+decoder="ProtobufDecoder"
+
+[Dashboard]
+type = "DashboardOutput"
+address = ":4352"
+ticker_interval = 10
+working_directory = "dashboard"
+static_directory = "../../../dasher" # TODO fix when running on the official aggregator box
+
+[TelemetryServerMetricsAggregator]
+type = "SandboxFilter"
+message_matcher = "Logger == 'TelemetryServerMetrics' && Fields[payload_type] == 'cbufd'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/cbufd_aggregator.lua"
+preserve_data = true
+memory_limit = 8000000
+instruction_limit = 100000
+output_limit = 64000
+
+[TelemetryServerMetricsHostAggregator]
+type = "SandboxFilter"
+message_matcher = "Logger == 'TelemetryServerMetrics' && Fields[payload_type] == 'cbufd'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/cbufd_host_aggregator.lua"
+preserve_data = true
+memory_limit = 8000000
+instruction_limit = 100000
+output_limit = 64000
+
+[TelemetryServerMetricsHostAggregator.config]
+max_hosts = 5
+rows = 60
+
+[TelemetryChannelMetricsAggregator]
+type = "SandboxFilter"
+message_matcher = "Logger == 'TelemetryChannelMetrics' && Fields[payload_type] == 'cbufd'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/cbufd_aggregator.lua"
+preserve_data = true
+memory_limit = 8000000
+instruction_limit = 100000
+output_limit = 64000
+
+[TelemetryChannelMetrics60DaysAggregator]
+type = "SandboxFilter"
+message_matcher = "Logger == 'TelemetryChannelMetrics' && Fields[payload_type] == 'cbufd'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/cbufd_aggregator.lua"
+preserve_data = true
+memory_limit = 8000000
+instruction_limit = 100000
+output_limit = 64000
+
+[TelemetryConvertMetrics]
+type = "SandboxFilter"
+message_matcher = "Type == 'telemetry.convert'"
+ticker_interval = 60
+script_type = "lua"
+filename = "telemetry_convert.lua"
+preserve_data = true
+memory_limit = 1000000 
+instruction_limit = 10000
+output_limit = 64000
