@@ -120,6 +120,11 @@ def list_partitions(bucket, prefix='', level=0, schema=None, include_keys=False)
         if level > 3:
             # split the last couple of partition components by "." instead of "/"
             partitions.extend(partitions.pop().split(".", 2))
+        if level >= len(partitions):
+            # Looks like a bogus file... let's skip it. For example we don't
+            # want to get tripped up by the 'telemetry_schema.json' file in the
+            # bucket root.
+            continue
         if schema is None or schema.is_allowed(partitions[level], allowed_values[level]):
             if level >= 5:
                 if include_keys:
