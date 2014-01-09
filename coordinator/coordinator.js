@@ -101,17 +101,8 @@ function filter2sql(filter) {
   return { sql: query, params: params };
 }
 
-
-required_files_params = ["filter"];
 function filter_files(req, res, next) {
   console.log(req.params);
-  // for (var i = required_files_params.length - 1; i >= 0; i--) {
-  //   param_name = required_files_params[i];
-  //   if (!req.params[param_name]) {
-  //     res.send("Missing parameter: " + param_name);
-  //     return next();
-  //   }
-  // }
   if (!req.params.filter) {
     try {
       req.params.filter = JSON.parse(req.query.filter);
