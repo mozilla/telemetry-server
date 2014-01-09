@@ -2,7 +2,7 @@
 maxprocs = 4
 base_dir = "." # TODO fix when running on the official aggregator box
 max_timer_inject = 100
-max_process_duration = 500000
+max_process_duration = 1000000
 
 [ProtobufDecoder]
 encoding_name = "PROTOCOL_BUFFER"
@@ -33,7 +33,7 @@ type = "DashboardOutput"
 address = ":4352"
 ticker_interval = 10
 working_directory = "dashboard"
-static_directory = "../../../dasher" # TODO fix when running on the official aggregator box
+static_directory = "dasher" # TODO fix when running on the official aggregator box
 
 [TelemetryServerMetricsAggregator]
 type = "SandboxFilter"
