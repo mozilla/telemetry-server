@@ -72,13 +72,18 @@ class TelemetrySchema:
 
         # Chop off the base dir and one path separator
         dimfile = canonical_file[len(canonical_base)+1:]
-        dims = dimfile.split(os.path.sep)
+        dims = dimfile.split("/")
         filename = dims.pop()
         file_dims = filename.split(".")
 
         # Last two dimensions are in the filename, separated by dots:
         dims.append(file_dims.pop(0))
         dims.append(file_dims.pop(0))
+
+        # To be even more strict, we could make sure that the number of
+        # dimensions matches exactly. That seems overly restrictive for now.
+        if len(dims) < len(self._dimensions):
+            raise ValueError("Error: file '%s' has too few dimensions. Expected %d but found %d." % (filename, len(self._dimensions), len(dims)))
         return dims
 
     def get_dimension_map(self, dims):
