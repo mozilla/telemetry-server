@@ -1,56 +1,59 @@
 import sqlite3
+import traceback
 from boto.s3.connection import S3Connection
+from datetime import datetime
 from telemetry.telemetry_schema import TelemetrySchema
 import simplejson as json
 import telemetry.util.s3 as s3u
+import telemetry.util.timer as timer
 
 # Update all files on or after submission date.
 def update_published_files(conn, submission_date):
     s3 = S3Connection()
     bucket_name = "telemetry-published-v1"
-    sql_check = "SELECT count(*) FROM published_files WHERE file_name = ?;"
     bucket = s3.get_bucket(bucket_name)
     schema_key = bucket.get_key("telemetry_schema.json")
     schema_string = schema_key.get_contents_as_string()
-    schema_obj = json.loads(schema_string)
     schema = TelemetrySchema(json.loads(schema_string))
-    filter_today_obj = json.loads(schema_string)
-    for dim in filter_today_obj["dimensions"]:
-        if dim["field_name"] == "submission_date":
-            dim["allowed_values"] = { "min": submission_date }
-        #elif dim["field_name"] == "reason":
-        #    # FIXME: just for debugging (much faster):
-        #    dim["allowed_values"] = ["android-anr-report"]
-        else:
-            dim["allowed_values"] = "*"
-    filter_today = TelemetrySchema(filter_today_obj)
     new_count = 0
     total_count = 0
-    # FIXME: It's faster just to list everything than it is to do "list_partitions"
-    for k in s3u.list_partitions(bucket, schema=filter_today, include_keys=True):
+    start_time = datetime.now()
+    # It's faster just to list everything than it is to do "list_partitions" on
+    # such an unselective filter
+    for k in bucket.list():
         total_count += 1
+        if total_count % 1000 == 0:
+            print "Looked at", total_count, "total records in", timer.delta_sec(start_time), "seconds, added", new_count, ". Last key was", k.name
         try:
-            c.execute(sql_check, (k.name,))
+            try:
+                dims = schema.get_dimension_map(schema.get_dimensions(".", k.name))
+            except ValueError, e:
+                print "Skipping file with invalid dimensions:", k.name, "-", e
+                continue
+            if dims["submission_date"] < submission_date:
+                #print "Skipping old file:", k.name
+                continue
+            c.execute(sql_file_exists, (k.name,))
             result = c.fetchone()
             if result[0] == 0:
-                print "Missing:", k.name
-                insert_one_published_file(schema, bucket_name, k, c)
+                print "Adding new file:", k.name
+                insert_one_published_file(schema, bucket_name, k, c, dims)
                 new_count += 1
                 if new_count % 200 == 0:
                     print "Inserted", new_count, "records, last one was", k.name
                     conn.commit()
             else:
-                print "Present:", k.name
+                print "Skipping new but already present file:", k.name
         except Exception, e:
             print "Error with key", k.name, ":", e
-        if total_count % 1000 == 0:
-            print "Of", total_count, "total records, added", new_count, ". Last key was", k.name
+            traceback.print_exc()
+    conn.commit()
+    print "Overall, added", new_count, "of", total_count, "in", timer.delta_sec(start_time), "seconds"
 
 def populate_published_files(conn):
     s3 = S3Connection()
     bucket_name = "telemetry-published-v1"
     bucket = s3.get_bucket(bucket_name)
-
     schema_key = bucket.get_key("telemetry_schema.json")
     schema_string = schema_key.get_contents_as_string()
     schema = TelemetrySchema(json.loads(schema_string))
@@ -60,7 +63,8 @@ def populate_published_files(conn):
     # Clear out existing records
     c.execute("DELETE FROM published_files")
 
-    # Now fill the tabl
+    start_time = datetime.now()
+    # Now fill the table
     for k in bucket.list():
         count += 1
         try:
@@ -69,15 +73,13 @@ def populate_published_files(conn):
             print "error in record", count, "key was:", k.name, ":", e
             fails.append(k.name)
         if count % 1000 == 0:
-            print "Inserted", count, "records, last one was", k.name
+            print "Inserted", count, "records in", timer.delta_sec(start_time), "seconds, last one was", k.name
             conn.commit()
-        #if count > 3000:
-        #    break
-
     conn.commit()
 
-def insert_one_published_file(schema, bucket_name, key, cursor):
-    dims = schema.get_dimension_map(schema.get_dimensions(".", key.name))
+def insert_one_published_file(schema, bucket_name, key, cursor, dims=None):
+    if dims is None:
+        dims = schema.get_dimension_map(schema.get_dimensions(".", key.name))
     bla = c.execute(sql_insert_published_file, (
         bucket_name,
         dims.get("reason"),
@@ -93,9 +95,10 @@ def insert_one_published_file(schema, bucket_name, key, cursor):
 
 
 conn = sqlite3.connect('coordinator.db')
+# TODO: PRAGMA foreign_keys = ON;
 c = conn.cursor()
 
-sql_create_table = '''
+sql_create_published_files = '''
 CREATE TABLE IF NOT EXISTS published_files (
  file_id            INTEGER PRIMARY KEY,
  bucket_name        TEXT        NOT NULL,
@@ -111,6 +114,23 @@ CREATE TABLE IF NOT EXISTS published_files (
  file_md5           TEXT,
  view_count         INT UNSIGNED DEFAULT 0,
  ref_count          INT UNSIGNED DEFAULT 0
+);
+'''
+sql_create_tasks = '''
+CREATE TABLE IF NOT EXISTS tasks (
+ task_id            INTEGER PRIMARY KEY,
+ name               TEXT        NOT NULL,
+ code_uri           TEXT        NOT NULL,
+ owner_email        VARCHAR(100) NOT NULL,
+ status             VARCHAR(20) NOT NULL DEFAULT 'pending',
+ claimed_until      DATETIME, -- NULL means not claimed yet.
+ retries_remaining  INT UNSIGNED DEFAULT 5
+);
+'''
+sql_create_task_files = '''
+CREATE TABLE IF NOT EXISTS task_files (
+ task_id            INTEGER NOT NULL REFERENCES tasks(task_id),
+ file_id            INTEGER NOT NULL REFERENCES published_files(file_id)
 );
 '''
 
@@ -132,19 +152,33 @@ INSERT INTO published_files (
 
 sql_file_exists = "SELECT count(*) FROM published_files WHERE file_name = ?;"
 
+sql_create_file_name_index          = "CREATE UNIQUE INDEX published_files_file_name_idx ON published_files (file_name);"
+sql_create_reason_index             = "CREATE INDEX published_files_reason_idx ON published_files (reason);"
+sql_create_app_name_index           = "CREATE INDEX published_files_app_name_idx ON published_files (app_name);"
+sql_create_app_update_channel_index = "CREATE INDEX published_files_app_update_channel_idx ON published_files (app_update_channel);"
+sql_create_app_version_index        = "CREATE INDEX published_files_app_version_idx ON published_files (app_version);"
+sql_create_app_build_id_index       = "CREATE INDEX published_files_app_build_id_idx ON published_files (app_build_id);"
+sql_create_submission_date_index    = "CREATE INDEX published_files_submission_date_idx ON published_files (submission_date);"
+
 # Create table
-c.execute(sql_create_table)
+print "Creating table (if needed)..."
+c.execute(sql_create_published_files)
+c.execute(sql_create_tasks)
+c.execute(sql_create_task_files)
 
-c.execute("SELECT max(submission_date) FROM published_files;")
-
-# TODO: this seems to be -1 for the above.
-if c.rowcount == 1:
-    submission_date = c.fetchone()
-    # TODO: update based on a filter that sets min submission_date to ^^
-    update_published_files(conn, submission_date)
-else:
-    # TODO: There aren't any rows in the table, do a mass populate.
+print "Checking if table is empty..."
+c.execute("SELECT count(*) FROM published_files;");
+countrow = c.fetchone();
+if countrow[0] == 0:
+    print "Table was empty, populating from scratch"
     populate_published_files(conn)
+else:
+    print "Table was not empty (contained", countrow[0], "rows). Checking last update date..."
+    c.execute("SELECT max(submission_date) FROM published_files;")
+    submissionrow = c.fetchone()
+    submission_date = submissionrow[0]
+    print "Updating everything on or after", submission_date
+    update_published_files(conn, submission_date)
 
 # Save the changes
 conn.commit()
