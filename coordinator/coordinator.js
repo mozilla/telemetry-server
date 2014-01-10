@@ -2,10 +2,38 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/*
+ * Coordinator usage:
+ *   - You:
+ *      I want to run "histogram analysis" for "20140101": run launcher.py with args
+ *        name="histogram-analysis-v1"
+ *        owner="mreid@mozilla.com"
+ *        filter="somefile-with-date-in.json"
+ *        code="s3://pathto/code.tar.gz"
+ *   - Coordinator:
+ *        looks in "published_files" for matches of filter
+ *        splits list into groups of X MB, creates an entry in "tasks"
+ *        inserts files into task_files referencing ^
+ *        scales the autoscale group to target based on number / size of tasks (some heuristic)
+ *   - Worker node: manager.py => asks coordinator for task(s)
+ *      Coordinator sets the taken_until field... and returns list of files + task info
+ *      worker success:
+ *        worker processes files, uploads to S3
+ *        worker informs coordinator "I'm done"
+ *        coordinator marks task status as "done"
+ *        coordinator tells autoscale group to scale down by 1 (or something)
+ *      worker fail:
+ *        task becomes available again after timeout and retries is decremented
+ *        when we run out of retries, inform owner that the task is broken
+ *   - Task-specific aggregator node:
+ *      Get all "done" tasks from coordinator with name="histogram analysis"
+ */
+
+var bunyan = require('bunyan');
 var restify = require('restify');
 var sqlite3 = require('sqlite3').verbose();
-var db = new sqlite3.Database("./coordinator.db");
-
+var db = new sqlite3.Database("./coordinator.test.db");
+var log = bunyan.createLogger({name: "coordinator"});
 
 function schema2db(field_name) {
   if (field_name == "reason" || field_name == "submission_date")
@@ -36,21 +64,21 @@ function filter2sql(filter) {
   var conditions = "";
   var params = [];
   for (var i = filter.dimensions.length - 1; i >= 0; i--) {
-    //console.log("Checking dimension " + i);
+    log.trace("Checking dimension " + i);
     var dim = filter.dimensions[i];
     if (dim.allowed_values === "*") {
       // Allow all values.  Doesn't actually filter, so skip it.
-      console.log("Skipping non-filtering " + dim.field_name + " = *");
+      log.info("Skipping non-filtering " + dim.field_name + " = *");
       continue;
     }
     var db_field = schema2db(dim.field_name);
-    //console.log("Getting dimension for " + dim.field_name + " = " + db_field);
+    log.trace("Getting dimension for " + dim.field_name + " = " + db_field);
     if (!db_field) {
       // Invalid field name.  TODO: exception
       return null;
     }
     var filter_type = Object.prototype.toString.call(dim.allowed_values);
-    //console.log("Type of " + dim.field_name + " is " + filter_type);
+    log.trace("Type of " + dim.field_name + " is " + filter_type);
     var cond = "";
     if (filter_type === "[object Array]") {
       cond += db_field;
@@ -76,7 +104,7 @@ function filter2sql(filter) {
         cond += db_field + " <= ?";
         params.push(dim.allowed_values.max);
       } else {
-        console.log("Found a meaningless allowed_values object: " + dim);
+        log.info("Found a meaningless allowed_values object: " + dim);
       }
     } else {
       // Unknown... use it directly and let the database figure it out.
@@ -97,17 +125,17 @@ function filter2sql(filter) {
   for (var i = params.length - 1; i >= 0; i--) {
     params[i] = sanitize(params[i]);
   };
-  query += " ORDER BY file_name;";
+  query += " ORDER BY file_name LIMIT 10;";
   return { sql: query, params: params };
 }
 
-function filter_files(req, res, next) {
-  console.log(req.params);
+function get_filtered_files(req, res, next) {
+  log.info(req.params);
   if (!req.params.filter) {
     try {
       req.params.filter = JSON.parse(req.query.filter);
     } catch (e) {
-      console.log("Boo!");
+      log.info("Boo!");
     }
   }
   if (!req.params.filter) {
@@ -115,25 +143,17 @@ function filter_files(req, res, next) {
     return next();
   }
   var filter = req.params.filter;
-  var query = filter2sql(filter);
 
-  console.log("running query: " + JSON.stringify(query));
-
+  // Force the type to application/json since we'll be streaming out the rows
+  // manually.
   res.setHeader('content-type', 'application/json');
-  console.log("a");
-
-  // TODO: send content-type:application/json
-  //res.writeHead();
-  console.log("b");
   res.write('{ "files": [');
-  console.log("c");
   var first = true;
-  db.each(query.sql, query.params, function(err, row) {
+  filter_files(filter, function(err, row) {
+    // Process each file record
     if (err) {
-      console.log("Found an err: " + JSON.stringify(err));
+      log.info("Found an err: " + JSON.stringify(err));
       return next(err);
-    } else {
-      console.log("Found a file: " + JSON.stringify(row));
     }
     if (first) {
       first = false;
@@ -142,21 +162,177 @@ function filter_files(req, res, next) {
     }
     res.write('"' + row.file_name + "\"\n");
   }, function(err, rowcount) {
+    // End of files, finish up.
     if (err) {
-      console.log("Found an err on completion: " + JSON.stringify(err));
+      log.info("Found an err on completion: " + JSON.stringify(err));
       return next(err);
-    }
-    else {
-      console.log("Found " + rowcount + " rows");
     }
     res.write('], "row_count": ' + rowcount + '}');
     res.end();
     return next();
   });
-  //job_script = req.params.job_script;
+}
 
-  //res.send("found some files based on your filter: " + JSON.stringify(query));
-  //return next();
+function filter_files(filter, onfile, onend) {
+  // TODO: iterate through matching files calling onfile(err, row) for each, then call onend(err, rowcount)
+  var query = filter2sql(filter);
+  log.info("running query: " + JSON.stringify(query));
+  db.each(query.sql, query.params, function(err, row) {
+    onfile(err, row);
+  }, function(err, rowcount) {
+    onend(err, rowcount);
+  });
+}
+
+var BATCH_SIZE = 500 * 1024 * 1024;
+var required_task_fields = ["name", "owner", "filter", "code_uri"];
+function create_task(req, res, next) {
+  for (var i = required_task_fields.length - 1; i >= 0; i--) {
+    param_name = required_task_fields[i];
+    if (!req.params[param_name]) {
+      res.send(400, "Missing parameter: " + param_name);
+      return next();
+    }
+  }
+
+  // Get files matching filter
+  // Split into tasks
+  // Insert groups of files into task_files
+  tasks = []
+  current_batch_size = 0;
+  current_batch = [];
+  function add_task(err, task_id) {
+    if (err) {
+      log.info("error adding task");
+      return next(err);
+    }
+    log.info("Adding task id: " + task_id);
+    tasks.push(task_id);
+  }
+  filter_files(req.params.filter, function(err, row){
+    if (current_batch_size > BATCH_SIZE) {
+      save_batch(req.params.name, req.params.owner, req.params.code_uri, current_batch, add_task);
+      log.info("saved intermediate batch");
+      current_batch_size = 0;
+      current_batch = [];
+    }
+    current_batch_size += row.file_size;
+    current_batch.push(row.file_id);
+  }, function(err, count){
+      if (current_batch.length > 0) {
+        save_batch(req.params.name, req.params.owner, req.params.code_uri, current_batch, function(err, task_id) {
+          if (err) {
+            return next(err);
+          }
+          tasks.push(task_id);
+          log.info("saved final batch");
+          log.info(JSON.stringify(tasks));
+          var task_info = {name: req.params.name, tasks: tasks};
+          // TODO: email task info to owner_email
+          // TODO: spin up some nodes to tackle this task.
+          res.send(task_info);
+        });
+      }
+      return next();
+  });
+}
+
+var sql_create_task      = 'INSERT INTO tasks (name, owner_email, code_uri) VALUES (?,?,?);';
+var sql_create_task_file = 'INSERT INTO task_files (task_id, file_id) VALUES (?,?);';
+function save_batch(name, owner, code_uri, files, onfinish) {
+  log.info("Adding a task with " + files.length + " files");
+  var stmt = db.prepare(sql_create_task_file);
+  db.run(sql_create_task, name, owner, code_uri, function(err) {
+    if (err) {
+      // ABORT! there was an error
+      onfinish(err, null);
+    } else {
+      var task_id = this.lastID;
+      // for file_id in files:
+      //   INSERT INTO task_files (task_id, file_id) VALUES (?, ?);
+      for (var i = files.length - 1; i >= 0; i--) {
+        stmt.run(task_id, files[i]);
+      }
+      stmt.finalize();
+      onfinish(null, task_id);
+    }
+  });
+}
+
+var sql_get_task_info_by_name = 'SELECT * FROM tasks WHERE name = ? ORDER BY task_id;';
+function get_task_info_by_name(req, res, next) {
+  // Get information about tasks with the specified name
+  if (!req.params.name) {
+    res.send(400, "Missing 'name' parameter");
+    return next();
+  }
+  log.info("Getting task info for " + req.params.name);
+  var task_info = {name: req.params.name, tasks: []};
+  db.each(sql_get_task_info_by_name, req.params.name, function(err, row){
+    if (err) {
+      log.info("error getting tasks");
+      return next(err);
+    }
+    log.info("Found a task: " + row.name + ", " + row.task_id);
+    task_info.tasks.push({
+      id: row.task_id,
+      code_uri: row.code_uri,
+      owner: row.owner_email,
+      status: row.status,
+      claimed_until: row.claimed_until,
+      retries_remaining: row.retries_remaining,
+    });
+  }, function(err, rowcount){
+    if (err) {
+      log.info("error on last get task");
+      return next(err);
+    }
+    log.info("Found " + rowcount + " rows for " + req.params.name);
+    task_info.num_tasks = rowcount;
+    res.send(task_info);
+    return next();
+  });
+}
+
+// There should only ever be at most one, but might as well make sure.
+var sql_get_task_info_by_id = 'SELECT * FROM tasks WHERE name = ? AND task_id = ? LIMIT 1;';
+var required_get_task_fields = ["name", "task_id"];
+function get_task_info(req, res, next) {
+  // Get information about the task with the specified name and id
+  for (var i = required_get_task_fields.length - 1; i >= 0; i--) {
+    param_name = required_get_task_fields[i];
+    if (!req.params[param_name]) {
+      res.send(400, "Missing parameter: " + param_name);
+      return next();
+    }
+  }
+
+  log.info("Getting task info for " + req.params.name + " id: " + req.params.task_id)
+
+  var task_info = {name: req.params.name, id: req.params.task_id};
+  db.each(sql_get_task_info_by_id, req.params.name, req.params.task_id, function(err, row){
+    if (err) {
+      log.info("error getting task by id");
+      return next(err);
+    }
+    log.info("Found a task: " + row.name + ", " + row.task_id);
+    task_info.code_uri = row.code_uri;
+    task_info.owner = row.owner_email;
+    task_info.status = row.status;
+    task_info.claimed_until = row.claimed_until;
+    task_info.retries_remaining = row.retries_remaining;
+  }, function(err, rowcount){
+    if (err) {
+      log.info("error finishing get task by id");
+      return next(err);
+    }
+    if (rowcount == 0) {
+      res.send(404, "No tasks found");
+    } else {
+      res.send(task_info);
+    }
+    return next();
+  });
 }
 
 // TODO: load up the schema from the S3 bucket.
@@ -166,9 +342,12 @@ var server = restify.createServer({
 server.use(restify.bodyParser());
 server.use(restify.queryParser({ mapParams: false }));
 server.use(restify.requestLogger());
-server.post('/files', filter_files);
-server.get('/files', filter_files);
+server.post('/files', get_filtered_files);
+server.get('/files', get_filtered_files);
+server.post('/tasks', create_task);
+server.get('/tasks/:name', get_task_info_by_name)
+server.get('/tasks/:name/:task_id', get_task_info)
 
 server.listen(8080, function() {
-  console.log('%s listening at %s', server.name, server.url)
+  log.info('%s listening at %s', server.name, server.url)
 });
