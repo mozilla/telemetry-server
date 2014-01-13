@@ -20,6 +20,7 @@ def update_published_files(conn, submission_date):
     new_count = 0
     total_count = 0
     start_time = datetime.now()
+    c = conn.cursor()
     # It's faster just to list everything than it is to do "list_partitions" on
     # such an unselective filter
     for k in bucket.list():
@@ -59,6 +60,7 @@ def populate_published_files(conn):
     schema_key = bucket.get_key("telemetry_schema.json")
     schema_string = schema_key.get_contents_as_string()
     schema = TelemetrySchema(json.loads(schema_string))
+    c = conn.cursor()
     count = 0
     fails = []
 
@@ -197,7 +199,7 @@ def main():
         for field in indexed_fields:
             print "Creating index for", field
             c.execute("CREATE INDEX published_files_{0}_idx ON published_files ({0});".format(field))
-
+    conn.commit()
 
     print "Checking if table is empty..."
     c.execute("SELECT count(*) FROM published_files;");
