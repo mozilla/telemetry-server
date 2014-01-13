@@ -147,7 +147,7 @@ def main():
      code_uri           TEXT        NOT NULL,
      owner_email        VARCHAR(100) NOT NULL,
      status             VARCHAR(20) NOT NULL DEFAULT 'pending',
-     claimed_until      DATETIME, -- NULL means not claimed yet.
+     claimed_until      TIMESTAMP WITH TIME ZONE, -- NULL means not claimed yet.
      retries_remaining  INT DEFAULT 5
     );
     '''
