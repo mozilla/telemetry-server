@@ -1,4 +1,5 @@
-import sqlite3
+import psycopg2
+import sys
 import traceback
 from boto.s3.connection import S3Connection
 from datetime import datetime
@@ -94,94 +95,128 @@ def insert_one_published_file(schema, bucket_name, key, cursor, dims=None):
         key.etag[1:-1]))
 
 
-conn = sqlite3.connect('coordinator.db')
-# TODO: PRAGMA foreign_keys = ON;
-c = conn.cursor()
+def main():
+    parser = argparse.ArgumentParser(description="Populate/update the S3 file cache")
+    parser.add_argument("--db-host")
+    parser.add_argument("--db-user")
+    parser.add_argument("--db-port")
+    parser.add_argument("--db-pass")
+    parser.add_argument("--db-name")
+    parser.add_argument("--create-indexes", action="store_true")
+    args = parser.parse_args()
 
-sql_create_published_files = '''
-CREATE TABLE IF NOT EXISTS published_files (
- file_id            INTEGER PRIMARY KEY,
- bucket_name        TEXT        NOT NULL,
- reason             VARCHAR(50) NOT NULL,
- app_name           VARCHAR(50) NOT NULL,
- app_update_channel VARCHAR(50) NOT NULL,
- app_version        VARCHAR(50) NOT NULL,
- app_build_id       VARCHAR(50) NOT NULL,
- submission_date    VARCHAR(8)  NOT NULL,
- log_version        VARCHAR(10) NOT NULL,
- file_name          TEXT,
- file_size          BIGINT      NOT NULL,
- file_md5           TEXT,
- view_count         INT UNSIGNED DEFAULT 0,
- ref_count          INT UNSIGNED DEFAULT 0
-);
-'''
-sql_create_tasks = '''
-CREATE TABLE IF NOT EXISTS tasks (
- task_id            INTEGER PRIMARY KEY,
- name               TEXT        NOT NULL,
- code_uri           TEXT        NOT NULL,
- owner_email        VARCHAR(100) NOT NULL,
- status             VARCHAR(20) NOT NULL DEFAULT 'pending',
- claimed_until      DATETIME, -- NULL means not claimed yet.
- retries_remaining  INT UNSIGNED DEFAULT 5
-);
-'''
-sql_create_task_files = '''
-CREATE TABLE IF NOT EXISTS task_files (
- task_id            INTEGER NOT NULL REFERENCES tasks(task_id),
- file_id            INTEGER NOT NULL REFERENCES published_files(file_id)
-);
-'''
+    connection_string = ""
+    if hasattr(args, "db_name"):
+        connection_string += "dbname={0} ".format(args.db_name)
+    if hasattr(args, "db_host"):
+        connection_string += "host={0} ".format(args.db_host)
+    if hasattr(args, "db_port"):
+        connection_string += "port={0} ".format(args.db_port)
+    if hasattr(args, "db_user"):
+        connection_string += "user={0} ".format(args.db_user)
+    if hasattr(args, "db_pass"):
+        connection_string += "password={0} ".format(args.db_pass)
 
-sql_insert_published_file = '''
-INSERT INTO published_files (
- bucket_name        ,
- reason             ,
- app_name           ,
- app_update_channel ,
- app_version        ,
- app_build_id       ,
- submission_date    ,
- log_version        ,
- file_name          ,
- file_size          ,
- file_md5
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-'''
+    conn = psycopg2.connect(connection_string.strip())
+    # TODO: PRAGMA foreign_keys = ON;
+    c = conn.cursor()
 
-sql_file_exists = "SELECT count(*) FROM published_files WHERE file_name = ?;"
+    sql_create_published_files = '''
+    CREATE TABLE IF NOT EXISTS published_files (
+     file_id            SERIAL PRIMARY KEY,
+     bucket_name        TEXT        NOT NULL,
+     reason             VARCHAR(50) NOT NULL,
+     app_name           VARCHAR(50) NOT NULL,
+     app_update_channel VARCHAR(50) NOT NULL,
+     app_version        VARCHAR(50) NOT NULL,
+     app_build_id       VARCHAR(50) NOT NULL,
+     submission_date    VARCHAR(8)  NOT NULL,
+     log_version        VARCHAR(10) NOT NULL,
+     file_name          TEXT UNIQUE NOT NULL,
+     file_size          BIGINT      NOT NULL,
+     file_md5           TEXT,
+     view_count         INT DEFAULT 0,
+     ref_count          INT DEFAULT 0
+    );
+    '''
+    sql_create_tasks = '''
+    CREATE TABLE IF NOT EXISTS tasks (
+     task_id            SERIAL PRIMARY KEY,
+     name               TEXT        NOT NULL,
+     code_uri           TEXT        NOT NULL,
+     owner_email        VARCHAR(100) NOT NULL,
+     status             VARCHAR(20) NOT NULL DEFAULT 'pending',
+     claimed_until      DATETIME, -- NULL means not claimed yet.
+     retries_remaining  INT DEFAULT 5
+    );
+    '''
+    sql_create_task_files = '''
+    CREATE TABLE IF NOT EXISTS task_files (
+     task_id            INTEGER NOT NULL REFERENCES tasks(task_id),
+     file_id            INTEGER NOT NULL REFERENCES published_files(file_id)
+    );
+    '''
 
-sql_create_file_name_index          = "CREATE UNIQUE INDEX published_files_file_name_idx ON published_files (file_name);"
-sql_create_reason_index             = "CREATE INDEX published_files_reason_idx ON published_files (reason);"
-sql_create_app_name_index           = "CREATE INDEX published_files_app_name_idx ON published_files (app_name);"
-sql_create_app_update_channel_index = "CREATE INDEX published_files_app_update_channel_idx ON published_files (app_update_channel);"
-sql_create_app_version_index        = "CREATE INDEX published_files_app_version_idx ON published_files (app_version);"
-sql_create_app_build_id_index       = "CREATE INDEX published_files_app_build_id_idx ON published_files (app_build_id);"
-sql_create_submission_date_index    = "CREATE INDEX published_files_submission_date_idx ON published_files (submission_date);"
+    sql_insert_published_file = '''
+    INSERT INTO published_files (
+     bucket_name        ,
+     reason             ,
+     app_name           ,
+     app_update_channel ,
+     app_version        ,
+     app_build_id       ,
+     submission_date    ,
+     log_version        ,
+     file_name          ,
+     file_size          ,
+     file_md5
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    '''
 
-# Create table
-print "Creating table (if needed)..."
-c.execute(sql_create_published_files)
-c.execute(sql_create_tasks)
-c.execute(sql_create_task_files)
+    sql_file_exists = "SELECT count(*) FROM published_files WHERE file_name = ?;"
 
-print "Checking if table is empty..."
-c.execute("SELECT count(*) FROM published_files;");
-countrow = c.fetchone();
-if countrow[0] == 0:
-    print "Table was empty, populating from scratch"
-    populate_published_files(conn)
-else:
-    print "Table was not empty (contained", countrow[0], "rows). Checking last update date..."
-    c.execute("SELECT max(submission_date) FROM published_files;")
-    submissionrow = c.fetchone()
-    submission_date = submissionrow[0]
-    print "Updating everything on or after", submission_date
-    update_published_files(conn, submission_date)
+    unique_indexed_fields = ["file_name"]
+    #sql_create_file_name_index          = "CREATE UNIQUE INDEX published_files_file_name_idx ON published_files (file_name);"
 
-# Save the changes
-conn.commit()
+    indexed_fields = ["reason", "app_name", "app_update_channel", "app_version", "app_build_id", "submission_date"]
+    #sql_create_reason_index             = "CREATE INDEX published_files_reason_idx ON published_files (reason);"
+    #sql_create_app_name_index           = "CREATE INDEX published_files_app_name_idx ON published_files (app_name);"
+    #sql_create_app_update_channel_index = "CREATE INDEX published_files_app_update_channel_idx ON published_files (app_update_channel);"
+    #sql_create_app_version_index        = "CREATE INDEX published_files_app_version_idx ON published_files (app_version);"
+    #sql_create_app_build_id_index       = "CREATE INDEX published_files_app_build_id_idx ON published_files (app_build_id);"
+    #sql_create_submission_date_index    = "CREATE INDEX published_files_submission_date_idx ON published_files (submission_date);"
 
-# All done
-conn.close()
+    # Create table
+    print "Creating table (if needed)..."
+    c.execute(sql_create_published_files)
+    c.execute(sql_create_tasks)
+    c.execute(sql_create_task_files)
+
+    if args.create_indexes:
+        for field in indexed_fields:
+            print "Creating index for", field
+            c.execute("CREATE INDEX published_files_{0}_idx ON published_files ({0});".format(field))
+
+
+    print "Checking if table is empty..."
+    c.execute("SELECT count(*) FROM published_files;");
+    countrow = c.fetchone();
+    if countrow[0] == 0:
+        print "Table was empty, populating from scratch"
+        populate_published_files(conn)
+    else:
+        print "Table was not empty (contained", countrow[0], "rows). Checking last update date..."
+        c.execute("SELECT max(submission_date) FROM published_files;")
+        submissionrow = c.fetchone()
+        submission_date = submissionrow[0]
+        print "Updating everything on or after", submission_date
+        update_published_files(conn, submission_date)
+
+    # Save the changes
+    conn.commit()
+
+    # All done
+    conn.close()
+
+if __name__ == "__main__":
+    sys.exit(main())
