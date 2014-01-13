@@ -9,7 +9,7 @@ import simplejson as json
 import telemetry.util.s3 as s3u
 import telemetry.util.timer as timer
 
-sql_file_exists = "SELECT count(*) FROM published_files WHERE file_name = ?;"
+sql_file_exists = "SELECT count(*) FROM published_files WHERE file_name = %s;"
 sql_create_published_files = '''
 CREATE TABLE IF NOT EXISTS published_files (
  file_id            SERIAL PRIMARY KEY,
@@ -59,7 +59,7 @@ INSERT INTO published_files (
  file_name          ,
  file_size          ,
  file_md5
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
 '''
 
 #sql_create_file_name_index          = "CREATE UNIQUE INDEX published_files_file_name_idx ON published_files (file_name);"
