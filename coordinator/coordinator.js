@@ -33,6 +33,12 @@ var bunyan = require('bunyan');
 var restify = require('restify');
 var pg = require('pg');
 
+// By default, this stupid pg lib doesn't parse BIGINT as a numberic value,
+// since JS can't represent full 64-bit integers. This causes problems when
+// Calculating the batch size for tasks, so we enable int-style parsing and
+// throw caution to the wind!
+pg.defaults.parseInt8 = true;
+
 var connection_string = process.argv[2];
 var log = bunyan.createLogger({name: "coordinator"});
 
@@ -182,8 +188,8 @@ function filter_files(filter, onfile, onend) {
   pg.connect(connection_string, function(err, client, done) {
     if (err) {
       log.error(err);
-      onend(err, null);
       done();
+      onend(err, null);
       return;
     }
 
@@ -195,14 +201,14 @@ function filter_files(filter, onfile, onend) {
 
     cq.on('end', function(result){
       log.trace("Finished retrieving rows: " + JSON.stringify(result));
-      onend(null, result.rowCount);
       done();
+      onend(null, result.rowCount);
     });
 
     cq.on('error', function(err){
       log.error(err);
-      onend(err);
       done();
+      onend(err, null);
     })
   });
 }
@@ -233,9 +239,10 @@ function create_task(req, res, next) {
     tasks.push(task_id);
   }
   filter_files(req.params.filter, function(err, row){
+    log.trace("Found a file: " + JSON.stringify(row));
     if (current_batch_size > BATCH_SIZE) {
       save_batch(req.params.name, req.params.owner, req.params.code_uri, current_batch, add_task);
-      log.info("saved intermediate batch");
+      log.info("saved intermediate batch because " + current_batch_size + " > " + BATCH_SIZE);
       current_batch_size = 0;
       current_batch = [];
     }
@@ -260,25 +267,47 @@ function create_task(req, res, next) {
   });
 }
 
-var sql_create_task      = 'INSERT INTO tasks (name, owner_email, code_uri) VALUES (?,?,?);';
-var sql_create_task_file = 'INSERT INTO task_files (task_id, file_id) VALUES (?,?);';
+var sql_create_task      = 'INSERT INTO tasks (name, owner_email, code_uri) VALUES ($1,$2,$3) RETURNING task_id;';
+var sql_create_task_file = 'INSERT INTO task_files (task_id, file_id) VALUES ($1,$2);';
 function save_batch(name, owner, code_uri, files, onfinish) {
   log.info("Adding a task with " + files.length + " files");
-  var stmt = db.prepare(sql_create_task_file);
-  db.run(sql_create_task, name, owner, code_uri, function(err) {
+  pg.connect(connection_string, function(err, client, done) {
     if (err) {
-      // ABORT! there was an error
+      log.error(err);
       onfinish(err, null);
-    } else {
-      var task_id = this.lastID;
-      // for file_id in files:
-      //   INSERT INTO task_files (task_id, file_id) VALUES (?, ?);
-      for (var i = files.length - 1; i >= 0; i--) {
-        stmt.run(task_id, files[i]);
-      }
-      stmt.finalize();
-      onfinish(null, task_id);
+      done();
+      return;
     }
+
+    var task_id = null;
+    var cq = client.query(sql_create_task, [name, owner, code_uri]);
+    cq.on('row', function(row) {
+      log.info("Created one task: " + JSON.stringify(row));
+      task_id = row.task_id;
+    });
+
+    cq.on('end', function(result){
+      log.trace("Finished creating task, let's add the task files");
+      for (var i = files.length - 1; i >= 0; i--) {
+        client.query(sql_create_task_file, [task_id, files[i]], function(err, result) {
+          if (err) {
+            log.error(err);
+            done();
+            onfinish(err, null);
+            return;
+          }
+          log.trace("Added one task file %s", files[i])
+        });
+      }
+      done();
+      onfinish(null, task_id);
+    });
+
+    cq.on('error', function(err){
+      log.error(err);
+      done();
+      onfinish(err, null);
+    });
   });
 }
 
