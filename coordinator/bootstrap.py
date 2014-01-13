@@ -1,4 +1,5 @@
 import argparse
+import os
 import psycopg2
 import sys
 import traceback
@@ -168,11 +169,11 @@ def insert_one_published_file(schema, bucket_name, key, cursor, dims=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Populate/update the S3 file cache")
-    parser.add_argument("--db-host")
-    parser.add_argument("--db-user")
+    parser.add_argument("--db-host", default="localhost")
+    parser.add_argument("--db-user", default=os.getlogin())
     parser.add_argument("--db-port", type=int, default=5432)
     parser.add_argument("--db-pass")
-    parser.add_argument("--db-name")
+    parser.add_argument("--db-name", default=os.getlogin())
     parser.add_argument("--create-indexes", action="store_true")
     args = parser.parse_args()
 
@@ -188,7 +189,7 @@ def main():
     if hasattr(args, "db_pass"):
         connection_string += "password={0} ".format(args.db_pass)
 
-    conn = psycopg2.connect(connection_string.strip())
+    conn = psycopg2.connect(connection_string)
     c = conn.cursor()
     indexed_fields = ["reason", "app_name", "app_update_channel", "app_version", "app_build_id", "submission_date"]
     # Create table
