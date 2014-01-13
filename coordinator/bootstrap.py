@@ -1,3 +1,4 @@
+import argparse
 import psycopg2
 import sys
 import traceback
