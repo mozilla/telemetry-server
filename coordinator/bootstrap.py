@@ -99,7 +99,7 @@ def main():
     parser = argparse.ArgumentParser(description="Populate/update the S3 file cache")
     parser.add_argument("--db-host")
     parser.add_argument("--db-user")
-    parser.add_argument("--db-port")
+    parser.add_argument("--db-port", type=int, default=5432)
     parser.add_argument("--db-pass")
     parser.add_argument("--db-name")
     parser.add_argument("--create-indexes", action="store_true")
