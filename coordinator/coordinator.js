@@ -187,24 +187,21 @@ function filter_files(filter, onfile, onend) {
       return;
     }
 
-    client.query(query.sql, query.params, function(err, result) {
-      if (err) {
-        log.error(err);
-        onend(err, null);
-        done();
-        return;
-      }
-      // All is well
-      log.trace("Result was: " + JSON.stringify(result));
-      for (var i = result.rows.length - 1; i >= 0; i--) {
-        onfile(null, result.rows[i]);
-      };
-      // result.rows.forEach(r) {
-      //   onfile(null, r);
-      // }
+    var cq = client.query(query.sql, query.params);
+    cq.on('row', function(row) {
+      log.trace("Retrieved one row: " + JSON.stringify(row));
+      onfile(null, row);
+    });
+
+    cq.on('end', function(result){
       onend(null, result.rowCount);
       done();
     });
+
+    cq.on('error', function(err){
+      onend(err);
+      done();
+    })
   });
 
 }
