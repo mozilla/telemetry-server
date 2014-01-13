@@ -31,8 +31,9 @@
 
 var bunyan = require('bunyan');
 var restify = require('restify');
-var sqlite3 = require('sqlite3').verbose();
-var db = new sqlite3.Database("./coordinator.test.db");
+var pg = require('pg');
+
+var connection_string = process.argv[2];
 var log = bunyan.createLogger({name: "coordinator"});
 
 function schema2db(field_name) {
@@ -62,6 +63,7 @@ function sanitize(value) {
 function filter2sql(filter) {
   var query = "SELECT * FROM published_files";
   var conditions = "";
+  var currentParam = 0;
   var params = [];
   for (var i = filter.dimensions.length - 1; i >= 0; i--) {
     log.trace("Checking dimension " + i);
@@ -83,32 +85,32 @@ function filter2sql(filter) {
     if (filter_type === "[object Array]") {
       cond += db_field;
       if (dim.allowed_values.length == 1) {
-        cond += " = ?";
+        cond += " = $" + ++currentParam;
       } else {
-        cond += " IN (?";
+        cond += " IN ($" + ++currentParam;
         for (var j = dim.allowed_values.length - 1; j >= 1; j--) {
-          cond += ",?";
+          cond += ",$" + ++currentParam;
         }
         cond += ")";
       }
       params = params.concat(dim.allowed_values);
     } else if (filter_type === "[object Object]") {
       if (dim.allowed_values.min && dim.allowed_values.max) {
-        cond += "(" + db_field + " >= ? AND " + db_field + " <= ?)";
+        cond += "(" + db_field + " >= $" + ++currentParam + " AND " + db_field + " <= $" + ++currentParam + ")";
         params.push(dim.allowed_values.min);
         params.push(dim.allowed_values.max);
       } else if (dim.allowed_values.min) {
-        cond += db_field + " >= ?";
+        cond += db_field + " >= $" + ++currentParam;
         params.push(dim.allowed_values.min);
       } else if (dim.allowed_values.max) {
-        cond += db_field + " <= ?";
+        cond += db_field + " <= $" + ++currentParam;
         params.push(dim.allowed_values.max);
       } else {
         log.info("Found a meaningless allowed_values object: " + dim);
       }
     } else {
       // Unknown... use it directly and let the database figure it out.
-      cond = db_field + " = ?";
+      cond = db_field + " = $" + ++currentParam;
       params.push(dim.allowed_values);
     }
     if (cond !== "") {
@@ -147,7 +149,6 @@ function get_filtered_files(req, res, next) {
   // Force the type to application/json since we'll be streaming out the rows
   // manually.
   res.setHeader('content-type', 'application/json');
-  res.write('{ "files": [');
   var first = true;
   filter_files(filter, function(err, row) {
     // Process each file record
@@ -156,6 +157,7 @@ function get_filtered_files(req, res, next) {
       return next(err);
     }
     if (first) {
+      res.write('{ "files": [');
       first = false;
     } else {
       res.write(",");
@@ -177,11 +179,34 @@ function filter_files(filter, onfile, onend) {
   // TODO: iterate through matching files calling onfile(err, row) for each, then call onend(err, rowcount)
   var query = filter2sql(filter);
   log.info("running query: " + JSON.stringify(query));
-  db.each(query.sql, query.params, function(err, row) {
-    onfile(err, row);
-  }, function(err, rowcount) {
-    onend(err, rowcount);
+  pg.connect(connection_string, function(err, client, done) {
+    if (err) {
+      log.error(err);
+      onend(err, null);
+      done();
+      return;
+    }
+
+    client.query(query.sql, query.params, function(err, result) {
+      if (err) {
+        log.error(err);
+        onend(err, null);
+        done();
+        return;
+      }
+      // All is well
+      log.trace("Result was: " + JSON.stringify(result));
+      for (var i = result.rows.length - 1; i >= 0; i--) {
+        onfile(null, result.rows[i]);
+      };
+      // result.rows.forEach(r) {
+      //   onfile(null, r);
+      // }
+      onend(null, result.rowCount);
+      done();
+    });
   });
+
 }
 
 var BATCH_SIZE = 500 * 1024 * 1024;
