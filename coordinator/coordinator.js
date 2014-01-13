@@ -176,7 +176,7 @@ function get_filtered_files(req, res, next) {
 }
 
 function filter_files(filter, onfile, onend) {
-  // TODO: iterate through matching files calling onfile(err, row) for each, then call onend(err, rowcount)
+  // Iterate through matching files calling onfile(err, row) for each, then call onend(err, rowcount)
   var query = filter2sql(filter);
   log.info("running query: " + JSON.stringify(query));
   pg.connect(connection_string, function(err, client, done) {
@@ -194,16 +194,17 @@ function filter_files(filter, onfile, onend) {
     });
 
     cq.on('end', function(result){
+      log.trace("Finished retrieving rows: " + JSON.stringify(result));
       onend(null, result.rowCount);
       done();
     });
 
     cq.on('error', function(err){
+      log.error(err);
       onend(err);
       done();
     })
   });
-
 }
 
 var BATCH_SIZE = 500 * 1024 * 1024;
