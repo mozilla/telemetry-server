@@ -67,7 +67,7 @@ function schema2db(field_name) {
 function sanitize(value) {
   // See 'safe_filename' in telemetry_schema.py
   if (value) {
-    return value.replace(/[^a-zA-Z0-9_/.]/, "_");
+    return value.replace(/[^a-zA-Z0-9_/.]/g, "_");
   }
   return value;
 }
@@ -181,8 +181,12 @@ function get_filtered_files(req, res, next) {
       log.info("Found an err on completion: " + JSON.stringify(err));
       return next(err);
     }
-    res.write('], "row_count": ' + rowcount + '}');
-    res.end();
+    if (rowcount == 0) {
+      res.send(404, "No files matched your filter");
+    } else {
+      res.write('], "row_count": ' + rowcount + '}');
+      res.end();
+    }
     return next();
   });
 }
@@ -612,6 +616,7 @@ var server = restify.createServer({
 server.use(restify.bodyParser());
 server.use(restify.queryParser({ mapParams: false }));
 server.use(restify.requestLogger());
+// TODO: list endpoints at /api (or /doc or whatever)
 server.post('/files', get_filtered_files);
 server.get('/files', get_filtered_files);
 server.post('/tasks', create_task);
