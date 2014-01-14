@@ -139,7 +139,7 @@ function filter2sql(filter) {
   for (var i = params.length - 1; i >= 0; i--) {
     params[i] = sanitize(params[i]);
   };
-  query += " ORDER BY file_name LIMIT 10;";
+  query += " ORDER BY file_name;";
   return { sql: query, params: params };
 }
 
@@ -415,11 +415,11 @@ function get_task_info(req, res, next) {
 }
 
 // TODO: insert the node's AWS ID in the request for tracking?
-var sql_claim_task_by_name =
-"UPDATE tasks SET " +
+var sql_claim_prefix = "UPDATE tasks SET " +
 " retries_remaining = retries_remaining - 1, " +
 " claimed_until = now() + '2 HOURS'::INTERVAL " +
-"WHERE " +
+"WHERE ";
+var sql_claim_by_name_condition =
 " task_id IN ( " +
 "  SELECT min(task_id) " +
 "  FROM tasks " +
@@ -428,7 +428,11 @@ var sql_claim_task_by_name =
 "   status NOT IN ('complete', 'failed') AND " +
 "   retries_remaining > 0 AND " +
 "   (claimed_until IS NULL OR claimed_until < now()) " +
-" ) RETURNING *;";
+" )";
+var sql_claim_by_id_condition = " name = $1 AND task_id = $2 ";
+var sql_claim_suffix = " RETURNING *;";
+var sql_claim_task_by_name = sql_claim_prefix + sql_claim_by_name_condition + sql_claim_suffix;
+var sql_claim_task_by_id = sql_claim_prefix + sql_claim_by_id_condition + sql_claim_suffix;
 var sql_get_task_files =
 "SELECT pf.file_name, pf.file_size, pf.bucket_name " +
 "FROM " +
@@ -443,7 +447,11 @@ function claim_task_by_name(req, res, next) {
   if (!check_required_parameters(req, ["name"])) {
     return next();
   }
-  log.info("Claiming task for " + req.params.name)
+  log.info("Claiming task named " + req.params.name);
+  return claim_task(req, res, next, sql_claim_task_by_name, [req.params.name]);
+}
+
+function claim_task(req, res, next, sql, params) {
   pg.connect(connection_string, function(err, client, done) {
     if (err) {
       log.error(err);
@@ -451,7 +459,7 @@ function claim_task_by_name(req, res, next) {
       return next(err);
     }
 
-    client.query(sql_claim_task_by_name, [req.params.name], function(err, result) {
+    client.query(sql, params, function(err, result) {
       if (err) {
         log.error(err);
         done();
@@ -462,7 +470,7 @@ function claim_task_by_name(req, res, next) {
         // TODO
         // There weren't any. return a special response indicating to try again
         // later (maybe look for the soonest "claimed_until" still in the future)
-        res.send(404, "No available tasks found for name '" + req.params.name + "'");
+        res.send(404, "No available tasks found for params " + JSON.stringify(params));
       } else {
         // Now get the associated files:
         // Force the type to application/json since we'll be streaming out the rows
@@ -505,7 +513,97 @@ function claim_task_by_name(req, res, next) {
 }
 
 function claim_task_by_id(req, res, next) {
-  log.info("TODO: implement me")
+  // Request a specific task to work on.
+  if (!check_required_parameters(req, ["name", "task_id"])) {
+    return next();
+  }
+  log.info("Claiming task " + req.params.name + "/" + req.params.task_id);
+  return claim_task(req, res, next, sql_claim_task_by_id, [req.params.name, req.params.task_id]);
+}
+
+// callback: onfinish(err, task)
+// if success, err will be null.  If fail, task will be null.
+// If there is no such task, both args will be null
+var sql_set_task_status = "UPDATE tasks SET status = $1 WHERE name = $2 AND task_id = $3 RETURNING *;";
+function set_task_status(task_name, task_id, status, onfinish) {
+  pg.connect(connection_string, function(err, client, done) {
+    if (err) {
+      log.error(err);
+      done();
+      return onfinish(err, null);
+    }
+
+    client.query(sql_set_task_status, [status, task_name, task_id], function(err, result) {
+      if (err) {
+        log.error(err);
+        done();
+        return onfinish(err, null);
+      }
+      done();
+      var task = null;
+      if (result.rowCount > 0) {
+        task = result.rows[0];
+        // TODO: Delete from task_files too?
+      }
+      return onfinish(null, task);
+    });
+  });
+}
+
+var sql_unclaim_task = "UPDATE tasks SET claimed_until = now() WHERE name = $1 AND task_id = $2 RETURNING *;";
+function unclaim_task_by_id(req, res, next) {
+  if (!check_required_parameters(req, ["name", "task_id"])) {
+    return next();
+  }
+  log.info("Releasing task");
+  pg.connect(connection_string, function(err, client, done) {
+    if (err) {
+      log.error(err);
+      done();
+      return next(err);
+    }
+
+    client.query(sql_unclaim_task, [req.params.name, req.params.task_id], function(err, result) {
+      if (err) {
+        log.error(err);
+        done();
+        return next(err);
+      }
+      done();
+      if (result.rowCount > 0) {
+        res.send(result.rows[0]);
+      } else {
+        res.send(404, "No matching task for name '" + req.params.name + "', id '" + req.params.task_id + "'");
+      }
+      return next();
+    });
+  });
+}
+
+function finish_task_by_id(req, res, next, label, status) {
+  if (!check_required_parameters(req, ["name", "task_id"])) {
+    return next();
+  }
+  log.info(label + " " + req.params.name + "/" + req.params.task_id);
+  set_task_status(req.params.name, req.params.task_id, status, function(err, task){
+    if (err) {
+      return next(err);
+    } else if (task) {
+      res.send(task);
+    } else {
+      // No matching task found :(
+      res.send(404, "No matching task for name '" + req.params.name + "', id '" + req.params.task_id + "'");
+    }
+    return next();
+  });
+}
+
+function kill_task_by_id(req, res, next) {
+  return finish_task_by_id(req, res, next, "Killing", "failed");
+}
+
+function complete_task_by_id(req, res, next) {
+  return finish_task_by_id(req, res, next, "Completing", "completed");
 }
 
 var server = restify.createServer({
@@ -521,6 +619,9 @@ server.get('/tasks/:name', get_task_info_by_name)
 server.get('/tasks/:name/:task_id', get_task_info)
 server.post('/claim/task/:name', claim_task_by_name)
 server.post('/claim/task/:name/:task_id', claim_task_by_id)
+server.post('/release/task/:name/:task_id', unclaim_task_by_id)
+server.post('/kill/task/:name/:task_id', kill_task_by_id)
+server.post('/complete/task/:name/:task_id', complete_task_by_id)
 
 server.listen(8080, function() {
   log.info('%s listening at %s', server.name, server.url)
