@@ -27,16 +27,22 @@
  *        when we run out of retries, inform owner that the task is broken
  *   - Task-specific aggregator node:
  *      Get all "done" tasks from coordinator with name="histogram analysis"
+ *
+ * Some notes:
+ *  - if tasks.retries_remaining == 0 and tasks.status = "pending" and
+ *    tasks.claimed_until is in the past, then that task has failed.
+ *  - tasks should go from status pending -> complete or pending -> failed
+ *
  */
 
 var bunyan = require('bunyan');
 var restify = require('restify');
 var pg = require('pg');
 
-// By default, this stupid pg lib doesn't parse BIGINT as a numberic value,
-// since JS can't represent full 64-bit integers. This causes problems when
-// Calculating the batch size for tasks, so we enable int-style parsing and
-// throw caution to the wind!
+// By default, this pg lib doesn't parse BIGINT as a numeric value, since JS
+// can't represent full 64-bit integers. This causes problems when calculating
+// the batch size for tasks, so we enable int-style parsing and throw caution
+// to the wind!
 pg.defaults.parseInt8 = true;
 
 var connection_string = process.argv[2];
@@ -209,24 +215,30 @@ function filter_files(filter, onfile, onend) {
       log.error(err);
       done();
       onend(err, null);
-    })
+    });
   });
 }
 
 var BATCH_SIZE = 500 * 1024 * 1024;
-var required_task_fields = ["name", "owner", "filter", "code_uri"];
-function create_task(req, res, next) {
-  for (var i = required_task_fields.length - 1; i >= 0; i--) {
-    param_name = required_task_fields[i];
+
+function check_required_parameters(req, fields) {
+  for (var i = fields.length - 1; i >= 0; i--) {
+    param_name = fields[i];
     if (!req.params[param_name]) {
       res.send(400, "Missing parameter: " + param_name);
-      return next();
+      return false;
     }
   }
+  return true;
+}
 
+function create_task(req, res, next) {
   // Get files matching filter
   // Split into tasks
   // Insert groups of files into task_files
+  if (!check_required_parameters(req, ["name", "owner", "filter", "code_uri"])) {
+    return next();
+  }
   tasks = []
   current_batch_size = 0;
   current_batch = [];
@@ -311,83 +323,191 @@ function save_batch(name, owner, code_uri, files, onfinish) {
   });
 }
 
-var sql_get_task_info_by_name = 'SELECT * FROM tasks WHERE name = ? ORDER BY task_id;';
+var sql_get_task_info_by_name = 'SELECT * FROM tasks WHERE name = $1 ORDER BY task_id;';
 function get_task_info_by_name(req, res, next) {
   // Get information about tasks with the specified name
-  if (!req.params.name) {
-    res.send(400, "Missing 'name' parameter");
+  if (!check_required_parameters(req, ["name"])) {
     return next();
   }
   log.info("Getting task info for " + req.params.name);
   var task_info = {name: req.params.name, tasks: []};
-  db.each(sql_get_task_info_by_name, req.params.name, function(err, row){
+
+  pg.connect(connection_string, function(err, client, done) {
     if (err) {
-      log.info("error getting tasks");
+      log.error(err);
+      done();
       return next(err);
     }
-    log.info("Found a task: " + row.name + ", " + row.task_id);
-    task_info.tasks.push({
-      id: row.task_id,
-      code_uri: row.code_uri,
-      owner: row.owner_email,
-      status: row.status,
-      claimed_until: row.claimed_until,
-      retries_remaining: row.retries_remaining,
+
+    client.query(sql_get_task_info_by_name, [req.params.name], function(err, result) {
+      if (err) {
+        log.error(err);
+        done();
+        return next(err);
+      }
+
+      done();
+      for (var i = 0; i < result.rows.length; i++) {
+        var row = result.rows[i];
+        log.info("Found a task: " + row.name + ", " + row.task_id);
+        task_info.tasks.push({
+          id: row.task_id,
+          code_uri: row.code_uri,
+          owner: row.owner_email,
+          status: row.status,
+          claimed_until: row.claimed_until,
+          retries_remaining: row.retries_remaining,
+        });
+      }
+      if (result.rowCount == 0) {
+        res.send(404, "No tasks found for name '" + req.params.name + "'");
+      } else {
+        res.send(task_info);
+      }
+      return next();
     });
-  }, function(err, rowcount){
-    if (err) {
-      log.info("error on last get task");
-      return next(err);
-    }
-    log.info("Found " + rowcount + " rows for " + req.params.name);
-    task_info.num_tasks = rowcount;
-    res.send(task_info);
-    return next();
   });
 }
 
 // There should only ever be at most one, but might as well make sure.
-var sql_get_task_info_by_id = 'SELECT * FROM tasks WHERE name = ? AND task_id = ? LIMIT 1;';
-var required_get_task_fields = ["name", "task_id"];
+var sql_get_task_info_by_id = 'SELECT * FROM tasks WHERE name = $1 AND task_id = $2 LIMIT 1;';
 function get_task_info(req, res, next) {
   // Get information about the task with the specified name and id
-  for (var i = required_get_task_fields.length - 1; i >= 0; i--) {
-    param_name = required_get_task_fields[i];
-    if (!req.params[param_name]) {
-      res.send(400, "Missing parameter: " + param_name);
-      return next();
-    }
+  if (!check_required_parameters(req, ["name", "task_id"])) {
+    return next();
   }
 
   log.info("Getting task info for " + req.params.name + " id: " + req.params.task_id)
 
   var task_info = {name: req.params.name, id: req.params.task_id};
-  db.each(sql_get_task_info_by_id, req.params.name, req.params.task_id, function(err, row){
+  pg.connect(connection_string, function(err, client, done) {
     if (err) {
-      log.info("error getting task by id");
+      log.error(err);
+      done();
       return next(err);
     }
-    log.info("Found a task: " + row.name + ", " + row.task_id);
-    task_info.code_uri = row.code_uri;
-    task_info.owner = row.owner_email;
-    task_info.status = row.status;
-    task_info.claimed_until = row.claimed_until;
-    task_info.retries_remaining = row.retries_remaining;
-  }, function(err, rowcount){
-    if (err) {
-      log.info("error finishing get task by id");
-      return next(err);
-    }
-    if (rowcount == 0) {
-      res.send(404, "No tasks found");
-    } else {
-      res.send(task_info);
-    }
-    return next();
+
+    client.query(sql_get_task_info_by_id, [req.params.name, req.params.task_id], function(err, result) {
+      if (err) {
+        log.error(err);
+        done();
+        return next(err);
+      }
+
+      done();
+      for (var i = 0; i < result.rows.length; i++) {
+        var row = result.rows[i];
+        log.info("Found a task: " + row.name + ", " + row.task_id);
+        task_info.code_uri = row.code_uri;
+        task_info.owner = row.owner_email;
+        task_info.status = row.status;
+        task_info.claimed_until = row.claimed_until;
+        task_info.retries_remaining = row.retries_remaining;
+      }
+      if (result.rowCount == 0) {
+        res.send(404, "No tasks found for name '" + req.params.name + "' and id '" + req.params.task_id + "'");
+      } else {
+        res.send(task_info);
+      }
+      return next();
+    });
   });
 }
 
-// TODO: load up the schema from the S3 bucket.
+// TODO: insert the node's AWS ID in the request for tracking?
+var sql_claim_task_by_name =
+"UPDATE tasks SET " +
+" retries_remaining = retries_remaining - 1, " +
+" claimed_until = now() + '2 HOURS'::INTERVAL " +
+"WHERE " +
+" task_id IN ( " +
+"  SELECT min(task_id) " +
+"  FROM tasks " +
+"  WHERE " +
+"   name = $1 AND " +
+"   status NOT IN ('complete', 'failed') AND " +
+"   retries_remaining > 0 AND " +
+"   (claimed_until IS NULL OR claimed_until < now()) " +
+" ) RETURNING *;";
+var sql_get_task_files =
+"SELECT pf.file_name, pf.file_size, pf.bucket_name " +
+"FROM " +
+" task_files AS tf " +
+"  LEFT JOIN " +
+" published_files AS pf " +
+"  ON tf.file_id = pf.file_id " +
+"WHERE task_id = $1 " +
+"ORDER BY pf.file_name;";
+function claim_task_by_name(req, res, next) {
+  // Request a task to work on.
+  if (!check_required_parameters(req, ["name"])) {
+    return next();
+  }
+  log.info("Claiming task for " + req.params.name)
+  pg.connect(connection_string, function(err, client, done) {
+    if (err) {
+      log.error(err);
+      done();
+      return next(err);
+    }
+
+    client.query(sql_claim_task_by_name, [req.params.name], function(err, result) {
+      if (err) {
+        log.error(err);
+        done();
+        return next(err);
+      }
+
+      if (result.rowCount == 0) {
+        // TODO
+        // There weren't any. return a special response indicating to try again
+        // later (maybe look for the soonest "claimed_until" still in the future)
+        res.send(404, "No available tasks found for name '" + req.params.name + "'");
+      } else {
+        // Now get the associated files:
+        // Force the type to application/json since we'll be streaming out the rows
+        // manually.
+        var task = result.rows[0];
+        res.setHeader('content-type', 'application/json');
+        var first = true;
+        log.info("Running SQL: " + sql_get_task_files);
+        var cq = client.query(sql_get_task_files, [task.task_id]);
+        cq.on('row', function(row) {
+          if (first) {
+            res.write('{ "task": ' + JSON.stringify(task) + ', "bucket_name": ' + JSON.stringify(row.bucket_name) + ', "files": [');
+            first = false;
+            // output header
+          } else {
+            res.write(",");
+          }
+          res.write(JSON.stringify(row.file_name) + "\n");
+        });
+
+        cq.on('end', function(result){
+          log.trace("Finished retrieving task files");
+          //done();
+          res.write(']}');
+          res.end();
+          //return next();
+        });
+
+        cq.on('error', function(err){
+          log.error(err);
+          //done();
+          res.end();
+          return next(err);
+        });
+      }
+      done();
+      return next();
+    });
+  });
+}
+
+function claim_task_by_id(req, res, next) {
+  log.info("TODO: implement me")
+}
+
 var server = restify.createServer({
   name: "Telemetry Coordinator",
 });
@@ -399,6 +519,8 @@ server.get('/files', get_filtered_files);
 server.post('/tasks', create_task);
 server.get('/tasks/:name', get_task_info_by_name)
 server.get('/tasks/:name/:task_id', get_task_info)
+server.post('/claim/task/:name', claim_task_by_name)
+server.post('/claim/task/:name/:task_id', claim_task_by_id)
 
 server.listen(8080, function() {
   log.info('%s listening at %s', server.name, server.url)
