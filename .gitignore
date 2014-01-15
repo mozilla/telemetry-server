@@ -1,6 +1,8 @@
 *.pyc
 *.gz
 *.bz2
+*.xz
+*.lzma
 *.swp
 *.swo
 *.out
