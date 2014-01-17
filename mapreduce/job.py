@@ -191,6 +191,8 @@ class Job:
                 # We can't rename across devices :( Copy / delete instead.
                 to_combine = 0
 
+        # TODO: If _output_file ends with a compressed suffix (.gz, .xz, .bz2, etc),
+        #       try to compress it after writing.
         if self._num_reducers > to_combine:
             out = open(self._output_file, "a")
             for i in range(to_combine, self._num_reducers):
@@ -281,7 +283,7 @@ class Job:
             for f in s3util.list_partitions(bucket, schema=self._input_filter, include_keys=True):
                 count += 1
                 out_files.append(f)
-                if count % 1000 == 0:
+                if count == 1 or count % 1000 == 0:
                     print "Listed", count, "so far"
             conn.close()
             duration = timer.delta_sec(start)
