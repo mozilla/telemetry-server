@@ -57,9 +57,20 @@ tar xzvf code.tar.gz
 $MAIN &> $LOG
 echo "'$MAIN' exited with code $?" >> $LOG
 gzip $LOG
-aws --region $REGION s3 cp ${LOG}.gz $S3_BASE/logs/${LOG}.gz
+aws --region $REGION s3 cp ${LOG}.gz $S3_BASE/logs/${LOG}.gz --content-type "text/plain" --content-encoding "gzip"
 cd $OUTPUT_DIR
-aws --region $REGION s3 cp ./ $S3_BASE/data/ --recursive
+for f in $(find . -type f); do
+  # Remove the leading "./"
+  f=$(sed -e "s/^\.\///" <<< $f)
+  UPLOAD_CMD=aws --region $REGION s3 cp ./$f $S3_BASE/data/$f
+  if [[ "$f" == *.gz ]]; then
+    echo "adding 'Content-Type: gzip' for $f"
+    UPLOAD_CMD=$UPLOAD_CMD --content-encoding "gzip"
+  else
+    echo "Not adding 'Content-Type' header for $f"
+  fi
+  $UPLOAD_CMD
+done
 EOF
 halt
 """
