@@ -43,7 +43,7 @@ mount /dev/md0 /mnt
         template_params["RAID_CONFIGURATION"] = raid_config
 
         template_str = """#!/bin/bash
-LOG=$JOB_NAME.$(date +%Y%m%d%H%M%S).log
+LOG=$BASE/$JOB_NAME.$(date +%Y%m%d%H%M%S).log
 S3_BASE=s3://$DATA_BUCKET/$JOB_NAME
 $RAID_CONFIGURATION
 pip install --upgrade awscli
@@ -56,23 +56,25 @@ aws --region $REGION s3 cp $CODE_URI code.tar.gz
 tar xzvf code.tar.gz
 $MAIN &> $LOG
 echo "'$MAIN' exited with code $?" >> $LOG
-gzip $LOG
-aws --region $REGION s3 cp ${LOG}.gz $S3_BASE/logs/${LOG}.gz --content-type "text/plain" --content-encoding "gzip"
 cd $OUTPUT_DIR
-for f in $(find . -type f); do
+for f in \$(find . -type f); do
   # Remove the leading "./"
-  f=$(sed -e "s/^\.\///" <<< $f)
-  UPLOAD_CMD="aws --region $REGION s3 cp ./$f $S3_BASE/data/$f"
-  if [[ "$f" == *.gz ]]; then
-    echo "adding 'Content-Type: gzip' for $f"
-    UPLOAD_CMD="$UPLOAD_CMD --content-encoding 'gzip'"
+  f=\$(sed -e "s/^\.\///" <<< \$f)
+  UPLOAD_CMD="aws --region $REGION s3 cp ./\$f $S3_BASE/data/\$f"
+  if [[ "\$f" == *.gz ]]; then
+    echo "adding 'Content-Type: gzip' for \$f" >> $LOG
+    UPLOAD_CMD="\$UPLOAD_CMD --content-encoding 'gzip'"
   else
-    echo "Not adding 'Content-Type' header for $f"
+    echo "Not adding 'Content-Type' header for \$f" >> $LOG
   fi
-  $UPLOAD_CMD
+  echo "Running: \$UPLOAD_CMD" >> $LOG
+  \$UPLOAD_CMD &>> $LOG
 done
+cd -
+gzip $LOG
+aws --region $REGION s3 cp ${LOG}.gz $S3_BASE/logs/$(basename $LOG).gz --content-type "text/plain" --content-encoding "gzip"
 EOF
-halt
+#halt
 """
         template = Template(template_str)
         return template.safe_substitute(template_params)
