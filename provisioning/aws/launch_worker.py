@@ -74,7 +74,7 @@ cd -
 gzip $LOG
 aws --region $REGION s3 cp ${LOG}.gz $S3_BASE/logs/$(basename $LOG).gz --content-type "text/plain" --content-encoding "gzip"
 EOF
-#halt
+halt
 """
         template = Template(template_str)
         return template.safe_substitute(template_params)
