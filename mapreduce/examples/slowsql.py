@@ -44,6 +44,7 @@ def map(k, d, v, cx):
         slowSQL = j["slowSQL"]
         for threadType, queries in slowSQL.iteritems():
             for query, arr in queries.iteritems():
+                query = query.encode('string_escape')
                 cx.write(",".join([threadType, submission_date, appName, appVersion, appUpdateChannel, query]), arr)
     except Exception as e:
         cx.write(",".join(["Error", str(e), traceback.format_exc()] + d), 1)
@@ -51,13 +52,32 @@ def map(k, d, v, cx):
 def setup_reduce(cx):
     cx.field_separator = ","
 
+def median(v, already_sorted=False):
+    ls = len(v)
+    if ls == 0:
+        return 0
+    if already_sorted:
+        s = v
+    else:
+        s = sorted(v)
+    middle = int(ls / 2)
+    if ls % 2 == 1:
+        return s[middle]
+    else:
+        return (s[middle] + s[middle-1]) / 2.0
+
 def reduce(k, v, cx):
-    t_count = 0
-    t_duration = 0
-    for count, duration in v:
-        t_count += count
-        t_duration += duration
-    cx.write(k, sum(v))
+    counts = [c for c,d in v]
+    durations = [d for c,d in v]
+    # Output fields:
+    # thread_type, submission_date, app_name, app_version, app_update_channel,
+    # query, document_count, total_invocations, total_duration, median_duration
+    total_invocations = sum(counts)
+    if total_invocations > 100:
+        cx.write(",".join([k, str(len(v)), str(total_invocations), str(sum(durations))]), median(durations))
+    else:
+        print "Skipping a query with only", total_invocations, "invocations"
+
 
 if __name__ == "__main__":
     raw = '''{
@@ -95,8 +115,7 @@ if __name__ == "__main__":
       ]
     }
   }
-}
-'''
+}'''
     expected = '''{
   "slowSQL": {
     "mainThread": {
