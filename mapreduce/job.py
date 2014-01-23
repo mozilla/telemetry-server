@@ -463,19 +463,25 @@ def main():
             print "ERROR: The 'boto' library is required except in 'local-only' mode."
             print "       You can install it using `sudo pip install boto`"
             parser.print_help()
-            sys.exit(-2)
+            return -2
         # If we want to process remote data, some more arguments are required.
         for remote_req in ["bucket"]:
             if not hasattr(args, remote_req) or getattr(args, remote_req) is None:
                 print "ERROR:", remote_req, "is a required option"
                 parser.print_help()
-                sys.exit(-1)
+                return -1
 
     job = Job(args)
     start = datetime.now()
-    job.mapreduce()
+    exit_code = 0
+    try:
+        job.mapreduce()
+    except:
+        traceback.print_exc(file=sys.stderr)
+        exit_code = 2
     duration = timer.delta_sec(start)
     print "All done in %.2fs" % (duration)
+    return exit_code
 
 if __name__ == "__main__":
     sys.exit(main())
