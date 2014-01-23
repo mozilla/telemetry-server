@@ -1,5 +1,7 @@
 # SlowSQL export, ported from:
 #   https://github.com/mozilla-metrics/telemetry-toolbox
+import csv
+import io
 import re
 import simplejson as json
 import traceback
@@ -33,21 +35,30 @@ def sanitize(json_string):
             parsed["slowSQL"]["otherThreads"] = sanitized
     return parsed
 
+# Make sure the keys come out csv-friendly - all on one line, and surrounded by
+# double-quotes, and with any double-quotes inside doubled up per usual.
+def safe_key(pieces):
+    output = io.BytesIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC)
+    writer.writerow(pieces)
+    # remove the trailing EOL chars:
+    return unicode(output.getvalue()).strip()
+
 def map(k, d, v, cx):
+    [reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date] = d
+    cx.write(safe_key(["TOTAL", submission_date, appName, appVersion, appUpdateChannel, "ALL_PINGS"]), [1,0])
     if '"slowSQL":' not in v:
         return
     if '"slowSQL":{"mainThread":{},"otherThreads":{}}' in v:
         return
     try:
         j = sanitize(v)
-        [reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date] = d
         slowSQL = j["slowSQL"]
         for threadType, queries in slowSQL.iteritems():
             for query, arr in queries.iteritems():
-                query = query.encode('string_escape')
-                cx.write(",".join([threadType, submission_date, appName, appVersion, appUpdateChannel, query]), arr)
+                cx.write(safe_key([threadType, submission_date, appName, appVersion, appUpdateChannel, query]), arr)
     except Exception as e:
-        cx.write(",".join(["Error", str(e), traceback.format_exc()] + d), 1)
+        cx.write(safe_key(["Error", str(e), traceback.format_exc()] + d), [1,0])
 
 def setup_reduce(cx):
     cx.field_separator = ","
@@ -67,17 +78,39 @@ def median(v, already_sorted=False):
         return (s[middle] + s[middle-1]) / 2.0
 
 def reduce(k, v, cx):
-    counts = [c for c,d in v]
-    durations = [d for c,d in v]
-    # Output fields:
-    # thread_type, submission_date, app_name, app_version, app_update_channel,
-    # query, document_count, total_invocations, total_duration, median_duration
+    try:
+        counts = []
+        durations = []
+        # Each ping can include multiple executions of a given query. Compute
+        # the average time per query for use in the median below. Since all we
+        # get is [count, total_duration], this is the best estimation of the
+        # actual median we can make.
+        avgs = []
+        for c,d in v:
+            counts.append(c)
+            durations.append(d)
+            if c > 0:
+                avgs.append(d/c)
+            else:
+                avgs.append(0)
+    except TypeError:
+        # This will happen if 'arr' is an int instead of an array, for example.
+        print "Not iterable key:", k, "value:", json.dumps(v)
+        counts = [0]
+        durations = [0]
+        if not k.startswith("Error,"):
+            k = "Error," + k
+    # Always output TOTAL and Error lines. Otherwise only output queries that
+    # have been invoked more than N times.
     total_invocations = sum(counts)
-    if total_invocations > 100:
-        cx.write(",".join([k, str(len(v)), str(total_invocations), str(sum(durations))]), median(durations))
+    if total_invocations > 100 or k.startswith("TOTAL,") or k.startswith("Error,"):
+        # Output fields:
+        #   thread_type, submission_date, app_name, app_version,
+        #   app_update_channel, query, document_count, total_invocations,
+        #   total_duration, median_duration
+        cx.write(",".join([k, str(len(v)), str(total_invocations), str(sum(durations))]), median(avgs))
     else:
         print "Skipping a query with only", total_invocations, "invocations"
-
 
 if __name__ == "__main__":
     raw = '''{
