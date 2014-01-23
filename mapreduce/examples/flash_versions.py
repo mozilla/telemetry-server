@@ -1,6 +1,6 @@
 # Flash Versions export, ported from:
 #   https://github.com/mozilla-metrics/telemetry-toolbox
-import json
+import simplejson as json
 import traceback
 
 def map(k, d, v, cx):
