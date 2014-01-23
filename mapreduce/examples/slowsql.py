@@ -5,6 +5,7 @@ import io
 import re
 import simplejson as json
 import traceback
+from string import maketrans
 
 string_literal_pattern = re.compile(r'([\'\"])(.+?)\1');
 def replace_quoted_values(sql):
@@ -37,12 +38,13 @@ def sanitize(json_string):
 
 # Make sure the keys come out csv-friendly - all on one line, and surrounded by
 # double-quotes, and with any double-quotes inside doubled up per usual.
+eol_trans_table = maketrans("\r\n", "  ")
 def safe_key(pieces):
     output = io.BytesIO()
-    writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC)
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
     writer.writerow(pieces)
     # remove the trailing EOL chars:
-    return unicode(output.getvalue()).strip()
+    return unicode(output.getvalue().strip().translate(eol_trans_table))
 
 def map(k, d, v, cx):
     [reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date] = d
