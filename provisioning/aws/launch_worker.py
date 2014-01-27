@@ -63,7 +63,7 @@ for f in \$(find . -type f); do
   UPLOAD_CMD="aws --region $REGION s3 cp ./\$f $S3_BASE/data/\$f"
   if [[ "\$f" == *.gz ]]; then
     echo "adding 'Content-Type: gzip' for \$f" >> $LOG
-    UPLOAD_CMD="\$UPLOAD_CMD --content-encoding 'gzip'"
+    UPLOAD_CMD="\$UPLOAD_CMD --content-encoding gzip"
   else
     echo "Not adding 'Content-Type' header for \$f" >> $LOG
   fi
@@ -72,7 +72,7 @@ for f in \$(find . -type f); do
 done
 cd -
 gzip $LOG
-aws --region $REGION s3 cp ${LOG}.gz $S3_BASE/logs/$(basename $LOG).gz --content-type "text/plain" --content-encoding "gzip"
+aws --region $REGION s3 cp ${LOG}.gz $S3_BASE/logs/$(basename $LOG).gz --content-type "text/plain" --content-encoding gzip
 EOF
 halt
 """
