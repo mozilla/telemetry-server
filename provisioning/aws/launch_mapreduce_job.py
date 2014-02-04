@@ -13,10 +13,10 @@ from fabric.api import *
 from fabric.exceptions import NetworkError
 import sys
 import aws_util
-from aws_launcher import SimpleLauncher
+from aws_launcher import Launcher
 import traceback
 
-class MapReduceLauncher(SimpleLauncher):
+class MapReduceLauncher(Launcher):
     def post_install(self, instance):
         base_dir = self.config.get("base_dir", "/mnt/telemetry")
         with cd(base_dir):
@@ -35,15 +35,15 @@ class MapReduceLauncher(SimpleLauncher):
             input_filter = mr_cfg["input_filter"]
             put(job_script, job_dir)
             put(input_filter, job_dir)
-            job_script_path = "/".join((job_dir, os.path.basename(job_script)))
-            input_filter_path = "/".join((job_dir, os.path.basename(input_filter)))
-            output_path = "/".join((job_dir, "output.txt"))
+            job_script_path = os.path.join(job_dir, os.path.basename(job_script))
+            input_filter_path = os.path.join(job_dir, os.path.basename(input_filter))
+            output_path = os.path.join(job_dir, "output.txt")
             job_args = (job_script_path, input_filter_path, data_dir, work_dir, output_path, self.aws_key, self.aws_secret_key, mr_cfg["data_bucket"])
             run('python -m mapreduce.job %s --input-filter %s --data-dir %s --work-dir %s --output %s --aws-key "%s" --aws-secret-key "%s" --bucket "%s"' % job_args)
             # TODO: consult "output_compression"
-            run("lzma " + output_path)
-            # TODO: upload job/output.txt.lzma to S3 output_bucket.output_filename
-            result = get(output_path + ".lzma", mr_cfg["output_filename"])
+            run("xz " + output_path)
+            # TODO: upload job/output.txt.xz to S3 output_bucket.output_filename
+            result = get(output_path + ".xz", mr_cfg["output_filename"])
             # TODO: check result.succeeded before bailing.
 
 def main():

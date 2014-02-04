@@ -12,6 +12,8 @@ import os
 import simplejson as json
 from fabric.api import *
 from fabric.exceptions import NetworkError
+from boto.ec2.blockdevicemapping import BlockDeviceType
+from boto.ec2.blockdevicemapping import BlockDeviceMapping
 import sys
 import aws_util
 import traceback
@@ -95,7 +97,7 @@ class Launcher(object):
 
     def install_python_dependencies(self, instance):
         print "Installing python dependencies"
-        sudo('pip install --upgrade simplejson boto fabric')
+        sudo('pip install --upgrade simplejson boto fabric awscli')
 
     def install_misc_dependencies(self, instance):
         pass
@@ -109,6 +111,9 @@ class Launcher(object):
         home = "/home/" + self.ssl_user
         with cd(home + "/telemetry-server/telemetry"):
             run("bash ../bin/get_histogram_tools.sh")
+
+    def get_user_data(self):
+        pass
 
     def choose_telemetry_branch(self, instance):
         # By default we use the master branch, but if you wanted to use a
@@ -143,56 +148,112 @@ class Launcher(object):
         print "Terminating", instance.id
         conn.terminate_instances(instance_ids=[instance.id])
 
+    def create_instance(self):
+        if self.aws_key is None:
+            self.aws_key = self.config.get("aws_key", None)
+        if self.aws_secret_key is None:
+            self.aws_secret_key = self.config.get("aws_secret_key", None)
+
+        self.conn = aws_util.connect(self.config["region"], self.aws_key, self.aws_secret_key)
+        itype = self.config.get("instance_type", "m1.large")
+        print "Creating a new instance of type", itype
+        # Known images:
+        # ami-bf1d8a8f == Ubuntu 13.04
+        # ami-ace67f9c == Ubuntu 13.10
+        # ami-76831f46 == telemetry-base - based on Ubuntu 13.04 with dependencies
+        #                 already installed
+        # ami-260c9516 == telemetry-server - Based on Ubuntu 13.10, everything is
+        #                 ready to go, server  will be auto-started on boot. Does
+        #                 NOT auto-start process-incoming.
+
+        # See if ephemerals have been specified
+        mapping = None
+        if "ephemeral_map" in self.config:
+            mapping = BlockDeviceMapping()
+            for device, ephemeral in self.config["ephemeral_map"].iteritems():
+                mapping[device] = BlockDeviceType(ephemeral_name=ephemeral)
+
+        reservation = self.conn.run_instances(
+                self.config.get("image", "ami-bf1d8a8f"),
+                key_name=self.config["ssl_key_name"],
+                instance_type=itype,
+                security_groups=self.config["security_groups"],
+                placement=self.config["placement"],
+                block_device_map=mapping,
+                user_data=self.get_user_data(),
+                instance_profile_name=self.config.get("iam_role"),
+                instance_initiated_shutdown_behavior=self.config.get("shutdown_behavior", "stop"))
+
+        instance = reservation.instances[0]
+
+        default_tags = self.config.get("default_tags", {})
+        if len(default_tags) > 0:
+            self.conn.create_tags([instance.id], default_tags)
+        # TODO:
+        # - find all instances where Owner = mreid and Application = telemetry-server
+        # - get the highest number
+        # - use the next one (or first unused one) for the current instance name.
+        name_tag = {"Name": self.config["name"]}
+        self.conn.create_tags([instance.id], name_tag)
+
+        while instance.state == 'pending':
+            print "Instance is pending - Waiting 10s for instance", instance.id, "to start up..."
+            time.sleep(10)
+            instance.update()
+
+        print "Instance", instance.id, "is", instance.state
+        return instance
+
     def go(self):
         print "Using the following config:"
         print json.dumps(self.config)
 
         if "instance_id" in self.config:
             print "Fetching instance", self.config["instance_id"]
-            conn = aws_util.connect(self.config["region"], self.aws_key, self.aws_secret_key)
-            instance = aws_util.get_instance(conn, self.config["instance_id"])
+            self.conn = aws_util.connect(self.config["region"], self.aws_key, self.aws_secret_key)
+            self.instance = aws_util.get_instance(conn, self.config["instance_id"])
         else:
             print "Creating instance..."
-            conn, instance = aws_util.create_instance(self.config, self.aws_key, self.aws_secret_key)
-        self.conn = conn
-        self.instance = instance
+            self.instance = self.create_instance()
 
         print "Ready to connect..."
         try:
-            ssl_host = "@".join((self.ssl_user, instance.public_dns_name))
+            ssl_host = "@".join((self.ssl_user, self.instance.public_dns_name))
             print "To connect to it:"
             print "ssh -i", self.ssl_key_path, ssl_host
-            env.key_filename = self.ssl_key_path
-            env.host_string = ssl_host
 
-            # Can't connect when using known hosts :(
-            env.disable_known_hosts = True
+            if not self.config.get("skip_ssh", False):
+                env.key_filename = self.ssl_key_path
+                env.host_string = ssl_host
 
-            # Long-running commands may time out if we don't set this
-            env.keepalive = 5
+                # Can't connect when using known hosts :(
+                env.disable_known_hosts = True
 
-            if aws_util.wait_for_ssh(self.config.get("ssl_retries", 3)):
-                print "SSH Connection is ready."
-            else:
-                print "Failed to establish SSH Connection to", instance.id
-                sys.exit(2)
+                # Long-running commands may time out if we don't set this
+                env.keepalive = 5
+
+                if aws_util.wait_for_ssh(self.config.get("ssl_retries", 3)):
+                    print "SSH Connection is ready."
+                else:
+                    print "Failed to establish SSH Connection to", self.instance.id
+                    sys.exit(2)
 
             if not self.config.get("skip_bootstrap", False):
-                self.bootstrap_instance(instance)
+                self.bootstrap_instance(self.instance)
 
-            self.run(instance)
+            self.run(self.instance)
         except Exception, e:
             print "Launch Error:", e
         finally:
             # All done: Terminate this mofo
             if "instance_id" in self.config:
                 # It was an already-existing instance, leave it alone
-                print "Not terminating instance", instance.id
+                print "Not terminating instance", self.instance.id
             elif self.config.get("skip_termination", False):
-                print "Config said not to terminate instance", instance.id
+                print "Config said not to terminate instance", self.instance.id
             else:
                 # we created it ourselves, terminate it.
-                self.terminate(conn, instance)
+                self.terminate(self.conn, self.instance)
 
     def run(self, instance):
         pass

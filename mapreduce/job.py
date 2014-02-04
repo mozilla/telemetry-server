@@ -191,6 +191,8 @@ class Job:
                 # We can't rename across devices :( Copy / delete instead.
                 to_combine = 0
 
+        # TODO: If _output_file ends with a compressed suffix (.gz, .xz, .bz2, etc),
+        #       try to compress it after writing.
         if self._num_reducers > to_combine:
             out = open(self._output_file, "a")
             for i in range(to_combine, self._num_reducers):
@@ -281,7 +283,7 @@ class Job:
             for f in s3util.list_partitions(bucket, schema=self._input_filter, include_keys=True):
                 count += 1
                 out_files.append(f)
-                if count % 1000 == 0:
+                if count == 1 or count % 1000 == 0:
                     print "Listed", count, "so far"
             conn.close()
             duration = timer.delta_sec(start)
@@ -461,19 +463,25 @@ def main():
             print "ERROR: The 'boto' library is required except in 'local-only' mode."
             print "       You can install it using `sudo pip install boto`"
             parser.print_help()
-            sys.exit(-2)
+            return -2
         # If we want to process remote data, some more arguments are required.
         for remote_req in ["bucket"]:
             if not hasattr(args, remote_req) or getattr(args, remote_req) is None:
                 print "ERROR:", remote_req, "is a required option"
                 parser.print_help()
-                sys.exit(-1)
+                return -1
 
     job = Job(args)
     start = datetime.now()
-    job.mapreduce()
+    exit_code = 0
+    try:
+        job.mapreduce()
+    except:
+        traceback.print_exc(file=sys.stderr)
+        exit_code = 2
     duration = timer.delta_sec(start)
     print "All done in %.2fs" % (duration)
+    return exit_code
 
 if __name__ == "__main__":
     sys.exit(main())
