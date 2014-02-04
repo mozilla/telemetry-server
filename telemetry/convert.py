@@ -105,7 +105,9 @@ class Converter:
             if key in histogram_defs:
                 real_histogram_name = key
             elif key.startswith("STARTUP_") and key[8:] in histogram_defs:
-                # chop off leading "STARTUP_" per http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#532
+                # chop off leading "STARTUP_"
+                # See http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.jsm
+                #     in the `gatherStartupHistograms` function.
                 real_histogram_name = key[8:]
             else:
                 # TODO: collect these to be returned
