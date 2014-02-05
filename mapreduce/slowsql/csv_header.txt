@@ -1,0 +1,1 @@
+thread_type,submission_date,app_name,app_version,app_update_channel,query,document_count,total_invocations,total_duration,median_duration
