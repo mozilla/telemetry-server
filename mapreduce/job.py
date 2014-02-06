@@ -358,7 +358,9 @@ class Mapper:
             for line in input_file["handle"]:
                 line_num += 1
                 try:
-                    key, value = line.split("\t", 1)
+                    # Remove the trailing EOL character(s) before passing to
+                    # the map function.
+                    key, value = line.rstrip('\r\n').split("\t", 1)
                     mapfunc(key, input_file["dimensions"], value, context)
                 except ValueError, e:
                     # TODO: increment "bad line" metrics.
@@ -422,20 +424,28 @@ class Reducer:
         if callable(setupreducefunc):
             setupreducefunc(context)
 
+        map_only = False
         if not callable(reducefunc):
-            print "No reduce function (that's ok)"
-        else:
-            collected = Collector(combinefunc, Reducer.COMBINE_SIZE)
-            for i in range(mapper_count):
-                mapper_file = os.path.join(work_dir, "mapper_%d_%d" % (i, reducer_id))
-                # read, group by key, call reducefunc, output
-                input_fd = open(mapper_file, "rb")
-                while True:
-                    try:
-                        key, value = marshal.load(input_fd)
+            print "No reduce function (that's ok). Writing out all the data."
+            map_only = True
+
+        collected = Collector(combinefunc, Reducer.COMBINE_SIZE)
+        for i in range(mapper_count):
+            mapper_file = os.path.join(work_dir, "mapper_%d_%d" % (i, reducer_id))
+            # read, group by key, call reducefunc, output
+            input_fd = open(mapper_file, "rb")
+            while True:
+                try:
+                    key, value = marshal.load(input_fd)
+                    if map_only:
+                        # Just write out each row as we see it
+                        context.write(key, value)
+                    else:
                         collected.collect(key, value)
-                    except EOFError:
-                        break
+                except EOFError:
+                    break
+        if not map_only:
+            # invoke the reduce function on each combined output.
             for k,v in collected.iteritems():
                 reducefunc(k, v, context)
         context.finish()
