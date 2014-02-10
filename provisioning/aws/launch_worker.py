@@ -50,9 +50,12 @@ pip install --upgrade awscli
 mkdir -p $BASE
 chown ubuntu:ubuntu $BASE
 sudo -u ubuntu bash <<EOF
+mkdir -p ~/.aws
+echo "[default]" > ~/.aws/config
+echo "region = $REGION" >> ~/.aws/config
 cd $BASE
 mkdir -p $OUTPUT_DIR
-aws --region $REGION s3 cp $CODE_URI code.tar.gz
+aws s3 cp $CODE_URI code.tar.gz
 tar xzvf code.tar.gz
 $MAIN &> $LOG
 echo "'$MAIN' exited with code $?" >> $LOG
@@ -60,7 +63,7 @@ cd $OUTPUT_DIR
 for f in \$(find . -type f); do
   # Remove the leading "./"
   f=\$(sed -e "s/^\.\///" <<< \$f)
-  UPLOAD_CMD="aws --region $REGION s3 cp ./\$f $S3_BASE/data/\$f"
+  UPLOAD_CMD="aws s3 cp ./\$f $S3_BASE/data/\$f"
   if [[ "\$f" == *.gz ]]; then
     echo "adding 'Content-Type: gzip' for \$f" >> $LOG
     UPLOAD_CMD="\$UPLOAD_CMD --content-encoding gzip"
@@ -72,7 +75,7 @@ for f in \$(find . -type f); do
 done
 cd -
 gzip $LOG
-aws --region $REGION s3 cp ${LOG}.gz $S3_BASE/logs/$(basename $LOG).gz --content-type "text/plain" --content-encoding gzip
+aws s3 cp ${LOG}.gz $S3_BASE/logs/$(basename $LOG).gz --content-type "text/plain" --content-encoding gzip
 EOF
 halt
 """
