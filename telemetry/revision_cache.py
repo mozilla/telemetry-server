@@ -28,7 +28,7 @@ class RevisionCache:
         self._repos = dict()
         self._hist_filename = "Histograms.json"
         self._hist_filepath = "toolkit/components/telemetry/" + self._hist_filename
-        self._valid_revisions = re.compile('^(http://[^/]+)/(.+)/rev/([0-9a-f]+)/?$')
+        self._valid_revisions = re.compile('^(http[s]?://[^/]+)/(.+)/rev/([0-9a-f]+)/?$')
 
     # TODO:
     #  [ ] deal with 'tip' and other named revisions / tags (fetch from source

@@ -39,12 +39,15 @@ try:
     check_one_url('http://hg.mozilla.org/releases/mozilla-aurora/rev/98feaf977ea2')
     check_one_url('http://hg.mozilla.org/mozilla-central/rev/e42dce3209da')
     check_one_url('http://hg.mozilla.org/projects/date/rev/614052b6cbcc')
-    check_one_url('http://hg.mozilla.org/try/rev/1c2a29db9d88')
+    # Try urls have a limited shelf life... we'd have to fetch a fresh one to test.
+    #check_one_url('http://hg.mozilla.org/try/rev/1c2a29db9d88')
+    #check_one_url('http://hg.mozilla.org/try/rev/c83206ac7356')
     check_one_url('http://hg.mozilla.org/integration/b2g-inbound/rev/9b6f43676952')
     check_one_url('http://hg.mozilla.org/projects/elm/rev/ff718cdbd54b')
     check_one_url('http://hg.mozilla.org/projects/ux/rev/b7d620677157')
     check_one_url('http://hg.mozilla.org/integration/fx-team/rev/dadec41b7cbc')
     check_one_url('http://hg.mozilla.org/integration/mozilla-inbound/rev/85cad21c5d48')
     check_one_url('http://hg.mozilla.org/releases/mozilla-esr24/rev/bba10d0ca256')
+    check_one_url('https://hg.mozilla.org/mozilla-central/rev/ecf20a2484b6')
 finally:
     shutil.rmtree(cache_dir)
