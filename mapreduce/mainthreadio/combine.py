@@ -110,6 +110,3 @@ for stub, column in [["frequency", 1], ["median_time", 2], ["median_count", 3]]:
         filename, app, chan, ver = f.split("\t")
         writer.writerow(row[0:-1] + [filename, app, chan, ver])
     outfile.close()
-
-# Output columns:
-#file, frequency, document_count, median_acc_time, median_op_count, app_name, channel, version
