@@ -58,7 +58,7 @@ instruction_limit = 100000
 output_limit = 64000
 
 [TelemetryServerMetricsHostAggregator.config]
-max_hosts = 5
+max_hosts = 10
 rows = 60
 
 [TelemetryChannelMetricsAggregator]
@@ -72,9 +72,13 @@ memory_limit = 8000000
 instruction_limit = 100000
 output_limit = 64000
 
+[TelemetryChannelMetricsAggregator.config]
+alert_rows = 15
+alert_cols = '[{"col":1, "deviation":1.5}]'
+
 [TelemetryChannelMetrics60DaysAggregator]
 type = "SandboxFilter"
-message_matcher = "Logger == 'TelemetryChannelMetrics' && Fields[payload_type] == 'cbufd'"
+message_matcher = "Logger == 'TelemetryChannelMetrics60Days' && Fields[payload_type] == 'cbufd'"
 ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_aggregator.lua"
@@ -82,6 +86,21 @@ preserve_data = true
 memory_limit = 8000000
 instruction_limit = 100000
 output_limit = 64000
+
+[TelemetryChannelMetrics60DaysAggregatorAlerting]
+type = "SandboxFilter"
+message_matcher = "Logger == 'TelemetryChannelMetrics60Days' && Fields[payload_type] == 'cbufd'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/cbufd_aggregator.lua"
+preserve_data = true
+memory_limit = 8000000
+instruction_limit = 100000
+output_limit = 64000
+
+[TelemetryChannelMetrics60DaysAggregatorAlerting.config]
+alert_rows = 15
+alert_cols = '[{"col":1, "deviation":1.5}]'
 
 [TelemetryConvertMetrics]
 type = "SandboxFilter"
@@ -93,3 +112,10 @@ preserve_data = true
 memory_limit = 1000000 
 instruction_limit = 10000
 output_limit = 64000
+
+[TelemetryAlert]
+type = "SmtpOutput"
+payload_only = false
+message_matcher = "Type == 'heka.sandbox-output' && Fields[payload_type] == 'alert'"
+send_to = ["trink@mozilla.com"]
+host = "mozilla.com.s5a1.psmtp.com:25"

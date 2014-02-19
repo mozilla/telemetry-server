@@ -23,11 +23,10 @@ working_directory = "sandbox"
 max_filters = 10
 
 [TelemetryServerInput]
-type = "LogfileInput"
-logfile = "/var/log/telemetry/telemetry-server.log"
+type = "LogstreamerInput"
+log_directory = "/var/log/telemetry"
+file_match = 'telemetry-server\.log'
 decoder = "TelemetryServerDecoder"
-seek_journal_name = "telemetry-server.journal"
-use_seek_journal = true 
 
 [TelemetryServerDecoder]
 type = "SandboxDecoder"
@@ -83,8 +82,6 @@ ticker_interval = 10
 working_directory = "dashboard"
 static_directory = "/usr/share/heka/dasher"
 
-[AMQPOutput]
-url = "amqp://guest:guest@10.250.68.186"
-exchange = "testout"
-exchangeType = "fanout"
+[TcpOutput]
+address = "10.250.68.186:5565"
 message_matcher =  "Type == 'heka.sandbox-output' && Fields[payload_type] == 'cbufd'"

@@ -8,21 +8,21 @@
 
 -- Injected Heka message
 ------------------------
---	Timestamp: 2013-09-10 20:43:17.216999936 +0000 UTC
---	Type: TelemetryServerLog
---	Hostname: trink-x230
---	Pid: 0
---	UUID: 2be3ed98-89e8-4bd0-a7c4-9aebe8747a8b
---	Logger: telemetry-server.log
---	Payload:
---	EnvVersion:
---	Severity: 6
---	Fields: [
---	name:"message" value_string:"OK"
---	name:"code" value_type:DOUBLE value_double:200
---	name:"url" value_string:"/submit/sample"
---	name:"duration" value_type:DOUBLE representation:"ms" value_double:0.547324
---	name:"size" value_type:DOUBLE representation:"B" value_double:4819 ]
+--      Timestamp: 2013-09-10 20:43:17.216999936 +0000 UTC
+--      Type: TelemetryServerLog
+--      Hostname: trink-x230
+--      Pid: 0
+--      UUID: 2be3ed98-89e8-4bd0-a7c4-9aebe8747a8b
+--      Logger: telemetry-server.log
+--      Payload:
+--      EnvVersion:
+--      Severity: 6
+--      Fields: [
+--      name:"message" value_string:"OK"
+--      name:"code" value_type:DOUBLE value_double:200
+--      name:"url" value_string:"/submit/sample"
+--      name:"duration" value_type:DOUBLE representation:"ms" value_double:0.547324
+--      name:"size" value_type:DOUBLE representation:"B" value_double:4819 ]
 
 require "cjson"
 
@@ -40,7 +40,7 @@ local fields = {
 local msg = {
     Timestamp = 0,
     Type = "TelemetryServerLog",
-    Severity = "7",
+    Severity = 7,
     Fields = fields
 }
 
