@@ -17,8 +17,13 @@
 #                      --from-email telemetry-alerts@some.tld \
 #                      --subject "Telemetry submission rate alert"
 
-import matplotlib as mp
-import matplotlib.pylab
+try:
+    import matplotlib as mp
+    import matplotlib.pylab
+    mp_available = True
+except ImportError:
+    mp_available = False
+
 import numpy
 import sys
 import simplejson as json
@@ -122,11 +127,14 @@ if __name__ == "__main__":
                 json.dump(last_run, f)
             print json.dumps(last_run, sort_keys=True, indent=2, separators=(',', ': '))
     elif len(sys.argv) > 1:
-        for channel in sys.argv[1:]:
-            # Display a graph of the specified channel
-            series = parse(get_data_url(channel), "Requests")
-            print "Detecting anomalies for channel: {0}. Graph URL: {1}".format(channel, get_graph_url(channel))
-            results = [predict(series[:i]) for i in range(0, len(series))]
-            cmap = mp.colors.ListedColormap(["white","red"], name='from_list', N=None)
-            mp.pyplot.scatter(range(0, len(series)), series, c=results, cmap=cmap)
-            mp.pylab.show()
+        if not mp_availalbe:
+            print "Sorry, matplotlib is not available.  Please install it to continue..."
+        else:
+            for channel in sys.argv[1:]:
+                # Display a graph of the specified channel
+                series = parse(get_data_url(channel), "Requests")
+                print "Detecting anomalies for channel: {0}. Graph URL: {1}".format(channel, get_graph_url(channel))
+                results = [predict(series[:i]) for i in range(0, len(series))]
+                cmap = mp.colors.ListedColormap(["white","red"], name='from_list', N=None)
+                mp.pyplot.scatter(range(0, len(series)), series, c=results, cmap=cmap)
+                mp.pylab.show()
