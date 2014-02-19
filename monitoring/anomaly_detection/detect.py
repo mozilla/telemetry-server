@@ -127,7 +127,7 @@ if __name__ == "__main__":
                 json.dump(last_run, f)
             print json.dumps(last_run, sort_keys=True, indent=2, separators=(',', ': '))
     elif len(sys.argv) > 1:
-        if not mp_availalbe:
+        if not mp_available:
             print "Sorry, matplotlib is not available.  Please install it to continue..."
         else:
             for channel in sys.argv[1:]:
