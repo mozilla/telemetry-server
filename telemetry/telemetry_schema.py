@@ -98,3 +98,16 @@ class TelemetrySchema:
             else:
                 dimensions.append(info.get(dim["field_name"], "UNKNOWN"))
         return dimensions
+
+    def get_field(self, dims, field_name):
+        dim_idx = -1
+        for i in range(len(self._dimensions)):
+            if self._dimensions[i]["field_name"] == field_name:
+                dim_idx = i
+                break
+        if dim_idx >= 0 and dim_idx < len(dims):
+            return dims[dim_idx]
+        elif dim_idx < 0:
+            raise ValueError("Error: field '{0}' not in schema dimensions".format(field_name))
+        else:
+            raise ValueError("Error: field '{0}' is dimension {1}, but incoming dims only has {2} items".format(field_name, dim_idx, len(dims)))
