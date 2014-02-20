@@ -77,13 +77,16 @@ class Log(object):
 
 class PipeStep(object):
     SENTINEL = 'STOP'
-    def __init__(self, num, name, q_in, q_out=None, log_file=None):
+    def __init__(self, num, name, q_in, q_out=None, log_file=None, stats_file=None):
         self.print_stats = True
         self.num = num
+        self.name = name
         self.label = " ".join((name, str(num)))
         self.q_in = q_in
         self.q_out = q_out
         self.log_file = log_file
+        self.stats_file = stats_file
+        self.stats = {}
         self.start_time = datetime.now()
         self.end_time = datetime.now()
         self.last_update = datetime.now()
@@ -113,6 +116,45 @@ class PipeStep(object):
         mb_write_rate = mb_written / duration
         self.log("Read %d records or %.2fMB (%.2fr/s, %.2fMB/s), wrote %d or %.2f MB (%.2fr/s, %.2fMB/s). Found %d bad records" % (self.records_read, mb_read, read_rate, mb_read_rate, self.records_written, mb_written, write_rate, mb_write_rate, self.bad_records))
 
+    def log_stats(self):
+        self.log("Logging stats!")
+        if self.stats_file is not None:
+            self.stats = {
+                "task": self.name,
+                "start_time": self.start_time.isoformat(),
+                "end_time": self.end_time.isoformat(),
+                "duration": timer.delta_sec(self.start_time, self.end_time),
+                "bad_records": self.bad_records,
+                "records_read": self.records_read,
+                "records_written": self.records_written,
+                "bytes_read": self.bytes_read,
+                "bytes_written": self.bytes_written
+            }
+            try:
+                with io.open(self.stats_file, "a") as fout:
+                    fout.write(unicode(json.dumps(self.stats) + u"\n"))
+            except:
+                self.log("Error writing stats")
+                self.log(traceback.format_exc())
+
+    def increment_stats(self, channel=None, records_read=0, records_written=0, bytes_read=0, bytes_written=0, bad_records=0):
+        self.records_read += records_read
+        self.records_written += records_written
+        self.bytes_read += bytes_read
+        self.bytes_written += bytes_written
+        self.bad_records += bad_records
+        if channel is not None:
+            # also record the stats for the channel
+            c = self.stats.get("channel", {})
+            cs = c.get(channel, defaultdict(int))
+            cs["records_read"] += records_read
+            cs["records_written"] += records_written
+            cs["bytes_read"] += bytes_read
+            cs["bytes_written"] += bytes_written
+            cs["bad_records"] += bad_records
+            c[channel] = cs
+            self.stats["channel"] = c
+
     def finish(self):
         self.log("All done")
         self.dump_stats()
@@ -128,7 +170,7 @@ class PipeStep(object):
                 if raw == PipeStep.SENTINEL:
                     break
                 self.handle(raw)
-                self.records_read += 1
+                #self.records_read += 1
                 if self.print_stats:
                     this_update = datetime.now()
                     if timer.delta_sec(self.last_update, this_update) > 10.0:
@@ -140,18 +182,18 @@ class PipeStep(object):
         self.log("Received stop message... work done")
 
 class ReadRawStep(PipeStep):
-    def __init__(self, num, name, raw_files, completed_files, log_file, schema, converter, storage, bad_filename):
+    def __init__(self, num, name, raw_files, completed_files, log_file, stats_file, schema, converter, storage, bad_filename):
         self.schema = schema
         self.converter = converter
         self.storage = storage
         self.bad_filename = bad_filename
-        PipeStep.__init__(self, num, name, raw_files, completed_files, log_file)
+        PipeStep.__init__(self, num, name, raw_files, completed_files, log_file, stats_file)
 
     def setup(self):
         self.expected_dim_count = len(self.schema._dimensions)
 
     def handle(self, raw_file):
-        self.log("Reading" + raw_file)
+        self.log("Reading " + raw_file)
         try:
             record_count = 0
             bytes_read = 0
@@ -258,6 +300,7 @@ class ReadRawStep(PipeStep):
         except Exception, e:
             # Corrupted data, let's skip this record.
             self.log("Error reading raw data from {0} {1}\n{2}".format(raw_file, e, traceback.format_exc()))
+        self.log_stats()
 
     def write_bad_record(self, key, dims, data, error, message=None):
         self.bad_records += 1
@@ -323,16 +366,15 @@ class CompressCompletedStep(PipeStep):
 
 
 class ExportCompressedStep(PipeStep):
-    def __init__(self, num, name, q_in, log_file, base_dir, config, dry_run):
+    def __init__(self, num, name, q_in, log_file, stats_file, base_dir, config, dry_run):
         self.dry_run = dry_run
         self.base_dir = base_dir
         self.aws_key = config.get("aws_key", None)
         self.aws_secret_key = config.get("aws_secret_key", None)
         self.aws_bucket_name = config["publish_bucket"]
-        PipeStep.__init__(self, num, name, q_in, log_file=log_file)
+        PipeStep.__init__(self, num, name, q_in, log_file=log_file, stats_file=stats_file)
 
     def setup(self):
-        self.batch = []
         if self.dry_run:
             self.conn = None
             self.bucket = None
@@ -409,6 +451,7 @@ def main():
     parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
     parser.add_argument("-b", "--bad-data-log", help="Save bad records to this file")
     parser.add_argument("-l", "--log-file", help="Log output to this file")
+    parser.add_argument("-s", "--stats-file", help="Log statistics to this file")
     parser.add_argument("--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
     parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
@@ -469,6 +512,9 @@ def main():
     done = False
 
     while not done:
+        if args.dry_run:
+            done = True
+
         try:
             start = datetime.now()
             incoming_filenames = []
@@ -476,6 +522,9 @@ def main():
             logger.log("Fetching file list from queue " + config["incoming_queue"])
             if args.dry_run:
                 logger.log("Dry run mode... can't read from the queue without messing things up...")
+                if args.input_files:
+                    print "Fetching file list from file", args.input_files
+                    incoming_filenames = [ l.strip() for l in args.input_files.readlines() ]
             else:
                 # Sometimes we don't get all the messages, even if more are
                 # available, so keep trying until we have enough (or there aren't
@@ -510,6 +559,7 @@ def main():
             local_filenames = []
             if args.dry_run:
                 logger.log("Dry run mode: skipping download from S3")
+                local_filenames = [ os.path.join(args.work_dir, f) for f in incoming_filenames ]
             else:
                 for local_filename, remote_filename, err in s3downloader.get_list(incoming_filenames):
                     if err is None:
@@ -537,14 +587,14 @@ def main():
 
             # Begin reading raw input
             raw_readers = start_workers(logger, num_cpus, "Reader", ReadRawStep, raw_files,
-                    (completed_files, args.log_file, schema, converter, storage, args.bad_data_log))
+                    (completed_files, args.log_file, args.stats_file, schema, converter, storage, args.bad_data_log))
 
             # Tell readers to stop when they get to the end:
             finish_queue(raw_files, num_cpus)
 
             # Compress completed files.
             compressors = start_workers(logger, num_cpus, "Compressor", CompressCompletedStep,
-                    completed_files, (None, args.log_file))
+                    completed_files, (None, args.log_file, args.stats_file))
 
             wait_for(logger, raw_readers, "Raw Readers")
 
@@ -563,7 +613,7 @@ def main():
                 # Export compressed files to S3.
                 compressed_files = Queue()
                 exporters = start_workers(logger, num_cpus, "Exporter", ExportCompressedStep,
-                        compressed_files, (args.log_file, args.output_dir, config, args.dry_run))
+                        compressed_files, (args.log_file, args.stats_file, args.output_dir, config, args.dry_run))
                 for root, dirs, files in os.walk(args.output_dir):
                     for f in files:
                         if f.endswith(StorageLayout.COMPRESSED_SUFFIX):
