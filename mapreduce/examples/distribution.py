@@ -2,7 +2,7 @@
 Get the distribution of a boolean measurement.
 """
 
-import simplejson as json
+import json
 
 key = "NEWTAB_PAGE_SHOWN"
 
