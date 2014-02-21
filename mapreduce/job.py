@@ -331,6 +331,9 @@ class TextContext(Context):
         self._sink.write(str(value))
         self._sink.write(self.record_separator)
 
+    def writeline(self, value):
+        self._sink.write(value)
+        self._sink.write(self.record_separator)
 
 class Mapper:
     def __init__(self, mapper_id, inputs, work_dir, module, partition_count):
