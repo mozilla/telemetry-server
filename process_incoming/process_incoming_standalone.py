@@ -168,7 +168,6 @@ class PipeStep(object):
     def finish(self):
         self.log("All done")
         self.dump_stats()
-        self.log_stats()
 
     def handle(self, record):
         pass
@@ -180,8 +179,10 @@ class PipeStep(object):
                 raw = self.q_in.get()
                 if raw == PipeStep.SENTINEL:
                     break
+                self.reset_stats()
                 self.handle(raw)
-                #self.records_read += 1
+                self.end_time = datetime.now()
+                self.log_stats()
                 if self.print_stats:
                     this_update = datetime.now()
                     if timer.delta_sec(self.last_update, this_update) > 10.0:
@@ -206,7 +207,6 @@ class ReadRawStep(PipeStep):
 
     def handle(self, raw_file):
         self.log("Reading " + raw_file)
-        self.reset_stats()
         try:
             record_count = 0
             bytes_read = 0
@@ -317,8 +317,7 @@ class ReadRawStep(PipeStep):
         except Exception, e:
             # Corrupted data, let's skip this record.
             self.log("Error reading raw data from {0} {1}\n{2}".format(raw_file, e, traceback.format_exc()))
-        self.end_time = datetime.now()
-        self.log_stats()
+
 
     def write_bad_record(self, key, dims, data, error, message=None, bad_record_type=None):
         # TODO: keep stats of bad records by error type
@@ -335,10 +334,6 @@ class ReadRawStep(PipeStep):
                 self.storage.write_filename(path, data, self.bad_filename)
             except Exception, e:
                 self.log("ERROR: {0}".format(e))
-
-    def finish(self):
-        self.log("All done")
-        self.dump_stats()
 
 
 class CompressCompletedStep(PipeStep):
@@ -547,7 +542,7 @@ def main():
             if args.dry_run:
                 logger.log("Dry run mode... can't read from the queue without messing things up...")
                 if args.input_files:
-                    print "Fetching file list from file", args.input_files
+                    logger.log("Fetching file list from file {}".format(args.input_files))
                     incoming_filenames = [ l.strip() for l in args.input_files.readlines() ]
             else:
                 # Sometimes we don't get all the messages, even if more are
