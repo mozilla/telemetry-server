@@ -76,43 +76,15 @@ class Log(object):
             with io.open(self.log_file, "a") as fout:
                 fout.write(u"{0}: {1}\n".format(self.label, message))
 
-
-class PipeStep(object):
-    SENTINEL = 'STOP'
-    def __init__(self, num, name, q_in, q_out=None, log_file=None, stats_file=None):
-        self.print_stats = True
-        self.num = num
-        self.name = name
-        self.label = " ".join((name, str(num)))
-        self.q_in = q_in
-        self.q_out = q_out
-        self.log_file = log_file
+class Stats(object):
+    def __init__(self, task, stats_file):
+        self.task = task
         self.stats_file = stats_file
-        self.reset_stats()
-        self.logger = Log(log_file, self.label)
-        self.log = self.logger.log
+        self.reset()
 
-        # Do stuff.
-        self.setup()
-        self.work()
-        self.finish()
-
-    def setup(self):
-        pass
-
-    def dump_stats(self):
-        duration = timer.delta_sec(self.start_time, self.end_time)
-        read_rate = self.records_read / duration
-        mb_read = self.bytes_read / 1024.0 / 1024.0
-        mb_read_rate = mb_read / duration
-        write_rate = self.records_written / duration
-        mb_written = self.bytes_written / 1024.0 / 1024.0
-        mb_write_rate = mb_written / duration
-        self.log("Read %d records or %.2fMB (%.2fr/s, %.2fMB/s), wrote %d or %.2f MB (%.2fr/s, %.2fMB/s). Found %d bad records" % (self.records_read, mb_read, read_rate, mb_read_rate, self.records_written, mb_written, write_rate, mb_write_rate, self.bad_records))
-
-    def log_stats(self):
+    def save(self):
         if self.stats_file is not None:
-            self.stats["task"] = self.name
+            self.stats["task"] = self.task
             self.stats["start_time"] = self.start_time.isoformat()
             self.stats["end_time"] = self.end_time.isoformat()
             self.stats["duration"] = timer.delta_sec(self.start_time, self.end_time)
@@ -129,11 +101,10 @@ class PipeStep(object):
                 self.log("Error writing stats")
                 self.log(traceback.format_exc())
 
-    def reset_stats(self):
+    def reset(self):
         self.stats = {}
         self.start_time = datetime.now()
         self.end_time = datetime.now()
-        self.last_update = datetime.now()
         self.bad_records = 0
         self.records_read = 0
         self.records_written = 0
@@ -141,7 +112,25 @@ class PipeStep(object):
         self.bytes_uncompressed = 0
         self.bytes_written = 0
 
-    def increment_stats(self, channel=None, records_read=0, records_written=0, bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0, bad_record_type=None):
+    def update_end_time(self):
+        self.end_time = datetime.now()
+
+    def get_summary(self):
+        duration = timer.delta_sec(self.start_time, self.end_time)
+        read_rate = self.records_read / duration
+        mb_read = self.bytes_read / 1024.0 / 1024.0
+        mb_read_rate = mb_read / duration
+        write_rate = self.records_written / duration
+        mb_written = self.bytes_written / 1024.0 / 1024.0
+        mb_write_rate = mb_written / duration
+        summary = "Read %d records or %.2fMB (%.2fr/s, %.2fMB/s), " \
+                  "wrote %d or %.2f MB (%.2fr/s, %.2fMB/s). " \
+                  "Found %d bad records" % (self.records_read, mb_read,
+                    read_rate, mb_read_rate, self.records_written, mb_written,
+                    write_rate, mb_write_rate, self.bad_records)
+        return summary
+
+    def increment(self, channel=None, records_read=0, records_written=0, bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0, bad_record_type=None):
         self.records_read += records_read
         self.records_written += records_written
         self.bytes_read += bytes_read
@@ -165,9 +154,32 @@ class PipeStep(object):
             b[bad_record_type] += bad_records
             self.stats["bad_record_type"] = b
 
+
+class PipeStep(object):
+    SENTINEL = 'STOP'
+    def __init__(self, num, name, q_in, q_out=None, log_file=None, stats_file=None):
+        self.print_stats = True
+        self.num = num
+        self.label = " ".join((name, str(num)))
+        self.q_in = q_in
+        self.q_out = q_out
+        self.log_file = log_file
+        self.stats = Stats(name, stats_file)
+        self.logger = Log(log_file, self.label)
+        self.last_update = datetime.now()
+        self.log = self.logger.log
+
+        # Do stuff.
+        self.setup()
+        self.work()
+        self.finish()
+
+    def setup(self):
+        pass
+
     def finish(self):
         self.log("All done")
-        self.dump_stats()
+        self.log(self.stats.get_summary())
 
     def handle(self, record):
         pass
@@ -179,16 +191,15 @@ class PipeStep(object):
                 raw = self.q_in.get()
                 if raw == PipeStep.SENTINEL:
                     break
-                self.reset_stats()
+                self.stats.reset()
                 self.handle(raw)
-                self.end_time = datetime.now()
-                self.log_stats()
+                self.stats.update_end_time()
+                self.stats.save()
                 if self.print_stats:
                     this_update = datetime.now()
                     if timer.delta_sec(self.last_update, this_update) > 10.0:
                         self.last_update = this_update
-                        self.dump_stats()
-                self.end_time = datetime.now()
+                        self.log(self.stats.get_summary())
             except Q.Empty:
                 break
         self.log("Received stop message... work done")
@@ -219,11 +230,11 @@ class ReadRawStep(PipeStep):
                 bytes_read += current_bytes
                 if err:
                     self.log("ERROR: Found corrupted data for record {0} in {1} path: {2} Error: {3}".format(record_count, raw_file, path, err))
-                    self.increment_stats(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type="corrupted data")
+                    self.stats.increment(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type="corrupted data")
                     continue
                 if len(data) == 0:
                     self.log("WARN: Found empty data for record {0} in {2} path: {2}".format(record_count, raw_file, path))
-                    self.increment_stats(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type="empty data")
+                    self.stats.increment(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type="empty data")
                     continue
 
                 # Incoming timestamps are in milliseconds, so convert to POSIX first
@@ -246,7 +257,7 @@ class ReadRawStep(PipeStep):
                     bad_record_type = "invalid path"
                     if ReadRawStep.UUID_ONLY_PATH.match(path):
                         bad_record_type = "uuid-only path"
-                    self.increment_stats(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type=bad_record_type)
+                    self.stats.increment(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type=bad_record_type)
                     continue
 
                 key = path_components.pop(0)
@@ -258,7 +269,7 @@ class ReadRawStep(PipeStep):
                 info["appBuildID"] = path_components.pop(0)
                 dims = self.schema.dimensions_from(info, submission_date)
 
-                self.increment_stats(channel=info["appUpdateChannel"], records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed)
+                self.stats.increment(channel=info["appUpdateChannel"], records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed)
 
                 try:
                     # Convert data:
@@ -277,7 +288,7 @@ class ReadRawStep(PipeStep):
                     try:
                         # Write to persistent storage
                         n = self.storage.write(key, serialized_data, dims, data_version)
-                        self.increment_stats(channel=info["appUpdateChannel"], records_written=1, bytes_written=len(key) + len(serialized_data) + 2)
+                        self.stats.increment(channel=info["appUpdateChannel"], records_written=1, bytes_written=len(key) + len(serialized_data) + 2)
                         # Compress rotated files as we generate them
                         if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
                             self.q_out.put(n)
@@ -290,7 +301,7 @@ class ReadRawStep(PipeStep):
                     if err_message == "Missing in payload: info.revision":
                         # We don't need to write these bad records out - we know
                         # why they are being skipped.
-                        self.increment_stats(channel=info["appUpdateChannel"], bad_records=1, bad_record_type="missing info.revision")
+                        self.stats.increment(channel=info["appUpdateChannel"], bad_records=1, bad_record_type="missing info.revision")
                     elif err_message == "Invalid revision URL: /rev/":
                         # We do want to log these payloads, but we don't want
                         # the full stack trace.
@@ -308,7 +319,7 @@ class ReadRawStep(PipeStep):
                     if sec > 10.0:
                         self.last_update = this_update
                         self.end_time = datetime.now()
-                        self.dump_stats()
+                        self.log(self.stats.get_summary())
 
             duration = timer.delta_sec(start)
             mb_read = bytes_read / 1024.0 / 1024.0
@@ -325,7 +336,7 @@ class ReadRawStep(PipeStep):
             channel = self.schema.get_field(dims, "appUpdateChannel")
         except ValueError, e:
             channel = "UNKNOWN"
-        self.increment_stats(channel=channel, bad_records=1, bad_record_type=bad_record_type)
+        self.stats.increment(channel=channel, bad_records=1, bad_record_type=bad_record_type)
         if message is not None:
             self.log("{0} - {1}".format(message, error))
         if self.bad_filename is not None:
@@ -345,7 +356,7 @@ class CompressCompletedStep(PipeStep):
         base_ends = filename.find(".log") + 4
         if base_ends < 4:
             self.log("Bad filename encountered, skipping: " + filename)
-            self.increment_stats(records_read=1, bad_records=1, bad_record_type="bad filename")
+            self.stats.increment(records_read=1, bad_records=1, bad_record_type="bad filename")
             return
         basename = filename[0:base_ends]
         # Get a unique name for the compressed file:
@@ -378,7 +389,7 @@ class CompressCompletedStep(PipeStep):
         f_raw.close()
         f_comp.close()
 
-        self.increment_stats(records_read=1, records_written=1, bytes_read=raw_bytes, bytes_written=comp_bytes)
+        self.stats.increment(records_read=1, records_written=1, bytes_read=raw_bytes, bytes_written=comp_bytes)
 
         # Remove raw file
         os.remove(tmp_name)
@@ -429,10 +440,10 @@ class ExportCompressedStep(PipeStep):
             local_filename, remote_filename, err = s3util.upload_one([self.base_dir, self.bucket, stripped_name])
         sec = timer.delta_sec(start)
         current_size = os.path.getsize(record)
-        self.increment_stats(records_read=1, bytes_read=current_size)
+        self.stats.increment(records_read=1, bytes_read=current_size)
         if err is None:
             # Everything went well.
-            self.increment_stats(records_written=1, bytes_written=current_size)
+            self.stats.increment(records_written=1, bytes_written=current_size)
             # Delete local files once they've been uploaded successfully.
             if not self.dry_run:
                 try:
@@ -442,7 +453,7 @@ class ExportCompressedStep(PipeStep):
                     self.log("Failed to remove uploaded file {0}: {1}".format(record, e))
         else:
             self.log("ERROR: failed to upload a file {0}: {1}".format(record, err))
-            self.increment_stats(bad_records=1)
+            self.stats.increment(bad_records=1)
             # TODO: add to a "failures" queue, save them or something?
 
 def start_workers(logger, count, name, clazz, q_in, more_args):
@@ -580,23 +591,23 @@ def main():
                 logger.log("Dry run mode: skipping download from S3")
                 local_filenames = [ os.path.join(args.work_dir, f) for f in incoming_filenames ]
             else:
+                download_stats = Stats("Downloader", args.stats_file)
                 for local_filename, remote_filename, err in s3downloader.get_list(incoming_filenames):
                     if err is None:
                         local_filenames.append(local_filename)
                     else:
                         # s3downloader already retries 3 times.
                         logger.log("Error downloading {0} Error: {1}".format(local_filename, err))
+                        download_stats.update_end_time()
+                        download_stats.increment(records_read=len(incoming_filenames), records_written=len(local_filenames), bad_records=1)
+                        download_stats.save()
                         return 2
-
+                download_stats.update_end_time()
+                downloaded_bytes = sum([ os.path.getsize(f) for f in local_filenames ])
+                download_stats.increment(records_read=len(incoming_filenames), records_written=len(local_filenames), bytes_read=downloaded_bytes, bytes_written=downloaded_bytes)
+                logger.log(download_stats.get_summary())
+                download_stats.save()
             after_download = datetime.now()
-            duration_sec = timer.delta_sec(before_download, after_download)
-            downloaded_bytes = sum([ os.path.getsize(f) for f in local_filenames ])
-            downloaded_mb = downloaded_bytes / 1024.0 / 1024.0
-            downloaded_mbps = downloaded_mb / duration_sec
-            logger.log("Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mbps))
-            # TODO: log downloaded_mb, duration_sec
-            # statsd.increment("process_incoming.bytes_downloaded", downloaded_bytes)
-            # statsd.histogram("process_incoming.download_speed_mbps", downloaded_mbps)
 
             raw_files = Queue()
             for l in local_filenames:
