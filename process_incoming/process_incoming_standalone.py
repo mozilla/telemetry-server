@@ -82,82 +82,75 @@ class Log(object):
                 fout.write(u"{0}: {1}\n".format(self.label, message))
 
 class Stats(object):
-    def __init__(self, task, stats_file):
+    def __init__(self, task, stats_file, logger=None):
         self.task = task
         self.stats_file = stats_file
+        self.logger = logger
         self.reset()
 
+    def save_map(self, channel_name, channel_stats):
+        if self.stats_file is None:
+            return;
+
+        channel_stats["task"] = self.task
+        channel_stats["channel"] = channel_name
+        channel_stats["start_time"] = datetime_to_json(self.start_time)
+        channel_stats["end_time"] = datetime_to_json(self.end_time)
+        channel_stats["duration"] = timer.delta_sec(self.start_time, self.end_time)
+        try:
+            with io.open(self.stats_file, "a") as fout:
+                fout.write(unicode(json.dumps(channel_stats) + u"\n"))
+        except:
+            self.logger.log("Error writing '{}' stats".format(channel_name))
+            self.logger.log(traceback.format_exc())
+
     def save(self):
-        if self.stats_file is not None:
-            self.stats["task"] = self.task
-            self.stats["start_time"] = datetime_to_json(self.start_time)
-            self.stats["end_time"] = datetime_to_json(self.end_time)
-            self.stats["duration"] = timer.delta_sec(self.start_time, self.end_time)
-            self.stats["bad_records"] = self.bad_records
-            self.stats["records_read"] = self.records_read
-            self.stats["records_written"] = self.records_written
-            self.stats["bytes_read"] = self.bytes_read
-            self.stats["bytes_uncompressed"] = self.bytes_uncompressed
-            self.stats["bytes_written"] = self.bytes_written
-            try:
-                with io.open(self.stats_file, "a") as fout:
-                    fout.write(unicode(json.dumps(self.stats) + u"\n"))
-            except:
-                self.log("Error writing stats")
-                self.log(traceback.format_exc())
+        self.save_map("ALL", self.overall)
+        for channel, channel_stats in self.by_channel.iteritems():
+            self.save_map(channel, channel_stats)
 
     def reset(self):
-        self.stats = {}
+        self.overall = defaultdict(int)
+        self.by_channel = {}
         self.start_time = now()
         self.end_time = now()
-        self.bad_records = 0
-        self.records_read = 0
-        self.records_written = 0
-        self.bytes_read = 0
-        self.bytes_uncompressed = 0
-        self.bytes_written = 0
 
     def update_end_time(self):
         self.end_time = now()
 
     def get_summary(self):
         duration = timer.delta_sec(self.start_time, self.end_time)
-        read_rate = self.records_read / duration
-        mb_read = self.bytes_read / 1024.0 / 1024.0
+        read_rate = self.overall["records_read"] / duration
+        mb_read = self.overall["bytes_read"] / 1024.0 / 1024.0
         mb_read_rate = mb_read / duration
-        write_rate = self.records_written / duration
-        mb_written = self.bytes_written / 1024.0 / 1024.0
+        write_rate = self.overall["records_written"] / duration
+        mb_written = self.overall["bytes_written"] / 1024.0 / 1024.0
         mb_write_rate = mb_written / duration
         summary = "Read %d records or %.2fMB (%.2fr/s, %.2fMB/s), " \
                   "wrote %d or %.2f MB (%.2fr/s, %.2fMB/s). " \
-                  "Found %d bad records" % (self.records_read, mb_read,
-                    read_rate, mb_read_rate, self.records_written, mb_written,
-                    write_rate, mb_write_rate, self.bad_records)
+                  "Found %d bad records" % (self.overall["records_read"],
+                    mb_read, read_rate, mb_read_rate,
+                    self.overall["records_written"], mb_written, write_rate,
+                    mb_write_rate, self.overall["bad_records"])
         return summary
 
-    def increment(self, channel=None, records_read=0, records_written=0, bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0, bad_record_type=None):
-        self.records_read += records_read
-        self.records_written += records_written
-        self.bytes_read += bytes_read
-        self.bytes_uncompressed += bytes_uncompressed
-        self.bytes_written += bytes_written
-        self.bad_records += bad_records
-        if channel is not None:
-            # also record the stats for the channel
-            c = self.stats.get("channel", {})
-            cs = c.get(channel, defaultdict(int))
-            cs["records_read"] += records_read
-            cs["records_written"] += records_written
-            cs["bytes_read"] += bytes_read
-            cs["bytes_uncompressed"] += bytes_uncompressed
-            cs["bytes_written"] += bytes_written
-            cs["bad_records"] += bad_records
-            c[channel] = cs
-            self.stats["channel"] = c
+    def increment_map(self, the_map, records_read=0, records_written=0, bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0, bad_record_type=None):
+        the_map["records_read"] += records_read
+        the_map["records_written"] += records_written
+        the_map["bytes_read"] += bytes_read
+        the_map["bytes_uncompressed"] += bytes_uncompressed
+        the_map["bytes_written"] += bytes_written
+        the_map["bad_records"] += bad_records
         if bad_record_type is not None and bad_records > 0:
-            b = self.stats.get("bad_record_type", defaultdict(int))
-            b[bad_record_type] += bad_records
-            self.stats["bad_record_type"] = b
+            br_key = "bad_records.{}".format(bad_record_type)
+            the_map[br_key] += bad_records
+
+    def increment(self, channel=None, records_read=0, records_written=0, bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0, bad_record_type=None):
+        self.increment_map(self.overall, records_read, records_written, bytes_read, bytes_uncompressed, bytes_written, bad_records, bad_record_type)
+        if channel is not None:
+            cs = self.by_channel.get(channel, defaultdict(int))
+            self.increment_map(cs, records_read, records_written, bytes_read, bytes_uncompressed, bytes_written, bad_records, bad_record_type)
+            self.by_channel[channel] = cs
 
 
 class PipeStep(object):
@@ -169,8 +162,8 @@ class PipeStep(object):
         self.q_in = q_in
         self.q_out = q_out
         self.log_file = log_file
-        self.stats = Stats(name, stats_file)
         self.logger = Log(log_file, self.label)
+        self.stats = Stats(name, stats_file, self.logger)
         self.last_update = now()
         self.log = self.logger.log
 
@@ -273,7 +266,7 @@ class ReadRawStep(PipeStep):
                 info["appUpdateChannel"] = path_components.pop(0)
                 info["appBuildID"] = path_components.pop(0)
                 dims = self.schema.dimensions_from(info, submission_date)
-                channel = self.schema.safe_filename(info["appUpdateChannel"])
+                channel = self.schema.get_field(dims, "appUpdateChannel", True, True)
 
                 self.stats.increment(channel=channel, records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed)
 
@@ -327,7 +320,7 @@ class ReadRawStep(PipeStep):
                         self.end_time = now()
                         self.log(self.stats.get_summary())
 
-            duration = timer.delta_sec(start)
+            duration = timer.delta_sec(start, now())
             mb_read = bytes_read / 1024.0 / 1024.0
             # Stats for the current file:
             self.log("Read %d records %.2fMB in %.2fs (%.2fMB/s)" % (record_count, mb_read, duration, mb_read / duration))
@@ -339,7 +332,7 @@ class ReadRawStep(PipeStep):
     def write_bad_record(self, key, dims, data, error, message=None, bad_record_type=None):
         # TODO: keep stats of bad records by error type
         try:
-            channel = self.schema.safe_filename(self.schema.get_field(dims, "appUpdateChannel"))
+            channel = self.schema.get_field(dims, "appUpdateChannel", True, True)
         except ValueError, e:
             channel = "UNKNOWN"
         self.stats.increment(channel=channel, bad_records=1, bad_record_type=bad_record_type)
@@ -399,7 +392,7 @@ class CompressCompletedStep(PipeStep):
 
         # Remove raw file
         os.remove(tmp_name)
-        sec = timer.delta_sec(start)
+        sec = timer.delta_sec(start, now())
         self.log("Compressed %s as %s in %.2fs. Size before: %.2fMB, after: %.2fMB (r: %.2fMB/s, w: %.2fMB/s)" % (filename, comp_name, sec, raw_mb, comp_mb, (raw_mb/sec), (comp_mb/sec)))
 
 class ExportCompressedStep(PipeStep):
@@ -444,7 +437,7 @@ class ExportCompressedStep(PipeStep):
             err = None
         else:
             local_filename, remote_filename, err = s3util.upload_one([self.base_dir, self.bucket, stripped_name])
-        sec = timer.delta_sec(start)
+        sec = timer.delta_sec(start, now())
         current_size = os.path.getsize(record)
         self.stats.increment(records_read=1, bytes_read=current_size)
         if err is None:
@@ -593,11 +586,11 @@ def main():
             before_download = now()
             logger.log("Downloading {0} files...".format(len(incoming_filenames)))
             local_filenames = []
+            download_stats = Stats("Downloader", args.stats_file, logger)
             if args.dry_run:
                 logger.log("Dry run mode: skipping download from S3")
                 local_filenames = [ os.path.join(args.work_dir, f) for f in incoming_filenames ]
             else:
-                download_stats = Stats("Downloader", args.stats_file)
                 for local_filename, remote_filename, err in s3downloader.get_list(incoming_filenames):
                     if err is None:
                         local_filenames.append(local_filename)
@@ -608,11 +601,11 @@ def main():
                         download_stats.increment(records_read=len(incoming_filenames), records_written=len(local_filenames), bad_records=1)
                         download_stats.save()
                         return 2
-                download_stats.update_end_time()
-                downloaded_bytes = sum([ os.path.getsize(f) for f in local_filenames ])
-                download_stats.increment(records_read=len(incoming_filenames), records_written=len(local_filenames), bytes_read=downloaded_bytes, bytes_written=downloaded_bytes)
-                logger.log(download_stats.get_summary())
-                download_stats.save()
+            download_stats.update_end_time()
+            downloaded_bytes = sum([ os.path.getsize(f) for f in local_filenames ])
+            download_stats.increment(records_read=len(incoming_filenames), records_written=len(local_filenames), bytes_read=downloaded_bytes, bytes_written=downloaded_bytes)
+            logger.log(download_stats.get_summary())
+            download_stats.save()
             after_download = now()
 
             raw_files = Queue()
@@ -686,8 +679,9 @@ def main():
                             logger.log("  Failed to delete message :(")
                 logger.log("Done")
 
-            duration = timer.delta_sec(start)
-            logger.log("All done in %.2fs (%.2fs excluding download time)" % (duration, timer.delta_sec(after_download)))
+            all_done = now()
+            duration = timer.delta_sec(start, all_done)
+            logger.log("All done in %.2fs (%.2fs excluding download time)" % (duration, timer.delta_sec(after_download, all_done)))
         except InterruptProcessingError, e:
             logger.log("Received normal shutdown request... quittin' time!")
             if raw_readers is not None:
