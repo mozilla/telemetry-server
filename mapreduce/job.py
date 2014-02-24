@@ -21,6 +21,7 @@ import telemetry.util.s3 as s3util
 import telemetry.util.timer as timer
 import subprocess
 from subprocess import Popen, PIPE
+import signal
 try:
     from boto.s3.connection import S3Connection
     BOTO_AVAILABLE=True
@@ -146,6 +147,13 @@ class Job:
         partitions = self.partition(files, remote_files)
         print "Done"
 
+        def checkExitCode(proc):
+            if proc.exitcode == -signal.SIGKILL:
+                # SIGKILL is most likely an OOM kill
+                raise MemoryError("%s ran out of memory" % proc.name)
+            elif proc.exitcode:
+                raise OSError("%s exited with code %d" % (proc.name, proc.exitcode))
+
         # Partitions are ready. Map.
         mappers = []
         for i in range(self._num_mappers):
@@ -160,6 +168,7 @@ class Job:
                     # TODO: Bail, since results will be unreliable?
                 p = Process(
                         target=Mapper,
+                        name=("Mapper-%d" % i),
                         args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
                 mappers.append(p)
                 p.start()
@@ -167,17 +176,20 @@ class Job:
                 print "Skipping mapper", i, "- no input files to process"
         for m in mappers:
             m.join()
+            checkExitCode(m)
 
         # Mappers are done. Reduce.
         reducers = []
         for i in range(self._num_reducers):
             p = Process(
                     target=Reducer,
+                    name=("Reducer-%d" % i),
                     args=(i, self._work_dir, self._job_module, self._num_mappers))
             reducers.append(p)
             p.start()
         for r in reducers:
             r.join()
+            checkExitCode(r)
 
         # Reducers are done.  Output results.
         to_combine = 1
