@@ -87,11 +87,13 @@ class TelemetryServerLauncher(Launcher):
         run("echo 'Soft limit:'; ulimit -S -n")
         run("echo 'Hard limit:'; ulimit -H -n")
 
-        # Setup logrotate for the stats log and process-incoming log
+        # Setup logrotate for the telemetry log files
         self.create_logrotate_config("/etc/logrotate.d/telemetry-server",
                 "/var/log/telemetry/telemetry-server.log")
         self.create_logrotate_config("/etc/logrotate.d/telemetry-incoming",
                 "/var/log/telemetry/telemetry-incoming.log")
+        self.create_logrotate_config("/etc/logrotate.d/telemetry-incoming-stats",
+                "/var/log/telemetry/telemetry-incoming-stats.log")
 
         # Create startup scripts:
         code_base = "/home/" + self.ssl_user + "/telemetry-server"
@@ -105,7 +107,10 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo 'stop on runlevel [016]' >> {0}".format(c_file))
 
         c_file = "/etc/init/telemetry-export.conf"
-        base_export_command = "/usr/bin/python -u -m telemetry.util.export -d {0}/data -p '^telemetry.log.*[.]finished$' --config /etc/mozilla/telemetry_aws.json".format(base_dir)
+        base_export_command = "/usr/bin/python -u -m telemetry.util.export " \
+            "-d {0}/data " \
+            "-p '^telemetry.log.*[.]finished$' " \
+            "--config /etc/mozilla/telemetry_aws.json".format(base_dir)
 
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
@@ -126,7 +131,16 @@ class TelemetryServerLauncher(Launcher):
         sudo("echo '    cd {1}' >> {0}".format(c_file, code_base))
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
-        sudo("echo \"    /usr/bin/python -u -m process_incoming.process_incoming_standalone -c /etc/mozilla/telemetry_aws.json -w {1}/work -o {1}/processed -t telemetry/telemetry_schema.json -l /var/log/telemetry/telemetry-incoming.log >> /var/log/telemetry/telemetry-incoming.out 2>&1\" >> {0}".format(c_file, base_dir))
+        sudo("echo \"    /usr/bin/python -u " \
+             "-m process_incoming.process_incoming_standalone " \
+             "-c /etc/mozilla/telemetry_aws.json " \
+             "-w {1}/work " \
+             "-o {1}/processed " \
+             "-t telemetry/telemetry_schema.json " \
+             "-l /var/log/telemetry/telemetry-incoming.log " \
+             "-s /var/log/telemetry/telemetry-incoming-stats.log >> " \
+             "/var/log/telemetry/telemetry-incoming.out 2>&1\" >> {0}".format(
+                c_file, base_dir))
         # NOTE: Don't automatically start/stop this service, since we only want
         #       to start it on "primary" nodes, and we only want to stop it in
         #       safe parts of the process-incoming code.
