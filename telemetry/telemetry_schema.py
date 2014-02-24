@@ -99,14 +99,21 @@ class TelemetrySchema:
                 dimensions.append(info.get(dim["field_name"], "UNKNOWN"))
         return dimensions
 
-    def get_field(self, dims, field_name):
+    def get_field(self, dims, field_name, limit_to_allowed=False, sanitize=False):
         dim_idx = -1
+        allowed_values = None
         for i in range(len(self._dimensions)):
             if self._dimensions[i]["field_name"] == field_name:
                 dim_idx = i
+                allowed_values = self._dimensions[i]["allowed_values"]
                 break
         if dim_idx >= 0 and dim_idx < len(dims):
-            return dims[dim_idx]
+            val = dims[dim_idx]
+            if limit_to_allowed:
+                val = self.get_allowed_value(val, allowed_values)
+            if sanitize:
+                val = self.safe_filename(val)
+            return val
         elif dim_idx < 0:
             raise ValueError("Error: field '{0}' not in schema dimensions".format(field_name))
         else:
