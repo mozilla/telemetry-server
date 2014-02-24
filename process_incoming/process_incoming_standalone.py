@@ -6,65 +6,97 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-import uuid
-import multiprocessing
 import logging
-from multiprocessing import Process, Queue
-import Queue as Q
-import simplejson as json
-import sys
+import multiprocessing
 import io
-import re
 import os
+import Queue as Q
+import re
+import signal
+import simplejson as json
+import subprocess
+import sys
 import time
+import traceback
+import uuid
+
 from collections import defaultdict
 from datetime import date, datetime
-from telemetry.telemetry_schema import TelemetrySchema
-import subprocess
+from multiprocessing import Process, Queue
 from subprocess import Popen
-from boto.s3.connection import S3Connection
+
+import boto.sqs
 from boto.exception import S3ResponseError
+from boto.s3.connection import S3Connection
+
+from telemetry.convert import Converter, BadPayloadError
+from telemetry.persist import StorageLayout
+from telemetry.revision_cache import RevisionCache
+from telemetry.telemetry_schema import TelemetrySchema
 import telemetry.util.timer as timer
 import telemetry.util.files as fileutil
 import telemetry.util.s3 as s3util
-from telemetry.convert import Converter, BadPayloadError
-from telemetry.revision_cache import RevisionCache
-from telemetry.persist import StorageLayout
-import boto.sqs
-import traceback
-import signal
 
+# Wait for processes to complete on their own
 def wait_for(logger, processes, label):
     logger.log("Waiting for {0}...".format(label))
     for p in processes:
-        logger.log("Joining pid {0} (alive: {1})...".format(p.pid, p.is_alive()))
+        logger.log("Joining pid {0} (alive: {1})".format(p.pid, p.is_alive()))
         p.join()
     logger.log("{0} Done.".format(label))
 
+# Force processes to stop immediately
 def terminate(logger, processes, label):
     logger.log("Terminating {0}...".format(label))
     for p in processes:
         p.terminate()
     logger.log("{0} Done.".format(label))
 
+# Start the requested number of worker processes
+def start_workers(logger, count, name, clazz, q_in, more_args):
+    logger.log("Starting {0}s...".format(name))
+    workers = []
+    for i in range(count):
+        w = Process(
+                target=clazz,
+                name="{0}-{1}".format(name, i),
+                args=(i, name, q_in) + more_args)
+        workers.append(w)
+        w.start()
+        logger.log("{0} {1} pid: {2}".format(name, i, w.pid))
+    logger.log("{0}s all started".format(name))
+    return workers
+
+# Insert the required number of sentinel values to signal subprocesses that
+# there is no more data.
 def finish_queue(queue, num_procs):
     for i in range(num_procs):
         queue.put(PipeStep.SENTINEL)
 
+# Convert a datetime object to a standard JSON date string.
 def datetime_to_json(d):
     return d.isoformat() + "Z"
 
+# Use UTC dates throughout for consistency.
 now = datetime.utcnow
+
+# Convert a timestamp (in milliseconds) to a YYYYMMDD string
+def ts_to_yyyymmdd(ts):
+    # Incoming timestamps are in milliseconds, so convert to POSIX first
+    # (ie. seconds)
+    return date.fromtimestamp(ts / 1000).strftime("%Y%m%d")
 
 class InterruptProcessingError(Exception):
     def __init__(self, msg):
         self.msg = msg
 
+# Convert OS Signal to an exception
 def handle_sigint(signum, frame):
     print "Caught signal", str(signum), "in pid", os.getpid()
     if signum == signal.SIGINT:
         raise InterruptProcessingError("It's quittin' time")
 
+# Output labeled log messages
 class Log(object):
     def __init__(self, log_file, label=None):
         self.log_file = log_file
@@ -81,6 +113,7 @@ class Log(object):
             with io.open(self.log_file, "a") as fout:
                 fout.write(u"{0}: {1}\n".format(self.label, message))
 
+# Keep track of a task's progress and save stats for external monitoring
 class Stats(object):
     def __init__(self, task, stats_file, logger=None):
         self.task = task
@@ -88,18 +121,18 @@ class Stats(object):
         self.logger = logger
         self.reset()
 
-    def save_map(self, channel_name, channel_stats):
+    def save_map(self, channel_name, chan_stats):
         if self.stats_file is None:
             return;
 
-        channel_stats["task"] = self.task
-        channel_stats["channel"] = channel_name
-        channel_stats["start_time"] = datetime_to_json(self.start_time)
-        channel_stats["end_time"] = datetime_to_json(self.end_time)
-        channel_stats["duration"] = timer.delta_sec(self.start_time, self.end_time)
+        chan_stats["task"] = self.task
+        chan_stats["channel"] = channel_name
+        chan_stats["start_time"] = datetime_to_json(self.start_time)
+        chan_stats["end_time"] = datetime_to_json(self.end_time)
+        chan_stats["duration"] = timer.delta_sec(self.start_time, self.end_time)
         try:
             with io.open(self.stats_file, "a") as fout:
-                fout.write(unicode(json.dumps(channel_stats) + u"\n"))
+                fout.write(unicode(json.dumps(chan_stats) + u"\n"))
         except:
             self.logger.log("Error writing '{}' stats".format(channel_name))
             self.logger.log(traceback.format_exc())
@@ -134,7 +167,9 @@ class Stats(object):
                     mb_write_rate, self.overall["bad_records"])
         return summary
 
-    def increment_map(self, the_map, records_read=0, records_written=0, bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0, bad_record_type=None):
+    def increment_map(self, the_map, records_read=0, records_written=0,
+            bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0,
+            bad_record_type=None):
         the_map["records_read"] += records_read
         the_map["records_written"] += records_written
         the_map["bytes_read"] += bytes_read
@@ -145,17 +180,28 @@ class Stats(object):
             br_key = "bad_records.{}".format(bad_record_type)
             the_map[br_key] += bad_records
 
-    def increment(self, channel=None, records_read=0, records_written=0, bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0, bad_record_type=None):
-        self.increment_map(self.overall, records_read, records_written, bytes_read, bytes_uncompressed, bytes_written, bad_records, bad_record_type)
+    def increment(self, channel=None, records_read=0, records_written=0,
+            bytes_read=0, bytes_uncompressed=0, bytes_written=0, bad_records=0,
+            bad_record_type=None, update_end_time=True):
+        self.increment_map(self.overall, records_read, records_written,
+                bytes_read, bytes_uncompressed, bytes_written, bad_records,
+                bad_record_type)
         if channel is not None:
+            # also record the stats for the channel
             cs = self.by_channel.get(channel, defaultdict(int))
-            self.increment_map(cs, records_read, records_written, bytes_read, bytes_uncompressed, bytes_written, bad_records, bad_record_type)
+            self.increment_map(cs, records_read, records_written, bytes_read,
+                    bytes_uncompressed, bytes_written, bad_records,
+                    bad_record_type)
             self.by_channel[channel] = cs
+        if update_end_time:
+            self.update_end_time()
 
 
+# Base class for pipline workers
 class PipeStep(object):
     SENTINEL = 'STOP'
-    def __init__(self, num, name, q_in, q_out=None, log_file=None, stats_file=None):
+    def __init__(self, num, name, q_in, q_out=None, log_file=None,
+            stats_file=None):
         self.print_stats = True
         self.num = num
         self.label = " ".join((name, str(num)))
@@ -202,14 +248,18 @@ class PipeStep(object):
                 break
         self.log("Received stop message... work done")
 
+
+# Read from raw input files, validate and convert data, save output to disk
 class ReadRawStep(PipeStep):
     UUID_ONLY_PATH = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
-    def __init__(self, num, name, raw_files, completed_files, log_file, stats_file, schema, converter, storage, bad_filename):
+    def __init__(self, num, name, raw_files, completed_files, log_file,
+            stats_file, schema, converter, storage, bad_filename):
         self.schema = schema
         self.converter = converter
         self.storage = storage
         self.bad_filename = bad_filename
-        PipeStep.__init__(self, num, name, raw_files, completed_files, log_file, stats_file)
+        PipeStep.__init__(self, num, name, raw_files, completed_files,
+                log_file, stats_file)
 
     def setup(self):
         self.expected_dim_count = len(self.schema._dimensions)
@@ -227,22 +277,32 @@ class ReadRawStep(PipeStep):
                 current_bytes_uncompressed = common_bytes + len(data)
                 bytes_read += current_bytes
                 if err:
-                    self.log("ERROR: Found corrupted data for record {0} in {1} path: {2} Error: {3}".format(record_count, raw_file, path, err))
-                    self.stats.increment(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type="corrupted_data")
+                    self.log("ERROR: Found corrupted data for record {0} in " \
+                             "{1} path: {2} Error: {3}".format(record_count,
+                                 raw_file, path, err))
+                    self.stats.increment(records_read=1,
+                            bytes_read=current_bytes,
+                            bytes_uncompressed=current_bytes_uncompressed,
+                            bad_records=1, bad_record_type="corrupted_data")
                     continue
                 if len(data) == 0:
-                    self.log("WARN: Found empty data for record {0} in {2} path: {2}".format(record_count, raw_file, path))
-                    self.stats.increment(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type="empty_data")
+                    self.log("WARN: Found empty data for record {0} in " \
+                             "{2} path: {2}".format(record_count, raw_file,
+                                 path))
+                    self.stats.increment(records_read=1,
+                            bytes_read=current_bytes,
+                            bytes_uncompressed=current_bytes_uncompressed,
+                            bad_records=1, bad_record_type="empty_data")
                     continue
 
-                # Incoming timestamps are in milliseconds, so convert to POSIX first
-                # (ie. seconds)
-                submission_date = date.fromtimestamp(timestamp / 1000).strftime("%Y%m%d")
+                submission_date = ts_to_yyyymmdd(timestamp)
                 path = unicode(path, errors="replace")
 
                 if data[0] != "{":
                     # Data looks weird, should be JSON.
-                    self.log("Warning: Found unexpected data for record {0} in {1} path: {2} data:\n{3}".format(record_count, raw_file, path, data))
+                    self.log("Warning: Found unexpected data for record {0}" \
+                             " in {1} path: {2} data:\n{3}".format(record_count,
+                                 raw_file, path, data))
                 else:
                     # Raw JSON, make sure we treat it as unicode.
                     data = unicode(data, errors="replace")
@@ -251,11 +311,16 @@ class ReadRawStep(PipeStep):
                 if len(path_components) != self.expected_dim_count:
                     # We're going to pop the ID off, but we'll also add the
                     # submission date, so it evens out.
-                    self.log("Found an invalid path in record {0}: {1}".format(record_count, path))
                     bad_record_type = "invalid_path"
                     if ReadRawStep.UUID_ONLY_PATH.match(path):
                         bad_record_type = "uuid_only_path"
-                    self.stats.increment(records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed, bad_records=1, bad_record_type=bad_record_type)
+                    else:
+                        self.log("Found an invalid path in record {0}: " \
+                             "{1}".format(record_count, path))
+                    self.stats.increment(records_read=1,
+                            bytes_read=current_bytes,
+                            bytes_uncompressed=current_bytes_uncompressed,
+                            bad_records=1, bad_record_type=bad_record_type)
                     continue
 
                 key = path_components.pop(0)
@@ -266,9 +331,12 @@ class ReadRawStep(PipeStep):
                 info["appUpdateChannel"] = path_components.pop(0)
                 info["appBuildID"] = path_components.pop(0)
                 dims = self.schema.dimensions_from(info, submission_date)
-                channel = self.schema.get_field(dims, "appUpdateChannel", True, True)
+                channel = self.schema.get_field(dims, "appUpdateChannel",
+                        True, True)
 
-                self.stats.increment(channel=channel, records_read=1, bytes_read=current_bytes, bytes_uncompressed=current_bytes_uncompressed)
+                self.stats.increment(channel=channel, records_read=1,
+                        bytes_read=current_bytes,
+                        bytes_uncompressed=current_bytes_uncompressed)
 
                 try:
                     # Convert data:
@@ -276,40 +344,55 @@ class ReadRawStep(PipeStep):
                         serialized_data = data
                         data_version = 1
                     else:
-                        parsed_data, parsed_dims = self.converter.convert_json(data, dims[-1])
+                        parsed_data, parsed_dims = self.converter.convert_json(
+                                data, dims[-1])
                         # TODO: take this out if it's too slow
                         for i in range(len(dims)):
                             if dims[i] != parsed_dims[i]:
-                                self.log("Record {0} mismatched dimension {1}: '{2}' != '{3}'".format(self.records_read, i, dims[1], parsed_dims[i]))
+                                self.log("Record {0} mismatched dimension " \
+                                         "{1}: '{2}' != '{3}'".format(
+                                            self.records_read, i, dims[1],
+                                            parsed_dims[i]))
                         serialized_data = self.converter.serialize(parsed_data)
                         dims = parsed_dims
                         data_version = 2
                     try:
                         # Write to persistent storage
-                        n = self.storage.write(key, serialized_data, dims, data_version)
-                        self.stats.increment(channel=channel, records_written=1, bytes_written=len(key) + len(serialized_data) + 2)
+                        n = self.storage.write(key, serialized_data, dims,
+                                data_version)
+                        self.stats.increment(channel=channel, records_written=1,
+                            bytes_written=len(key) + len(serialized_data) + 2)
                         # Compress rotated files as we generate them
                         if n.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX):
                             self.q_out.put(n)
                     except Exception, e:
-                        self.write_bad_record(key, dims, serialized_data, str(e), "ERROR Writing to output file:", "write_failed")
+                        self.write_bad_record(key, dims, serialized_data,
+                                str(e), "ERROR Writing to output file:",
+                                "write_failed")
                 except BadPayloadError, e:
-                    self.write_bad_record(key, dims, data, e.msg, "Bad Payload:", "bad_payload")
+                    self.write_bad_record(key, dims, data, e.msg,
+                            "Bad Payload:", "bad_payload")
                 except Exception, e:
                     err_message = str(e)
                     if err_message == "Missing in payload: info.revision":
                         # We don't need to write these bad records out - we know
                         # why they are being skipped.
-                        self.stats.increment(channel=channel, bad_records=1, bad_record_type="missing_revision")
+                        self.stats.increment(channel=channel, bad_records=1,
+                                bad_record_type="missing_revision")
                     elif err_message == "Invalid revision URL: /rev/":
                         # We do want to log these payloads, but we don't want
                         # the full stack trace.
-                        self.write_bad_record(key, dims, data, err_message, "Conversion Error", "missing_revision_repo")
+                        self.write_bad_record(key, dims, data, err_message,
+                                "Conversion Error", "missing_revision_repo")
+                    # Don't split this long string - we want to be able to find it in the code
                     elif err_message.startswith("JSONDecodeError: Invalid control character"):
-                        self.write_bad_record(key, dims, data, err_message, "Conversion Error", "invalid_control_char")
+                        self.write_bad_record(key, dims, data, err_message,
+                                "Conversion Error", "invalid_control_char")
                     else:
-                        # TODO: recognize other common failure modes and handle them gracefully.
-                        self.write_bad_record(key, dims, data, err_message, "Conversion Error", "conversion_error")
+                        # TODO: Recognize other common failure modes and handle
+                        #       them gracefully.
+                        self.write_bad_record(key, dims, data, err_message,
+                                "Conversion Error", "conversion_error")
                         self.log(traceback.format_exc())
 
                 if self.print_stats:
@@ -317,25 +400,28 @@ class ReadRawStep(PipeStep):
                     sec = timer.delta_sec(self.last_update, this_update)
                     if sec > 10.0:
                         self.last_update = this_update
-                        self.end_time = now()
                         self.log(self.stats.get_summary())
 
             duration = timer.delta_sec(start, now())
             mb_read = bytes_read / 1024.0 / 1024.0
             # Stats for the current file:
-            self.log("Read %d records %.2fMB in %.2fs (%.2fMB/s)" % (record_count, mb_read, duration, mb_read / duration))
+            self.log("Read %d records %.2fMB in %.2fs (%.2fMB/s)" % (
+                    record_count, mb_read, duration, mb_read / duration))
         except Exception, e:
             # Corrupted data, let's skip this record.
-            self.log("Error reading raw data from {0} {1}\n{2}".format(raw_file, e, traceback.format_exc()))
+            self.log("Error reading raw data from {0} {1}\n{2}".format(
+                    raw_file, e, traceback.format_exc()))
 
 
-    def write_bad_record(self, key, dims, data, error, message=None, bad_record_type=None):
-        # TODO: keep stats of bad records by error type
+    def write_bad_record(self, key, dims, data, error, message=None,
+            bad_record_type=None):
         try:
-            channel = self.schema.get_field(dims, "appUpdateChannel", True, True)
+            channel = self.schema.get_field(dims, "appUpdateChannel", True,
+                    True)
         except ValueError, e:
             channel = "UNKNOWN"
-        self.stats.increment(channel=channel, bad_records=1, bad_record_type=bad_record_type)
+        self.stats.increment(channel=channel, bad_records=1,
+                bad_record_type=bad_record_type)
         if message is not None:
             self.log("{0} - {1}".format(message, error))
         if self.bad_filename is not None:
@@ -346,6 +432,7 @@ class ReadRawStep(PipeStep):
                 self.log("ERROR: {0}".format(e))
 
 
+# Compress completed output files from ReadRawStep
 class CompressCompletedStep(PipeStep):
     def setup(self):
         self.compress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.COMPRESSION_ARGS
@@ -355,7 +442,8 @@ class CompressCompletedStep(PipeStep):
         base_ends = filename.find(".log") + 4
         if base_ends < 4:
             self.log("Bad filename encountered, skipping: " + filename)
-            self.stats.increment(records_read=1, bad_records=1, bad_record_type="bad_filename")
+            self.stats.increment(records_read=1, bad_records=1,
+                    bad_record_type="bad_filename")
             return
         basename = filename[0:base_ends]
         # Get a unique name for the compressed file:
@@ -375,7 +463,8 @@ class CompressCompletedStep(PipeStep):
 
         # Now set up our processing pipe:
         # - read from f_raw, compress, write to comp_name
-        p_compress = Popen(self.compress_cmd, bufsize=65536, stdin=f_raw, stdout=f_comp, stderr=sys.stderr)
+        p_compress = Popen(self.compress_cmd, bufsize=65536, stdin=f_raw,
+                stdout=f_comp, stderr=sys.stderr)
 
         # Note: it looks like p_compress.wait() is what we want, but the docs
         #       warn of a deadlock, so we use communicate() instead.
@@ -388,21 +477,28 @@ class CompressCompletedStep(PipeStep):
         f_raw.close()
         f_comp.close()
 
-        self.stats.increment(records_read=1, records_written=1, bytes_read=raw_bytes, bytes_written=comp_bytes)
+        self.stats.increment(records_read=1, records_written=1,
+                bytes_read=raw_bytes, bytes_written=comp_bytes)
 
         # Remove raw file
         os.remove(tmp_name)
         sec = timer.delta_sec(start, now())
-        self.log("Compressed %s as %s in %.2fs. Size before: %.2fMB, after: %.2fMB (r: %.2fMB/s, w: %.2fMB/s)" % (filename, comp_name, sec, raw_mb, comp_mb, (raw_mb/sec), (comp_mb/sec)))
+        self.log("Compressed %s as %s in %.2fs. Size before: %.2fMB, after:" \
+                 " %.2fMB (r: %.2fMB/s, w: %.2fMB/s)" % (filename, comp_name,
+                    sec, raw_mb, comp_mb, (raw_mb/sec), (comp_mb/sec)))
 
+
+# Export compressed output files to S3 for long-term storage and analysis
 class ExportCompressedStep(PipeStep):
-    def __init__(self, num, name, q_in, log_file, stats_file, base_dir, config, dry_run):
+    def __init__(self, num, name, q_in, log_file, stats_file,
+            base_dir, config, dry_run):
         self.dry_run = dry_run
         self.base_dir = base_dir
         self.aws_key = config.get("aws_key", None)
         self.aws_secret_key = config.get("aws_secret_key", None)
         self.aws_bucket_name = config["publish_bucket"]
-        PipeStep.__init__(self, num, name, q_in, log_file=log_file, stats_file=stats_file)
+        PipeStep.__init__(self, num, name, q_in, log_file=log_file,
+                stats_file=stats_file)
 
     def setup(self):
         if self.dry_run:
@@ -426,7 +522,8 @@ class ExportCompressedStep(PipeStep):
             # Remove the output dir prefix from filenames
             stripped_name = self.strip_data_dir(self.base_dir, record)
         except ValueError, e:
-            self.log("Warning: couldn't strip base dir from '{0}' {1}".format(record, e))
+            self.log("Warning: couldn't strip base dir from '{0}' " \
+                     "{1}".format(record, e))
             stripped_name = record
 
         self.log("Uploading {0}".format(stripped_name))
@@ -436,7 +533,8 @@ class ExportCompressedStep(PipeStep):
             remote_filename = stripped_name
             err = None
         else:
-            local_filename, remote_filename, err = s3util.upload_one([self.base_dir, self.bucket, stripped_name])
+            local_filename, remote_filename, err = s3util.upload_one([
+                    self.base_dir, self.bucket, stripped_name])
         sec = timer.delta_sec(start, now())
         current_size = os.path.getsize(record)
         self.stats.increment(records_read=1, bytes_read=current_size)
@@ -449,43 +547,44 @@ class ExportCompressedStep(PipeStep):
                     os.remove(record)
                     self.log("Removed uploaded file {0}".format(record))
                 except Exception, e:
-                    self.log("Failed to remove uploaded file {0}: {1}".format(record, e))
+                    self.log("Failed to remove uploaded file {0}: " \
+                             "{1}".format(record, e))
         else:
-            self.log("ERROR: failed to upload a file {0}: {1}".format(record, err))
+            self.log("ERROR: failed to upload a file {0}: {1}".format(record,
+                    err))
             self.stats.increment(bad_records=1)
             # TODO: add to a "failures" queue, save them or something?
-
-def start_workers(logger, count, name, clazz, q_in, more_args):
-    logger.log("Starting {0}s...".format(name))
-    workers = []
-    for i in range(count):
-        w = Process(
-                target=clazz,
-                name="{0}-{1}".format(name, i),
-                args=(i, name, q_in) + more_args)
-        workers.append(w)
-        w.start()
-        logger.log("{0} {1} pid: {2}".format(name, i, w.pid))
-    logger.log("{0}s all started".format(name))
-    return workers
 
 
 def main():
     signal.signal(signal.SIGINT, handle_sigint)
-    parser = argparse.ArgumentParser(description='Process incoming Telemetry data', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-c", "--config", help="AWS Configuration file (json)", required=True, type=file)
-
-    parser.add_argument("-w", "--work-dir", help="Location to cache downloaded files", required=True)
-    parser.add_argument("-o", "--output-dir", help="Base dir to store processed data", required=True)
-    parser.add_argument("-i", "--input-files", help="File containing a list of keys to process", type=file)
-    parser.add_argument("-b", "--bad-data-log", help="Save bad records to this file")
-    parser.add_argument("-l", "--log-file", help="Log output to this file")
-    parser.add_argument("-s", "--stats-file", help="Log statistics to this file")
-    parser.add_argument("--histogram-cache-path", help="Path to store a local cache of histograms", default="./histogram_cache")
-    parser.add_argument("-t", "--telemetry-schema", help="Location of the desired telemetry schema", required=True)
-    parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
-    parser.add_argument("-D", "--dry-run", help="Don't modify remote files", action="store_true")
-    parser.add_argument("-v", "--verbose", help="Print more detailed output", action="store_true")
+    parser = argparse.ArgumentParser(
+            description='Process incoming Telemetry data',
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-c", "--config", required=True, type=file,
+            help="AWS Configuration file (json)")
+    parser.add_argument("-w", "--work-dir", required=True,
+            help="Location to cache downloaded files")
+    parser.add_argument("-o", "--output-dir", required=True,
+            help="Base dir to store processed data")
+    parser.add_argument("-i", "--input-files", type=file,
+            help="File containing a list of keys to process")
+    parser.add_argument("-b", "--bad-data-log",
+            help="Save bad records to this file")
+    parser.add_argument("-l", "--log-file",
+            help="Log output to this file")
+    parser.add_argument("-s", "--stats-file",
+            help="Log statistics to this file")
+    parser.add_argument("--histogram-cache-path", default="./histogram_cache",
+            help="Path to store a local cache of histograms")
+    parser.add_argument("-t", "--telemetry-schema", required=True,
+            help="Location of the desired telemetry schema")
+    parser.add_argument("-m", "--max-output-size", metavar="N", type=int,
+            default=500000000, help="Rotate output files after N bytes")
+    parser.add_argument("-D", "--dry-run", action="store_true",
+            help="Don't modify remote files")
+    parser.add_argument("-v", "--verbose", action="store_true",
+            help="Print more detailed output")
     args = parser.parse_args()
 
     if args.verbose:
@@ -504,19 +603,21 @@ def main():
     cache = RevisionCache(args.histogram_cache_path, "hg.mozilla.org")
     converter = Converter(cache, schema)
     storage = StorageLayout(schema, args.output_dir, args.max_output_size)
-
     logger = Log(args.log_file, "Master")
-
     num_cpus = multiprocessing.cpu_count()
-
     conn = None
     incoming_bucket = None
     incoming_queue = None
     s3downloader = None
+    raw_readers = None
+    compressors = None
+    exporters = None
+    done = False
 
     if not args.dry_run:
         # Set up AWS connections
-        conn = S3Connection(config.get("aws_key", None), config.get("aws_secret_key", None))
+        conn = S3Connection(config.get("aws_key", None), config.get(
+                "aws_secret_key", None))
         incoming_bucket = conn.get_bucket(config["incoming_bucket"])
         q_conn = boto.sqs.connect_to_region(config.get("aws_region", None),
                 aws_access_key_id=config.get("aws_key", None),
@@ -531,33 +632,32 @@ def main():
             publish_bucket = conn.get_bucket(config["publish_bucket"])
             logger.log("Looks good!")
         except S3ResponseError:
-            logger.log("Bucket {0} not found.  Attempting to create it.".format(config["publish_bucket"]))
+            logger.log("Bucket {0} not found. Attempting to create it.".format(
+                    config["publish_bucket"]))
             publish_bucket = conn.create_bucket(config["publish_bucket"])
-        s3downloader = s3util.Loader(args.work_dir, config["incoming_bucket"], poolsize=num_cpus, aws_key=config.get("aws_key", None), aws_secret_key=config.get("aws_secret_key", None))
-
-    raw_readers = None
-    compressors = None
-    exporters = None
-    done = False
+        s3downloader = s3util.Loader(args.work_dir, config["incoming_bucket"],
+                poolsize=num_cpus, aws_key=config.get("aws_key", None),
+                aws_secret_key=config.get("aws_secret_key", None))
 
     while not done:
         if args.dry_run:
             done = True
-
         try:
             start = now()
             incoming_filenames = []
             incoming_queue_messages = []
             logger.log("Fetching file list from queue " + config["incoming_queue"])
             if args.dry_run:
-                logger.log("Dry run mode... can't read from the queue without messing things up...")
+                logger.log("Dry run mode... can't read from the queue " \
+                           "without messing things up...")
                 if args.input_files:
-                    logger.log("Fetching file list from file {}".format(args.input_files))
+                    logger.log("Fetching file list from file {}".format(
+                            args.input_files))
                     incoming_filenames = [ l.strip() for l in args.input_files.readlines() ]
             else:
                 # Sometimes we don't get all the messages, even if more are
-                # available, so keep trying until we have enough (or there aren't
-                # any left)
+                # available, so keep trying until we have enough (or there
+                # aren't any left)
                 for i in range(num_cpus):
                     messages = incoming_queue.get_messages(num_cpus - len(incoming_filenames))
                     for m in messages:
@@ -565,7 +665,10 @@ def main():
                         possible_filename = m.get_body()
                         key = incoming_bucket.get_key(possible_filename)
                         if key is None:
-                            logger.log("Could not find queued filename in bucket {0}: {1}".format(config["incoming_bucket"], possible_filename))
+                            logger.log("Could not find queued filename in" \
+                                       " bucket {0}: {1}".format(
+                                            config["incoming_bucket"],
+                                            possible_filename))
                             # try to delete it:
                             incoming_queue.delete_message(m)
                         else:
@@ -596,14 +699,19 @@ def main():
                         local_filenames.append(local_filename)
                     else:
                         # s3downloader already retries 3 times.
-                        logger.log("Error downloading {0} Error: {1}".format(local_filename, err))
-                        download_stats.update_end_time()
-                        download_stats.increment(records_read=len(incoming_filenames), records_written=len(local_filenames), bad_records=1)
+                        logger.log("Error downloading {0} Error: {1}".format(
+                                local_filename, err))
+                        download_stats.increment(
+                                records_read=len(incoming_filenames),
+                                records_written=len(local_filenames),
+                                bad_records=1)
                         download_stats.save()
                         return 2
-            download_stats.update_end_time()
-            downloaded_bytes = sum([ os.path.getsize(f) for f in local_filenames ])
-            download_stats.increment(records_read=len(incoming_filenames), records_written=len(local_filenames), bytes_read=downloaded_bytes, bytes_written=downloaded_bytes)
+            downloaded_bytes = sum([os.path.getsize(f) for f in local_filenames])
+            download_stats.increment(records_read=len(incoming_filenames),
+                    records_written=len(local_filenames),
+                    bytes_read=downloaded_bytes,
+                    bytes_written=downloaded_bytes)
             logger.log(download_stats.get_summary())
             download_stats.save()
             after_download = now()
@@ -615,16 +723,17 @@ def main():
             completed_files = Queue()
 
             # Begin reading raw input
-            raw_readers = start_workers(logger, num_cpus, "Reader", ReadRawStep, raw_files,
-                    (completed_files, args.log_file, args.stats_file, schema, converter, storage, args.bad_data_log))
+            raw_readers = start_workers(logger, num_cpus, "Reader", ReadRawStep,
+                    raw_files, (completed_files, args.log_file, args.stats_file,
+                    schema, converter, storage, args.bad_data_log))
 
             # Tell readers to stop when they get to the end:
             finish_queue(raw_files, num_cpus)
 
             # Compress completed files.
-            compressors = start_workers(logger, num_cpus, "Compressor", CompressCompletedStep,
-                    completed_files, (None, args.log_file, args.stats_file))
-
+            compressors = start_workers(logger, num_cpus, "Compressor",
+                    CompressCompletedStep, completed_files, (None,
+                    args.log_file, args.stats_file))
             wait_for(logger, raw_readers, "Raw Readers")
 
             # `find <out_dir> -type f -not -name ".compressme"`
@@ -641,8 +750,9 @@ def main():
             try:
                 # Export compressed files to S3.
                 compressed_files = Queue()
-                exporters = start_workers(logger, num_cpus, "Exporter", ExportCompressedStep,
-                        compressed_files, (args.log_file, args.stats_file, args.output_dir, config, args.dry_run))
+                exporters = start_workers(logger, num_cpus, "Exporter",
+                        ExportCompressedStep, compressed_files, (args.log_file,
+                        args.stats_file, args.output_dir, config, args.dry_run))
                 for root, dirs, files in os.walk(args.output_dir):
                     for f in files:
                         if f.endswith(StorageLayout.COMPRESSED_SUFFIX):
@@ -650,7 +760,8 @@ def main():
                 finish_queue(compressed_files, num_cpus)
                 wait_for(logger, exporters, "Exporters")
             except InterruptProcessingError, e:
-                logger.log("Received shutdown request... waiting for exporters to finish")
+                logger.log("Received shutdown request... waiting for " \
+                           "exporters to finish")
                 done = True
                 wait_for(logger, exporters, "Exporters")
                 logger.log("OK, cleaning up")
@@ -670,7 +781,8 @@ def main():
                 logger.log("Removing processed messages from SQS...")
                 for m in incoming_queue_messages:
                     if args.dry_run:
-                        logger.log("  Dry run, so not really deleting {0}".format(m.get_body()))
+                        logger.log("  Dry run, so not really deleting " \
+                                   "{0}".format(m.get_body()))
                     else:
                         logger.log("  Deleting {0}".format(m.get_body()))
                         if incoming_queue.delete_message(m):
@@ -678,10 +790,10 @@ def main():
                         else:
                             logger.log("  Failed to delete message :(")
                 logger.log("Done")
-
             all_done = now()
             duration = timer.delta_sec(start, all_done)
-            logger.log("All done in %.2fs (%.2fs excluding download time)" % (duration, timer.delta_sec(after_download, all_done)))
+            logger.log("All done in %.2fs (%.2fs excluding download time)" % (
+                duration, timer.delta_sec(after_download, all_done)))
         except InterruptProcessingError, e:
             logger.log("Received normal shutdown request... quittin' time!")
             if raw_readers is not None:
