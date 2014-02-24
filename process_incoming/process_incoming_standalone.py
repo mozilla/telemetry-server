@@ -747,6 +747,7 @@ def main():
             finish_queue(completed_files, num_cpus)
             wait_for(logger, compressors, "Compressors")
 
+            shutdown_requested = False
             try:
                 # Export compressed files to S3.
                 compressed_files = Queue()
@@ -762,6 +763,11 @@ def main():
             except InterruptProcessingError, e:
                 logger.log("Received shutdown request... waiting for " \
                            "exporters to finish")
+                shutdown_requested = True
+                shutdown_stats = Stats("ShutdownDuringExport", args.stats_file,
+                    logger)
+                shutdown_stats.increment(records_read=1)
+                shutdown_stats.save()
                 done = True
                 wait_for(logger, exporters, "Exporters")
                 logger.log("OK, cleaning up")
@@ -790,6 +796,10 @@ def main():
                         else:
                             logger.log("  Failed to delete message :(")
                 logger.log("Done")
+
+            if shutdown_requested:
+                shutdown_stats.increment(records_written=1)
+                shutdown_stats.save()
             all_done = now()
             duration = timer.delta_sec(start, all_done)
             logger.log("All done in %.2fs (%.2fs excluding download time)" % (
@@ -804,6 +814,9 @@ def main():
                 terminate(logger, exporters, "Exporters")
 
             done = True
+    shutdown_stats = Stats("ShutdownComplete", args.stats_file, logger)
+    shutdown_stats.increment(records_read=1, records_written=1)
+    shutdown_stats.save()
     logger.log("All done.")
     return 0
 
