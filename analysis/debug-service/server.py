@@ -167,4 +167,9 @@ login_manager.init_app(app)
 browser_id.init_app(app)
 
 if __name__ == '__main__':
-    app.run(host = '0.0.0.0', port = 80)
+    parser = ArgumentParser(description='Launch Telemetry Analysis Service')
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", default=80, type=int)
+    args = parser.parse_args()
+
+    app.run(host = args.host, port = args.port)
