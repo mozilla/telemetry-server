@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" />
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+  <script src="https://login.persona.org/include.js" type="text/javascript"></script>
+  <script type="text/javascript">{{ auth_script|safe }}</script>
+  <title>Telemetry Self-Serve Data Analysis</title>
+ </head>
+ <body>
+  <div id="header"> Telemetry Self-Serve Data Analysis </div>
+  <div id="subheader">Schedule an analysis job</div>
+  <div id="content">
+   <br/> <br/>
+   {% if current_user.is_authenticated() %}
+    {% if current_user.is_authorized() %}
+     <div id="confirm">
+      The server will upload {{ code_tarball }} to {{ code_s3path }}.  This tarball will be unpacked on a worker node, then {{ commandline }} will be invoked.  Any output files found in {{ output_dir }} (relative to where the tarball was unpacked) will be made publicly available at {{ s3_datapath }}. These files will upload anything already in that location in S3.  The job will be run {{ job_frequency }} at {{ job_time }} on {{ job_dow }} (or {{ job_dom }}).  The job will be allowed to run for a max of {{ job_timeout }} minutes, after which it will be killed.
+     </div>
+     <button>Looks good, Schedule it!</button>
+     <button>Cancel</button>
+    {% else %}
+     Sorry, self-serve data analysis is currently limited to <em>@mozilla.com</em> addresses.  The address you signed in with ({{ current_user.email }}) does not grant you access.  Please <button id="browserid-logout">Sign out</button> and sign in with an authorized account.
+    {% endif %}
+   {% else %}        
+    <button id="browserid-login">Sign in with Persona</button>
+    <p>For Ad-hoc data analysis and for scheduling analysis tasks, please <strong>sign in</strong> with an <em>@mozilla.com</em> email address.</p>
+   {% endif %}
+  </div>
+  <div id="footer">
+   <a href="/debug">Launch an ad-hoc analysis worker</a>
+   {% if current_user.is_authenticated() %}
+    <div id="signout">
+     <button id="browserid-logout">Sign out</button>
+    </div>
+   {% endif %}
+   <p>For existing telemetry dashboards, please visit <a href="http://telemetry.mozilla.org">telemetry.mozilla.org</a>.</p>
+  </div>
+ </body>
+</html>

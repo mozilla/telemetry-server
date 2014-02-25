@@ -52,6 +52,30 @@ def unauthorized():
 def index():
     return render_template('index.html', token = str(uuid4()))
 
+@app.route("/schedule", methods=["GET"])
+@login_required
+def schedule_job():
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+    return render_template('schedule.html', token = str(uuid4()))
+
+@app.route("/schedule-job", methods=["POST"])
+@login_required
+def confirm_job():
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+    return render_template('schedule_confirm.html', token = str(uuid4()))
+
+@app.route("/debug", methods=["GET"])
+@login_required
+def get_debug_params():
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+    return render_template('debug.html', token = str(uuid4()))
+
 @app.route("/spawn-debug-instance", methods=["POST"])
 @login_required
 def spawn_debug_instance():

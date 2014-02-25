@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+ <head>
+  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" />
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+  <script src="https://login.persona.org/include.js" type="text/javascript"></script>
+  <script type="text/javascript">{{ auth_script|safe }}</script>
+  <title>Telemetry Self-Serve Data Analysis</title>
+ </head>
+ <body>
+  <div id="header"> Telemetry Self-Serve Data Analysis </div>
+  <div id="subheader">Schedule an analysis job</div>
+  <div id="content">
+   <br/> <br/>
+   {% if current_user.is_authenticated() %}
+    {% if current_user.is_authorized() %}
+     <form action="schedule-job" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="token" value="{{ token }}">
+      <table>
+       <tr>
+        <td class="field-label"> <label> Job Name: </label> </td>
+        <td class="field-input"> <input type="text" name="job-name"></input> </td>
+        <td class="field-desc"> The job name will form part of the location of the code tarball below, as well as part of the path to the public data in S3 </td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> Code Tarball: </label> </td>
+        <td class="field-input"> <input type="file" name="code-tarball"></input> </td>
+        <td class="field-desc"> This .tar.gz file should contain all the code needed to run your job. Recommended form: job-name-0.1.tar.gz</td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> Execution Commandline: </label> </td>
+        <td class="field-input"> <input type="text" name="commandline" value="./run.sh"></input> </td>
+        <td class="field-desc"> The tarball will be unpacked on a worker node, then this command will be invoked from the same directory </td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> Output Directory: </label> </td>
+        <td class="field-input"> <input type="text" name="output-dir" value="output"></input> </td>
+        <td class="field-desc"> After running the above command, any files found in this dir (relative to the root where the tarball is unpacked) will be made publicly available at http://s3/telemetry-public-analysis/Job Name/data/*.  Any files that are already in S3 at the above location will be overwritten by new files of the same name. </td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> Schedule Frequency: </label> </td>
+        <td class="field-input"> 
+	 <select name="schedule-frequency">
+	  <option value="daily">Daily</option>
+	  <option value="weekly">Weekly</option>
+	  <option value="monthly">Monthly</option>
+	 </select>
+	</td>
+        <td class="field-desc"> The job will be run periodically per this selection </td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> Day of Week: </label> </td>
+        <td class="field-input"> 
+	 <select name="schedule-day-of-week">
+	  <option value="0">Sunday</option>
+	  <option value="1">Monday</option>
+	  <option value="2">Tuesday</option>
+	  <option value="3">Wednesday</option>
+	  <option value="4">Thursday</option>
+	  <option value="5">Friday</option>
+	  <option value="6">Saturday</option>
+	 </select>
+	</td>
+        <td class="field-desc"> The job will run weekly on this day </td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> Day of Month: </label> </td>
+        <td class="field-input"> <input type="text" name="schedule-day-of-month" value="1"></input> </td>
+        <td class="field-desc"> The job will run monthly on this day </td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> Time of Day (UTC): </label> </td>
+        <td class="field-input"> 
+	 <select name="schedule-time-of-day">
+	  <option value="0">Midnight</option>
+	  <option value="1">1am</option>
+	  <option value="2">2am</option>
+	  <option value="3">3am</option>
+	  <option value="4">4am</option>
+	  <option value="5">5am</option>
+	  <option value="6">6am</option>
+	  <option value="7">7am</option>
+	  <option value="8">8am</option>
+	  <option value="9">9am</option>
+	  <option value="10">10am</option>
+	  <option value="11">11am</option>
+	  <option value="12" selected>Noon</option>
+	  <option value="13">1pm</option>
+	  <option value="14">2pm</option>
+	  <option value="15">3pm</option>
+	  <option value="16">4pm</option>
+	  <option value="17">5pm</option>
+	  <option value="18">6pm</option>
+	  <option value="19">7pm</option>
+	  <option value="20">8pm</option>
+	  <option value="21">9pm</option>
+	  <option value="22">10pm</option>
+	  <option value="23">11pm</option>
+	 </select>
+	</td>
+        <td class="field-desc"> The job will be run at this time.  Note: if you want to process the previous day's data, it's good to leave a few hours' buffer for the data to be published, so start those types of jobs later in the day. </td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> Job Timeout (minutes): </label> </td>
+        <td class="field-input"> <input type="text" name="timeout" value="120"></input> </td>
+        <td class="field-desc"> If the job does not complete within this many minutes, it will automatically be killed. </td>
+       </tr>
+      </table>
+      <input type="submit" name="submit" value="Submit">
+     </form>
+    {% else %}
+     Sorry, self-serve data analysis is currently limited to <em>@mozilla.com</em> addresses.  The address you signed in with ({{ current_user.email }}) does not grant you access.  Please <button id="browserid-logout">Sign out</button> and sign in with an authorized account.
+    {% endif %}
+   {% else %}        
+    <button id="browserid-login">Sign in with Persona</button>
+    <p>For Ad-hoc data analysis and for scheduling analysis tasks, please <strong>sign in</strong> with an <em>@mozilla.com</em> email address.</p>
+   {% endif %}
+  </div>
+  <div id="footer">
+   <a href="/debug">Launch an ad-hoc analysis worker</a>
+   {% if current_user.is_authenticated() %}
+    <div id="signout">
+     <button id="browserid-logout">Sign out</button>
+    </div>
+   {% endif %}
+   <p>For existing telemetry dashboards, please visit <a href="http://telemetry.mozilla.org">telemetry.mozilla.org</a>.</p>
+  </div>
+ </body>
+</html>

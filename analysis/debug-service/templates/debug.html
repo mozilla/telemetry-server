@@ -1,0 +1,52 @@
+<html>
+ <head>
+  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" />
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+  <script src="https://login.persona.org/include.js" type="text/javascript"></script>
+  <script type="text/javascript">{{ auth_script|safe }}</script>
+  <title>Telemetry Self-Serve Data Analysis</title>
+ </head>
+ <body>
+  <div id="header"> Telemetry Self-Serve Data Analysis </div>
+  <div id="subheader">Launch an ad-hoc analysis worker</div>
+  <div id="content">
+   {% if current_user.is_authenticated() %}
+    {% if current_user.is_authorized() %}
+     <br>
+     Launch a server in the cloud and use it for custom data analysis. The machine will be available for 24 hours, then it will be automatically terminated.
+     <br>
+     <form action="spawn-debug-instance" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="token" value="{{ token }}">
+      <table>
+       <tr>
+        <td class="field-label"> <label> Server Name: </label> </td>
+        <td class="field-input"> <input type="text" name="name"></input> </td>
+        <td class="field-desc"> The server name identifies this machine within AWS. Use something short like &quot;myname-charset-usage&quot; </td>
+       </tr>
+       <tr>
+        <td class="field-label"> <label> SSH Public Key: </label> </td>
+        <td class="field-input"> <input type="file" name="public-ssh-key"></input> </td>
+        <td class="field-desc"> Your public key file. Usually <code>id_rsa.pub</code>.</td>
+       </tr>
+      </table>
+      <input type="submit" name="submit" value="Submit">
+     </form>
+    {% else %}
+     Sorry, self-serve data analysis is currently limited to <em>@mozilla.com</em> addresses.  The address you signed in with ({{ current_user.email }}) does not grant you access.  Please <button id="browserid-logout">Sign out</button> and sign in with an authorized account.
+    {% endif %}
+   {% else %}
+    <button id="browserid-login">Sign in with Persona</button>
+    <p>For Ad-hoc data analysis and for scheduling analysis tasks, please <strong>sign in</strong> with an <em>@mozilla.com</em> email address.</p>
+   {% endif %}
+  </div>
+  <div id="footer">
+   <a href="/schedule">Schedule an analysis job</a>
+   {% if current_user.is_authenticated() %}
+    <div id="signout">
+     <button id="browserid-logout">Sign out</button>
+    </div>
+   {% endif %}
+   <p>For existing telemetry dashboards, please visit <a href="http://telemetry.mozilla.org">telemetry.mozilla.org</a>.</p>
+  </div>
+ </body>
+</html>
