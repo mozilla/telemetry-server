@@ -1,6 +1,7 @@
 [hekad]
 maxprocs = 4
-base_dir = "." # TODO fix when running on the official aggregator box
+base_dir = "."
+share_dir = "."
 max_timer_inject = 100
 max_process_duration = 1000000
 
@@ -19,7 +20,6 @@ address = ":5565"
 type = "SandboxManagerFilter"
 message_signer = "telemetry"
 message_matcher = "Type == 'heka.control.sandbox'"
-working_directory = "sandbox"
 max_filters = 10
 
 [AMQPInput]
@@ -32,8 +32,6 @@ decoder="ProtobufDecoder"
 type = "DashboardOutput"
 address = ":4352"
 ticker_interval = 10
-working_directory = "dashboard"
-static_directory = "dasher" # TODO fix when running on the official aggregator box
 
 [TelemetryServerMetricsAggregator]
 type = "SandboxFilter"
@@ -42,9 +40,6 @@ ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_aggregator.lua"
 preserve_data = true
-memory_limit = 8000000
-instruction_limit = 100000
-output_limit = 64000
 
 [TelemetryServerMetricsHostAggregator]
 type = "SandboxFilter"
@@ -53,9 +48,6 @@ ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_host_aggregator.lua"
 preserve_data = true
-memory_limit = 8000000
-instruction_limit = 100000
-output_limit = 64000
 
 [TelemetryServerMetricsHostAggregator.config]
 max_hosts = 10
@@ -68,9 +60,6 @@ ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_aggregator.lua"
 preserve_data = true
-memory_limit = 8000000
-instruction_limit = 100000
-output_limit = 64000
 
 [TelemetryChannelMetricsAggregator.config]
 alert_rows = 15
@@ -83,9 +72,6 @@ ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_aggregator.lua"
 preserve_data = true
-memory_limit = 8000000
-instruction_limit = 100000
-output_limit = 64000
 
 [TelemetryChannelMetrics60DaysAggregatorAlerting]
 type = "SandboxFilter"
@@ -94,9 +80,6 @@ ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_aggregator.lua"
 preserve_data = true
-memory_limit = 8000000
-instruction_limit = 100000
-output_limit = 64000
 
 [TelemetryChannelMetrics60DaysAggregatorAlerting.config]
 alert_rows = 15
@@ -107,15 +90,36 @@ type = "SandboxFilter"
 message_matcher = "Type == 'telemetry.convert'"
 ticker_interval = 60
 script_type = "lua"
-filename = "telemetry_convert.lua"
+filename = "lua_filters/telemetry_convert.lua"
 preserve_data = true
-memory_limit = 1000000 
-instruction_limit = 10000
-output_limit = 64000
 
 [TelemetryAlert]
 type = "SmtpOutput"
 payload_only = false
 message_matcher = "Type == 'heka.sandbox-output' && Fields[payload_type] == 'alert'"
-send_to = ["trink@mozilla.com"]
+send_to = ["telemetry-alerts@mozilla.com"]
 host = "mozilla.com.s5a1.psmtp.com:25"
+
+[TelemetryProcessingRecordsAggregator]
+type = "SandboxFilter"
+message_matcher = "Logger == 'TelemetryProcessingRecords' && Fields[payload_type] == 'cbufd'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/cbufd_aggregator.lua"
+preserve_data = true
+
+[TelemetryProcessingBytesAggregator]
+type = "SandboxFilter"
+message_matcher = "Logger == 'TelemetryProcessingBytes' && Fields[payload_type] == 'cbufd'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/cbufd_aggregator.lua"
+preserve_data = true
+
+[TelemetryProcessingErrorsAggregator]
+type = "SandboxFilter"
+message_matcher = "Logger == 'TelemetryProcessingErrors' && Fields[payload_type] == 'cbufd'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/cbufd_aggregator.lua"
+preserve_data = true

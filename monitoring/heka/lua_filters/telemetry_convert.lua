@@ -13,8 +13,8 @@ local sec_per_row = read_config("sec_per_row") or 60
 
 local function discover_fields()
     local t = {fields = {}, cbuf = nil}
+    local h = {type = 0, name = "", value = 0, representation = "", count = 0, key = ""}
     while true do
-        local h = {type = 0, name = "", value = 0, representation = "", count = 0, key = ""}
         h.type, h.name, h.value, h.representation, h.count = read_next_field()
         if not h.type then break end
         h.key = string.format("Fields[%s]", h.name)

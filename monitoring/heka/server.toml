@@ -1,6 +1,5 @@
 [hekad]
 maxprocs = 4
-base_dir = "."
 max_timer_inject = 100
 max_process_duration = 1000000
 
@@ -19,7 +18,6 @@ address = ":5565"
 type = "SandboxManagerFilter"
 message_signer = "telemetry"
 message_matcher = "Type == 'heka.control.sandbox'"
-working_directory = "sandbox"
 max_filters = 10
 
 [TelemetryServerInput]
@@ -31,45 +29,31 @@ decoder = "TelemetryServerDecoder"
 [TelemetryServerDecoder]
 type = "SandboxDecoder"
 script_type = "lua"
-filename = "telemetry_server_decoder.lua"
-module_directory = "/usr/share/heka/lua_modules"
+filename = "lua_decoders/telemetry_server.lua"
 
 [TelemetryServerMetrics]
 type = "SandboxFilter"
-message_matcher = "Type == 'TelemetryServerLog'"
+message_matcher = "Type == 'telemetry.server'"
 ticker_interval = 60
 script_type = "lua"
-filename = "telemetry_server_metrics.lua"
+filename = "lua_filters/telemetry_server_metrics.lua"
 preserve_data = true
-memory_limit = 1000000 
-instruction_limit = 1000
-output_limit = 64000
 
 [TelemetryChannelMetrics]
 type = "SandboxFilter"
-message_matcher = "Type == 'TelemetryServerLog'"
+message_matcher = "Type == 'telemetry.server'"
 ticker_interval = 60
 script_type = "lua"
-filename = "telemetry_channel_metrics.lua"
+filename = "lua_filters/telemetry_channel_metrics.lua"
 preserve_data = true
-memory_limit = 8000000 
-instruction_limit = 1000
-output_limit = 64000
-
-[TelemetryChannelMetrics.config]
-rows = 1440
-sec_per_row = 60
 
 [TelemetryChannelMetrics60Days]
 type = "SandboxFilter"
-message_matcher = "Type == 'TelemetryServerLog'"
+message_matcher = "Type == 'telemetry.server'"
 ticker_interval = 60
 script_type = "lua"
-filename = "telemetry_channel_metrics.lua"
+filename = "lua_filters/telemetry_channel_metrics.lua"
 preserve_data = true
-memory_limit = 8000000
-instruction_limit = 1000
-output_limit = 64000
 
 [TelemetryChannelMetrics60Days.config]
 rows = 1440
@@ -79,8 +63,6 @@ sec_per_row = 3600
 type = "DashboardOutput"
 address = ":4352"
 ticker_interval = 10
-working_directory = "dashboard"
-static_directory = "/usr/share/heka/dasher"
 
 [TcpOutput]
 address = "10.250.68.186:5565"

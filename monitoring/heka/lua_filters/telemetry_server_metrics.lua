@@ -15,15 +15,13 @@ local REQUEST_TIME  = request:set_header(4, "Request Time", "ms")
 
 function process_message ()
     local ts = read_message("Timestamp")
-    local sc = tonumber(read_message("Fields[code]"))
-    local rd = tonumber(read_message("Fields[duration]"))
-    local rs = tonumber(read_message("Fields[size]"))
+    if not request:add(ts, REQUEST_TIME, read_message("Fields[duration]")) then
+        return 0 -- outside the buffer
+    end
 
-    local t = request:add(ts, REQUEST_TIME, rd)
-    if not t then return 0 end -- outside the buffer
+    request:add(ts, REQUEST_SIZE, read_message("Fields[size]"))
 
-    t = request:add(ts, REQUEST_SIZE, rs)
-    if sc == 200 then
+    if sc == read_message("Fields[code]") then
         request:add(ts, SUCCESS, 1)
     else
         request:add(ts, FAILURE, 1)

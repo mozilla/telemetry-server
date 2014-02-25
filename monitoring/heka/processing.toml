@@ -1,0 +1,65 @@
+[hekad]
+maxprocs = 4
+max_timer_inject = 100
+max_process_duration = 1000000
+
+[ProtobufDecoder]
+encoding_name = "PROTOCOL_BUFFER"
+
+[TCP:5565]
+type = "TcpInput"
+parser_type = "message.proto"
+decoder = "ProtobufDecoder"
+address = ":5565"
+	[TCP:5565.signer.telemetry_0]
+	hmac_key = "TODO change on deploy" # TODO update on deploy
+
+[TelemetrySandboxManager]
+type = "SandboxManagerFilter"
+message_signer = "telemetry"
+message_matcher = "Type == 'heka.control.sandbox'"
+max_filters = 10
+
+[TelemetryProcessingInput]
+type = "LogstreamerInput"
+log_directory = "/var/log/telemetry"
+file_match = 'telemetry-processing\.log'
+decoder = "TelemetryProcessingDecoder"
+
+[TelemetryProcessingDecoder]
+type = "SandboxDecoder"
+script_type = "lua"
+filename = "lua_decoders/telemetry_processing.lua"
+
+[TelemetryProcessingRecords]
+type = "SandboxFilter"
+message_matcher = "Type == 'telemetry.processing'"
+ticker_interval = 10
+script_type = "lua"
+filename = "lua_filters/telemetry_processing_records.lua"
+preserve_data = true
+
+[TelemetryProcessingBytes]
+type = "SandboxFilter"
+message_matcher = "Type == 'telemetry.processing' && Fields[channel] == 'ALL'"
+ticker_interval = 10
+script_type = "lua"
+filename = "lua_filters/telemetry_processing_bytes.lua"
+preserve_data = true
+
+[TelemetryProcessingErrors]
+type = "SandboxFilter"
+message_matcher = "Type == 'telemetry.processing' && Fields[channel] == 'ALL' && Fields[bad_records] > 0"
+ticker_interval = 10
+script_type = "lua"
+filename = "lua_filters/telemetry_processing_errors.lua"
+preserve_data = true
+
+[Dashboard]
+type = "DashboardOutput"
+address = ":4352"
+ticker_interval = 10
+
+[TcpOutput]
+address = "10.250.68.186:5565"
+message_matcher =  "Type == 'heka.sandbox-output' && Fields[payload_type] == 'cbufd'"
