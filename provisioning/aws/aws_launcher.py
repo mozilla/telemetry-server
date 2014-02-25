@@ -26,6 +26,7 @@ class Launcher(object):
         self.aws_key = args.aws_key
         self.aws_secret_key = args.aws_secret_key
         self.ssl_user = self.config.get("ssl_user", "ubuntu")
+        self.home = "/home/" + self.ssl_user
         self.ssl_key_path = self.config.get("ssl_key_path", "~/.ssh/id_rsa.pub")
         self.repo = args.repository
         if args.instance_name is not None:
@@ -103,13 +104,11 @@ class Launcher(object):
         pass
 
     def install_telemetry_code(self, instance):
-        home = "/home/" + self.ssl_user
-        with cd(home):
+        with cd(self.home):
             run("git clone %s" % self.repo)
 
     def install_histogram_tools(self, instance):
-        home = "/home/" + self.ssl_user
-        with cd(home + "/telemetry-server/telemetry"):
+        with cd(self.home + "/telemetry-server/telemetry"):
             run("bash ../bin/get_histogram_tools.sh")
 
     def get_user_data(self):
