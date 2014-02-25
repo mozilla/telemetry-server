@@ -111,8 +111,6 @@ def reduce(k, v, cx):
         #   app_update_channel, query, document_count, total_invocations,
         #   total_duration, median_duration
         cx.write(",".join([k, str(len(v)), str(total_invocations), str(sum(durations))]), median(avgs))
-    else:
-        print "Skipping a query with only", total_invocations, "invocations"
 
 if __name__ == "__main__":
     raw = '''{
