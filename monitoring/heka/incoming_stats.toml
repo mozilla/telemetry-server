@@ -20,39 +20,39 @@ message_signer = "telemetry"
 message_matcher = "Type == 'heka.control.sandbox'"
 max_filters = 10
 
-[TelemetryProcessingInput]
+[TelemetryIncomingStatsInput]
 type = "LogstreamerInput"
 log_directory = "/var/log/telemetry"
-file_match = 'telemetry-processing\.log'
-decoder = "TelemetryProcessingDecoder"
+file_match = 'telemetry-incoming-stats\.log'
+decoder = "TelemetryIncomingStatsDecoder"
 
-[TelemetryProcessingDecoder]
+[TelemetryIncomingStatsDecoder]
 type = "SandboxDecoder"
 script_type = "lua"
-filename = "lua_decoders/telemetry_processing.lua"
+filename = "lua_decoders/telemetry_incoming_stats.lua"
 
-[TelemetryProcessingRecords]
+[TelemetryStatsRecords]
 type = "SandboxFilter"
-message_matcher = "Type == 'telemetry.processing'"
+message_matcher = "Type == 'telemetry.incoming_stats'"
 ticker_interval = 10
 script_type = "lua"
-filename = "lua_filters/telemetry_processing_records.lua"
+filename = "lua_filters/telemetry_stats_records.lua"
 preserve_data = true
 
-[TelemetryProcessingBytes]
+[TelemetryStatsBytes]
 type = "SandboxFilter"
-message_matcher = "Type == 'telemetry.processing' && Fields[channel] == 'ALL'"
+message_matcher = "Type == 'telemetry.incoming_stats' && Fields[channel] == 'ALL'"
 ticker_interval = 10
 script_type = "lua"
-filename = "lua_filters/telemetry_processing_bytes.lua"
+filename = "lua_filters/telemetry_stats_bytes.lua"
 preserve_data = true
 
-[TelemetryProcessingErrors]
+[TelemetryStatsErrors]
 type = "SandboxFilter"
-message_matcher = "Type == 'telemetry.processing' && Fields[channel] == 'ALL' && Fields[bad_records] > 0"
+message_matcher = "Type == 'telemetry.incoming_stats' && Fields[channel] == 'ALL' && Fields[bad_records] > 0"
 ticker_interval = 10
 script_type = "lua"
-filename = "lua_filters/telemetry_processing_errors.lua"
+filename = "lua_filters/telemetry_stats_errors.lua"
 preserve_data = true
 
 [Dashboard]

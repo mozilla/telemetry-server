@@ -100,25 +100,25 @@ message_matcher = "Type == 'heka.sandbox-output' && Fields[payload_type] == 'ale
 send_to = ["telemetry-alerts@mozilla.com"]
 host = "mozilla.com.s5a1.psmtp.com:25"
 
-[TelemetryProcessingRecordsAggregator]
+[TelemetryStatsRecordsAggregator]
 type = "SandboxFilter"
-message_matcher = "Logger == 'TelemetryProcessingRecords' && Fields[payload_type] == 'cbufd'"
+message_matcher = "Logger == 'TelemetryStatsRecords' && Fields[payload_type] == 'cbufd'"
 ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_aggregator.lua"
 preserve_data = true
 
-[TelemetryProcessingBytesAggregator]
+[TelemetryStatsBytesAggregator]
 type = "SandboxFilter"
-message_matcher = "Logger == 'TelemetryProcessingBytes' && Fields[payload_type] == 'cbufd'"
+message_matcher = "Logger == 'TelemetryStatsBytes' && Fields[payload_type] == 'cbufd'"
 ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_aggregator.lua"
 preserve_data = true
 
-[TelemetryProcessingErrorsAggregator]
+[TelemetryStatsErrorsAggregator]
 type = "SandboxFilter"
-message_matcher = "Logger == 'TelemetryProcessingErrors' && Fields[payload_type] == 'cbufd'"
+message_matcher = "Logger == 'TelemetryStatsErrors' && Fields[payload_type] == 'cbufd'"
 ticker_interval = 60
 script_type = "lua"
 filename = "lua_filters/cbufd_aggregator.lua"

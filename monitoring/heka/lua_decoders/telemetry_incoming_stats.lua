@@ -10,7 +10,7 @@ sample input
 Injected Heka message
 ---------------------
 Timestamp: 2014-02-23 11:51:17.793986048 -0800 PST
-Type: telemetry.processing
+Type: telemetry.incoming_stats
 Hostname: trink-x230
 Pid: 0
 UUID: bb8105b4-e71b-45c7-a33e-a9fad3445d0b
@@ -45,7 +45,7 @@ local metadata = {
 
 local msg = {
     Timestamp = nil,
-    Type = "telemetry.processing",
+    Type = "telemetry.incoming_stats",
     Fields = nil
 }
 
