@@ -96,7 +96,7 @@ class TelemetryServerLauncher(Launcher):
                 "/var/log/telemetry/telemetry-incoming-stats.log")
 
         # Create startup scripts:
-        code_base = "/home/" + self.ssl_user + "/telemetry-server"
+        code_base = self.home + "/telemetry-server"
         c_file = "/etc/init/telemetry-server.conf"
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}/http' >> {0}".format(c_file, code_base))
