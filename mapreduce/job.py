@@ -148,6 +148,7 @@ class Job:
         print "Done"
 
         def checkExitCode(proc):
+            # If process was terminated by a signal, exitcode is the negative signal value
             if proc.exitcode == -signal.SIGKILL:
                 # SIGKILL is most likely an OOM kill
                 raise MemoryError("%s ran out of memory" % proc.name)
