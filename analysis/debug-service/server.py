@@ -60,6 +60,41 @@ def schedule_job():
         return login_manager.unauthorized()
     return render_template('schedule.html')
 
+def get_required_int(request, field, label, min_value=0, max_value=100):
+    value = request.form[field]
+    if value is None or value.strip() == '':
+        raise ValueError(label + " is required")
+    else:
+        try:
+            value = int(value)
+            if value < min_value or value > max_value:
+                raise ValueError("{0} should be between {1} and {2}".format(label, min_value, max_value))
+        except ValueError:
+            raise ValueError("{0} should be an int between {1} and {2}".format(label, min_value, max_value))
+    return value
+
+def hour_to_time(hour):
+    return "{0}:00 UTC".format(hour)
+
+def display_dow(dow):
+    if dow is None:
+        return ''
+
+    dayname = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dow]
+    return " every {0}".format(dayname)
+
+def display_dom(dom):
+    if dom is None:
+        return ''
+    nth = "{0}th".format(dom)
+    if dom % 10 == 1:
+        nth = "{0}st".format(dom)
+    elif dom % 10 == 2:
+        nth = "{0}nd".format(dom)
+    elif dom % 10 == 3:
+        nth = "{0}rd".format(dom)
+    return " on the {0} day of each month".format(nth)
+
 @app.route("/schedule/new", methods=["POST"])
 @login_required
 def create_scheduled_job():
@@ -68,12 +103,72 @@ def create_scheduled_job():
         return login_manager.unauthorized()
 
     errors = {}
+    for f in ['job-name', 'commandline', 'output-dir',
+              'schedule-frequency', 'schedule-time-of-day', 'timeout']:
+        val = request.form[f]
+        if val is None or val.strip() == '':
+            errors[f] = "This field is required"
+
+    frequency = request.form['schedule-frequency'].strip()
+    day_of_week = None
+    day_of_month = None
+    if frequency == 'weekly':
+        # day of week is required
+        try:
+            day_of_week = get_required_int(request, 'schedule-day-of-week',
+                    "Day of Week", max_value=6)
+        except ValueError, e:
+            errors['schedule-day-of-week'] = e.message
+    elif frequency == 'monthly':
+        # day of month is required
+        try:
+            day_of_month = get_required_int(request, 'schedule-day-of-month',
+                    "Day of Month", max_value=31)
+        except ValueError, e:
+            errors['schedule-day-of-month'] = e.message
+    elif frequency != 'daily':
+        # incoming value is bogus.
+        errors['schedule-frequency'] = "Pick one of the values in the list"
+
+    try:
+        time_of_day = get_required_int(request, 'schedule-time-of-day',
+                "Time of Day", max_value=23)
+    except ValueError, e:
+        errors['schedule-time-of-day'] = e.message
+
+    try:
+        timeout = get_required_int(request, 'timeout',
+                "Job Timeout", max_value=24*60)
+    except ValueError, e:
+        errors['timeout'] = e.message
+
+    # Check for code-tarball
+    if request.files['code-tarball']:
+        filename = request.files['code-tarball'].filename
+        if not (filename.endswith(".tar.gz") or filename.endswith(".tgz")):
+            errors['code-tarball'] = "Code file must be in .tar.gz or .tgz format"
+    else:
+        errors['code-tarball'] = "File is required (.tar.gz or .tgz)"
+
+
     if errors:
         return render_template('schedule.html', errors=errors)
 
     # Now do it!
 
-    return render_template('schedule_create.html')
+    code_s3path = "s3://telemetry-analysis-code/{0}/{1}".format(request.form["job-name"], request.files["code-tarball"].filename)
+    data_s3path = "s3://telemetry-public-analysis/{0}/data/".format(request.form["job-name"])
+    return render_template('schedule_create.html',
+        code_s3path = code_s3path,
+        data_s3path = data_s3path,
+        commandline = request.form['commandline'],
+        output_dir = request.form['output-dir'],
+        job_frequency = frequency,
+        job_time = hour_to_time(time_of_day),
+        job_dow = display_dow(day_of_week),
+        job_dom = display_dom(day_of_month),
+        job_timeout = timeout
+        )
 
 @app.route("/worker", methods=["GET"])
 @login_required
@@ -203,4 +298,4 @@ if __name__ == '__main__':
     parser.add_argument("--port", default=80, type=int)
     args = parser.parse_args()
 
-    app.run(host = args.host, port = args.port)
+    app.run(host = args.host, port = args.port, debug=True)
