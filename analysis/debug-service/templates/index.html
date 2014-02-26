@@ -5,13 +5,13 @@
   Would you like to:<br>
   <ul>
    <li>
-    <a href="/debug">
+    <a href="{{ url_for('get_worker_params') }}">
      <img width="48" src="{{ url_for('static', filename='worker.png') }}"></img>
      Launch an ad-hoc analysis worker
     </a>
    </li>
    <li>
-    <a href="/schedule">
+    <a href="{{ url_for('schedule_job') }}">
      <img width="48" src="{{ url_for('static', filename='schedule.png') }}"></img>
      Schedule an analysis job
     </a>

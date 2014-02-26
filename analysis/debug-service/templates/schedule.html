@@ -1,35 +1,65 @@
+{% import 'macros.html' as macros %}
 {% extends "base.html" %}
 {% block title %}
  Schedule an analysis job
 {% endblock %}
 {% block content %}
- <form action="schedule-job" method="post" enctype="multipart/form-data">
-  <input type="hidden" name="token" value="{{ token }}">
+ <div class="blurb">
+ Run a telemetry analysis on a scheduled basis. The output of the analysis will be publicly available.
+ </div>
+ <form action="{{ url_for('create_scheduled_job') }}" id="scheduleform" method="post" enctype="multipart/form-data">
   <table>
+   {{ macros.input(errors, 'job-name', 'Job Name', 'The job name will form part of the location of the code tarball below, as well as part of the path to the public data in S3') }}
+   {{ macros.input(errors, 'code-tarball', 'Code Tarball', 'This .tar.gz file should contain all the code needed to run your job. Recommended form: job-name-0.1.tar.gz', type='file') }}
+   <!--
    <tr>
     <td class="field-label"> <label> Job Name: </label> </td>
-    <td class="field-input"> <input type="text" name="job-name"></input> </td>
-    <td class="field-desc"> The job name will form part of the location of the code tarball below, as well as part of the path to the public data in S3 </td>
+    <td class="field-input">
+     {% if errors and 'job-name' in errors %}
+      <div class="field-error">
+     {% endif %}
+     <input type="text" name="job-name" required></input> </td>
+     {% if errors and 'job-name' in errors %}
+       <br/>
+       {{ errors['job-name'] }}
+      </div>
+     {% endif %}
+    <td class="field-desc">
+     The job name will form part of the location of the code tarball below,
+     as well as part of the path to the public data in S3
+    </td>
    </tr>
    <tr>
     <td class="field-label"> <label> Code Tarball: </label> </td>
-    <td class="field-input"> <input type="file" name="code-tarball"></input> </td>
-    <td class="field-desc"> This .tar.gz file should contain all the code needed to run your job. Recommended form: job-name-0.1.tar.gz</td>
+    <td class="field-input"> <input type="file" name="code-tarball" required></input> </td>
+    <td class="field-desc">
+     This .tar.gz file should contain all the code needed to run your job.
+     Recommended form: job-name-0.1.tar.gz
+    </td>
    </tr>
+   -->
    <tr>
     <td class="field-label"> <label> Execution Commandline: </label> </td>
-    <td class="field-input"> <input type="text" name="commandline" value="./run.sh"></input> </td>
-    <td class="field-desc"> The tarball will be unpacked on a worker node, then this command will be invoked from the same directory </td>
+    <td class="field-input"> <input type="text" name="commandline" value="./run.sh" required></input> </td>
+    <td class="field-desc">
+     The tarball will be unpacked on a worker node, then this command will be
+     invoked from the same directory
+   </td>
    </tr>
    <tr>
     <td class="field-label"> <label> Output Directory: </label> </td>
-    <td class="field-input"> <input type="text" name="output-dir" value="output"></input> </td>
-    <td class="field-desc"> After running the above command, any files found in this dir (relative to the root where the tarball is unpacked) will be made publicly available at http://s3/telemetry-public-analysis/Job Name/data/*.  Any files that are already in S3 at the above location will be overwritten by new files of the same name. </td>
+    <td class="field-input"> <input type="text" name="output-dir" value="output" required></input> </td>
+    <td class="field-desc">
+     After running the above command, any files found in this dir (relative to
+     the root where the tarball is unpacked) will be made publicly available in
+     Amazon S3.  Any files that are already in S3 at the above location will be
+     overwritten by new files of the same name.
+    </td>
    </tr>
    <tr>
     <td class="field-label"> <label> Schedule Frequency: </label> </td>
     <td class="field-input">
-     <select name="schedule-frequency">
+     <select name="schedule-frequency" required>
       <option value="daily">Daily</option>
       <option value="weekly">Weekly</option>
       <option value="monthly">Monthly</option>
@@ -40,7 +70,7 @@
    <tr>
     <td class="field-label"> <label> Day of Week: </label> </td>
     <td class="field-input">
-     <select name="schedule-day-of-week">
+     <select name="schedule-day-of-week" required>
       <option value="0">Sunday</option>
       <option value="1">Monday</option>
       <option value="2">Tuesday</option>
@@ -54,13 +84,13 @@
    </tr>
    <tr>
     <td class="field-label"> <label> Day of Month: </label> </td>
-    <td class="field-input"> <input type="text" name="schedule-day-of-month" value="1"></input> </td>
+    <td class="field-input"> <input type="text" name="schedule-day-of-month" value="1" required digits></input> </td>
     <td class="field-desc"> The job will run monthly on this day </td>
    </tr>
    <tr>
     <td class="field-label"> <label> Time of Day (UTC): </label> </td>
     <td class="field-input">
-     <select name="schedule-time-of-day">
+     <select name="schedule-time-of-day" required>
       <option value="0">Midnight</option>
       <option value="1">1am</option>
       <option value="2">2am</option>
@@ -87,18 +117,29 @@
       <option value="23">11pm</option>
      </select>
     </td>
-    <td class="field-desc"> The job will be run at this time.  Note: if you want to process the previous day's data, it's good to leave a few hours' buffer for the data to be published, so start those types of jobs later in the day. </td>
+    <td class="field-desc">
+     The job will be run at this time.  Note: if you want to process the
+     previous day's data, it's good to leave a few hours' buffer for the data
+     to be published, so start those types of jobs later in the day.
+    </td>
    </tr>
    <tr>
     <td class="field-label"> <label> Job Timeout (minutes): </label> </td>
-    <td class="field-input"> <input type="text" name="timeout" value="120"></input> </td>
-    <td class="field-desc"> If the job does not complete within this many minutes, it will automatically be killed. </td>
+    <td class="field-input"> <input type="text" name="timeout" value="120" required></input> </td>
+    <td class="field-desc">
+     If the job does not complete within this many minutes, it will
+     automatically be killed.
+    </td>
    </tr>
   </table>
   <input type="submit" name="submit" value="Submit">
  </form>
+ <script>
+  $("#scheduleform").validate();
+ </script>
 {% endblock %}
 
 {% block footer %}
- <a href="/debug">Launch an ad-hoc analysis worker</a>
+ <a href="{{ url_for('index') }}">Home</a> <br/>
+ <a href="{{ url_for('get_worker_params') }}">Launch an ad-hoc analysis worker</a>
 {% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}
+ Schedule an analysis job
+{% endblock %}
+{% block content %}
+ <div class="blurb">
+      The server will upload your code to <code>{{ code_s3path }}</code>.  This tarball will be unpacked on a worker node, then <code>{{ commandline }}</code> will be invoked.  Any output files found in <code>{{ output_dir }}</code> (relative to where the tarball was unpacked) will be made publicly available at <code>{{ data_s3path }}</code>. These files will overwrite anything already in that location in S3.  The job will be run <strong>{{ job_frequency }}</strong> at <strong>{{ job_time }}{{ job_dow }}{{ job_dom }}</strong>.  The job will be allowed to run for a max of <strong>{{ job_timeout }}</strong> minutes, after which it will be killed.
+ </div>
+    <a href="{{ url_for('schedule_job') }}">Go back</a>
+{% endblock %}
+{% block footer %}
+ <a href="{{ url_for('get_worker_params') }}">Launch an ad-hoc analysis worker</a>
+{% endblock %}

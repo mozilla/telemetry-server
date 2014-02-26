@@ -20,7 +20,7 @@ def main():
                 name = instance.tags.get('name', instance.id)
                 ses.send_email(
                     source          = config.EMAIL_SOURCE,
-                    subject         = "telemetry-analysis debug instance %s terminated!" % name,
+                    subject         = "telemetry-analysis worker instance %s terminated!" % name,
                     body            = "We've terminated your instance as it has been running for over 24 hours!",
                     to_addresses    = [instance.tags['Owner']]
                 )

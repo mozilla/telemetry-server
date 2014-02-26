@@ -58,27 +58,34 @@ def schedule_job():
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
-    return render_template('schedule.html', token = str(uuid4()))
+    return render_template('schedule.html')
 
-@app.route("/schedule-job", methods=["POST"])
+@app.route("/schedule/new", methods=["POST"])
 @login_required
-def confirm_job():
+def create_scheduled_job():
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
-    return render_template('schedule_confirm.html', token = str(uuid4()))
 
-@app.route("/debug", methods=["GET"])
+    errors = {}
+    if errors:
+        return render_template('schedule.html', errors=errors)
+
+    # Now do it!
+
+    return render_template('schedule_create.html')
+
+@app.route("/worker", methods=["GET"])
 @login_required
-def get_debug_params():
+def get_worker_params():
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
-    return render_template('debug.html', token = str(uuid4()))
+    return render_template('worker.html', token = str(uuid4()))
 
-@app.route("/spawn-debug-instance", methods=["POST"])
+@app.route("/worker/new", methods=["POST"])
 @login_required
-def spawn_debug_instance():
+def spawn_worker_instance():
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
@@ -119,7 +126,7 @@ def spawn_debug_instance():
     }
     ses.send_email(
         source          = app.config['EMAIL_SOURCE'],
-        subject         = ("telemetry-analysis debug instance: %s (%s) launched"
+        subject         = ("telemetry-analysis worker instance: %s (%s) launched"
                            % (request.form['name'], instance.id)),
         format          = 'html',
         body            = render_template('instance-launched-email.html', **params),
@@ -127,7 +134,7 @@ def spawn_debug_instance():
     )
     return redirect(url_for('monitor', instance_id = instance.id))
 
-@app.route("/monitor/<instance_id>", methods=["GET"])
+@app.route("/worker/monitor/<instance_id>", methods=["GET"])
 @login_required
 def monitor(instance_id):
     # Check that the user logged in is also authorized to do this
@@ -153,7 +160,7 @@ def monitor(instance_id):
         terminate_url   = abs_url_for('kill', instance_id = instance.id)
     )
 
-@app.route("/kill/<instance_id>", methods=["GET"])
+@app.route("/worker/kill/<instance_id>", methods=["GET"])
 @login_required
 def kill(instance_id):
     # Check that the user logged in is also authorized to do this
