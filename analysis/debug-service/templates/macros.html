@@ -1,0 +1,19 @@
+{% macro input(errors, name, label, desc, type='text') -%}
+ <tr>
+  <td class="field-label"> <label> {{ label }}: </label> </td>
+  <td class="field-input">
+   {% if errors and name in errors %}
+    <div class="field-error">
+     {{ errors[name] }}
+   {% endif %}
+   <input type="{{ type }}" name="{{ name }}" required></input> </td>
+   {% if errors and name in errors %}
+    </div>
+   {% endif %}
+  <td class="field-desc">
+   {{ desc }}
+  </td>
+ </tr>
+{%- endmacro %}
+
+
