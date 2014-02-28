@@ -45,12 +45,12 @@ def load_user(email):
 
 @login_manager.unauthorized_handler
 def unauthorized():
-    return render_template('unauthorized.html')
+    return render_template('index.html')
 
 # Routes
 @app.route('/', methods=["GET"])
 def index():
-    return render_template('index.html', token = str(uuid4()))
+    return render_template('index.html')
 
 @app.route("/schedule", methods=["GET"])
 @login_required
@@ -109,7 +109,16 @@ def create_scheduled_job():
         if val is None or val.strip() == '':
             errors[f] = "This field is required"
 
+    time_of_day = -1
+    try:
+        time_of_day = get_required_int(request, 'schedule-time-of-day',
+                "Time of Day", max_value=23)
+    except ValueError, e:
+        errors['schedule-time-of-day'] = e.message
+
     frequency = request.form['schedule-frequency'].strip()
+    # m h  dom mon dow   command
+    cron_bits = [0, time_of_day]
     day_of_week = None
     day_of_month = None
     if frequency == 'weekly':
@@ -117,6 +126,7 @@ def create_scheduled_job():
         try:
             day_of_week = get_required_int(request, 'schedule-day-of-week',
                     "Day of Week", max_value=6)
+            cron_bits.extend(['*', '*', day_of_week])
         except ValueError, e:
             errors['schedule-day-of-week'] = e.message
     elif frequency == 'monthly':
@@ -124,17 +134,14 @@ def create_scheduled_job():
         try:
             day_of_month = get_required_int(request, 'schedule-day-of-month',
                     "Day of Month", max_value=31)
+            cron_bits.extend([day_of_month, '*', '*'])
         except ValueError, e:
             errors['schedule-day-of-month'] = e.message
     elif frequency != 'daily':
         # incoming value is bogus.
         errors['schedule-frequency'] = "Pick one of the values in the list"
-
-    try:
-        time_of_day = get_required_int(request, 'schedule-time-of-day',
-                "Time of Day", max_value=23)
-    except ValueError, e:
-        errors['schedule-time-of-day'] = e.message
+    else:
+        cron_bits.extend(['*', '*', '*'])
 
     try:
         timeout = get_required_int(request, 'timeout',
@@ -150,11 +157,27 @@ def create_scheduled_job():
     else:
         errors['code-tarball'] = "File is required (.tar.gz or .tgz)"
 
+    # TODO: Check if job_name is already in use
 
+    # If there were any errors, stop and re-display the form.
+    # TODO: It would be polite to render the form with the previously-supplied
+    #       values filled in.
     if errors:
         return render_template('schedule.html', errors=errors)
 
     # Now do it!
+    # What do we need to know about a job?
+    # job_owner
+    # job_id
+    # job_schedule
+    # job_name
+    # job_timeout_minutes
+    # job_code_uri
+    # job_commandline
+    # job_data_bucket (telemetry-public-analysis)
+    # job_output_dir
+
+    cron_bits.append("/path/to/run/script.sh")
 
     code_s3path = "s3://telemetry-analysis-code/{0}/{1}".format(request.form["job-name"], request.files["code-tarball"].filename)
     data_s3path = "s3://telemetry-public-analysis/{0}/data/".format(request.form["job-name"])
@@ -167,7 +190,8 @@ def create_scheduled_job():
         job_time = hour_to_time(time_of_day),
         job_dow = display_dow(day_of_week),
         job_dom = display_dom(day_of_month),
-        job_timeout = timeout
+        job_timeout = timeout,
+        cron_spec = " ".join([str(c) for c in cron_bits])
         )
 
 @app.route("/worker", methods=["GET"])
@@ -185,9 +209,31 @@ def spawn_worker_instance():
     if not current_user.is_authorized():
         return login_manager.unauthorized()
 
+    errors = {}
+
+    # Check required fields
+    for f in ['name', 'token']:
+        val = request.form[f]
+        if val is None or val.strip() == '':
+            errors[f] = "This field is required"
+
+    # Check required file
+    if not request.files['public-ssh-key']:
+        errors['code-tarball'] = "Public key file is required"
+
+    # TODO: Bug 961200: Check that a proper OpenSSH public key was uploaded.
+    # It should start with "ssh-rsa AAAAB3"
+    pubkey = request.files['public-ssh-key'].read()
+    if not pubkey.startswith("ssh-rsa AAAAB3"):
+        print "Found a pubkey of:", pubkey
+        errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
+
+    if errors:
+        return render_template('worker.html', errors=errors, token=str(uuid4()))
+
     # Upload s3 key to bucket
     sshkey = bucket.new_key("keys/%s.pub" % request.form['token'])
-    sshkey.set_contents_from_file(request.files['public-ssh-key'])
+    sshkey.set_contents_from_string(pubkey)
 
     # Create
     boot_script = render_template('boot-script.sh',
