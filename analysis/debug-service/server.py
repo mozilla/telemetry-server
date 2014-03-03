@@ -119,6 +119,41 @@ def update_crontab():
     # TODO: implement me
     pass
 
+def get_required_int(request, field, label, min_value=0, max_value=100):
+    value = request.form[field]
+    if value is None or value.strip() == '':
+        raise ValueError(label + " is required")
+    else:
+        try:
+            value = int(value)
+            if value < min_value or value > max_value:
+                raise ValueError("{0} should be between {1} and {2}".format(label, min_value, max_value))
+        except ValueError:
+            raise ValueError("{0} should be an int between {1} and {2}".format(label, min_value, max_value))
+    return value
+
+def hour_to_time(hour):
+    return "{0}:00 UTC".format(hour)
+
+def display_dow(dow):
+    if dow is None:
+        return ''
+
+    dayname = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dow]
+    return " every {0}".format(dayname)
+
+def display_dom(dom):
+    if dom is None:
+        return ''
+    nth = "{0}th".format(dom)
+    if dom % 10 == 1:
+        nth = "{0}st".format(dom)
+    elif dom % 10 == 2:
+        nth = "{0}nd".format(dom)
+    elif dom % 10 == 3:
+        nth = "{0}rd".format(dom)
+    return " on the {0} day of each month".format(nth)
+
 
 @app.teardown_appcontext
 def close_db(error):
@@ -162,41 +197,6 @@ def schedule_job(errors=None, values=None):
         jobs.append(job)
 
     return render_template('schedule.html', jobs=jobs, errors=errors, values=values)
-
-def get_required_int(request, field, label, min_value=0, max_value=100):
-    value = request.form[field]
-    if value is None or value.strip() == '':
-        raise ValueError(label + " is required")
-    else:
-        try:
-            value = int(value)
-            if value < min_value or value > max_value:
-                raise ValueError("{0} should be between {1} and {2}".format(label, min_value, max_value))
-        except ValueError:
-            raise ValueError("{0} should be an int between {1} and {2}".format(label, min_value, max_value))
-    return value
-
-def hour_to_time(hour):
-    return "{0}:00 UTC".format(hour)
-
-def display_dow(dow):
-    if dow is None:
-        return ''
-
-    dayname = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dow]
-    return " every {0}".format(dayname)
-
-def display_dom(dom):
-    if dom is None:
-        return ''
-    nth = "{0}th".format(dom)
-    if dom % 10 == 1:
-        nth = "{0}st".format(dom)
-    elif dom % 10 == 2:
-        nth = "{0}nd".format(dom)
-    elif dom % 10 == 3:
-        nth = "{0}rd".format(dom)
-    return " on the {0} day of each month".format(nth)
 
 @app.route("/schedule/new", methods=["POST"])
 @login_required
