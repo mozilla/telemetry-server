@@ -1,19 +1,72 @@
-{% macro input(errors, name, label, desc, type='text', value=None) -%}
+{% macro begin_input(errors, name, label, type='text', value=None, digits=False) -%}
  <tr>
+  <!-- value: {{ value}} -->
   <td class="field-label"> <label> {{ label }}: </label> </td>
   <td class="field-input">
    {% if errors and name in errors %}
     <div class="field-error">
      {{ errors[name] }}
    {% endif %}
-   <input type="{{ type }}" name="{{ name }}" required {% if value %} value="{{ value }}" {% endif %}></input> </td>
+   <input type="{{ type }}" name="{{ name }}" required
+   {% if values and values[name] %}
+    value="{{ values[name] }}"
+   {% elif value %}
+    value="{{ value }}"
+   {% endif %} />
    {% if errors and name in errors %}
     </div>
    {% endif %}
+  </td>
   <td class="field-desc">
-   {{ desc|safe }}
+{%- endmacro %}
+
+{% macro begin_select(errors, name, label) -%}
+ <tr>
+    <td class="field-label"> <label> {{ label }}: </label> </td>
+    <td class="field-input">
+     {% if errors and name in errors %}
+      <div class="field-error">
+       {{ errors[name] }}
+     {% endif %}
+     <select name="{{ name }}" required>
+{%- endmacro %}
+
+{% macro select_option(value, label, selected=False) -%}
+      <option value="{{ value }}"
+       {%- if values and values[name] == value -%}
+        selected
+       {%- elif selected -%}
+        selected
+       {%- endif %}>{{ label }}</option>
+{%- endmacro %}
+
+{% macro end_select_options() -%}
+     </select>
+    </td>
+    <td class="field-desc">
+{%- endmacro %}
+
+{% macro end_input() -%}
   </td>
  </tr>
 {%- endmacro %}
 
+{% macro input(errors, name, label, desc, type='text', value=None) -%}
+ {{ begin_input(errors, name, label, type, value) }}
+ {{ desc|safe }}
+ {{ end_input() }}
+{%- endmacro %}
 
+{% macro render_dialog(title, class='dialog') -%}
+    <div class="{{ class }}">
+        <h2>{{ title }}</h2>
+        <div class="contents">
+            {{ caller() }}
+        </div>
+    </div>
+{%- endmacro %}
+
+{% call render_dialog('Hello World') %}
+    This is a simple dialog rendered by using a macro and
+    a call block.
+{% endcall %}

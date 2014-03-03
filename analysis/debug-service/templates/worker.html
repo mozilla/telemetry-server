@@ -1,7 +1,7 @@
 {% import 'macros.html' as macros %}
 {% extends "base.html" %}
 {% block title %}
- <img width="48" src="{{ url_for('static', filename='worker.png') }}"></img>
+ <img width="48" src="{{ url_for('static', filename='worker.png') }}" />
  Launch an ad-hoc analysis worker
 {% endblock %}
 {% block content %}
@@ -12,29 +12,23 @@
   terminated.
  </div>
  <br>
+ <hr/>
  <form action="{{ url_for('spawn_worker_instance') }}" method="post" enctype="multipart/form-data">
   <input type="hidden" name="token" value="{{ token }}">
   <table>
-   {{ macros.input(errors, 'name', 'Server Name', "The server name identifies this machine within AWS. Use something short like &quot;myname-charset-usage&quot;", value=current_user.email.split('@')[0] + '-telemetry-analysis') }}
-   {{ macros.input(errors, 'public-ssh-key', 'SSH Public Key', 'Your public key file. Usually <code>id_rsa.pub</code>. This will be appended to the server\'s <code>authorized_keys</code> to grant you SSH access. Do <strong>not</strong> upload a private key file.', type='file') }}
-   <!--
-   <tr>
-    <td class="field-label"> <label> Server Name: </label> </td>
-    <td class="field-input">
-     <input type="text" name="name" value="{{ current_user.email.split('@')[0] + '-telemetry-analysis' }}" required></input>
-    </td>
-    <td class="field-desc">
-     The server name identifies this machine within AWS. Use something short
-     like &quot;myname-charset-usage&quot;
-    </td>
-   </tr>
-   <tr>
-    <td class="field-label"> <label> SSH Public Key: </label> </td>
-    <td class="field-input"> <input type="file" name="public-ssh-key" required></input> </td>
-    <td class="field-desc"> Your public key file. Usually <code>id_rsa.pub</code>. This will be appended to the server's <code>authorized_keys</code> to grant you SSH access. Do <strong>not</strong> upload a private key file.</td>
-   </tr>
-   -->
+   {% set username = current_user.email.split('@')[0] %}
+   {{ macros.begin_input(errors, 'name', 'Server Name', 'text', username + '-telemetry-analysis') }}
+    The server name identifies this machine within AWS. Use something short
+    like &quot;{{ username }}-charset-usage&quot;
+   {{ macros.end_input() }}
+
+   {{ macros.begin_input(errors, 'public-ssh-key', 'SSH Public Key', type='file') }}
+    Your public key file. Usually <code>id_rsa.pub</code>. This will be appended
+    to the server's <code>authorized_keys</code> to grant you SSH access. Do
+    <strong>not</strong> upload a private key file.'
+   {{ macros.end_input() }}
   </table>
+  <hr/>
   <input type="submit" name="submit" value="Submit">
  </form>
 {% endblock %}

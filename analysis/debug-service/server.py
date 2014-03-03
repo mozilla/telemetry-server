@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from argparse import ArgumentParser
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, g, request, redirect, url_for
 from flask.ext.login import LoginManager, login_required, current_user
 from flask.ext.browserid import BrowserID
 from user import User, AnonymousUser
@@ -10,6 +10,8 @@ from boto.ses import connect_to_region as ses_connect
 from boto.s3 import connect_to_region as s3_connect
 from urlparse import urljoin
 from uuid import uuid4
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.sql import select, func
 
 # Create flask app
 app = Flask(__name__)
@@ -27,6 +29,70 @@ login_manager.anonymous_user = AnonymousUser
 
 # Initialize browser id login
 browser_id = BrowserID()
+
+# Cron-related constants:
+CRON_IDX_MIN  = 0
+CRON_IDX_HOUR = 1
+CRON_IDX_DOM  = 2
+CRON_IDX_MON  = 3
+CRON_IDX_DOW  = 4
+CRON_IDX_CMD  = 5
+
+def connect_db():
+    db = {}
+    db['engine'] = create_engine(app.config['DB_URL'])
+    db['metadata'] = MetaData(bind=db['engine'])
+    db['metadata'].reflect()
+    db['conn'] = db['engine'].connect()
+    return db
+
+def get_db():
+    """Opens a new database connection if there is none yet for the
+    current application context.
+    """
+    if not hasattr(g, 'database'):
+        g.database = connect_db()
+    return g.database
+
+def save_job(job):
+    db = get_db()
+    table = db['metadata'].tables['scheduled_jobs']
+    insert = table.insert().values(job)
+    print "Insert:", str(insert)
+    return db['conn'].execute(insert)
+
+def get_jobs(owner):
+    db = get_db()
+    table = db['metadata'].tables['scheduled_jobs']
+    query = select([table]).where(table.c.owner == owner).order_by(table.c.id)
+    result = db['conn'].execute(query)
+    try:
+        for row in result:
+            yield row
+    except:
+        result.close()
+        raise
+    result.close()
+
+def job_exists(name=None, job_id=None):
+    db = get_db()
+    table = db['metadata'].tables['scheduled_jobs']
+    if name is not None:
+        query = select([func.count(table.c.id)]).where(table.c.name == name)
+    elif job_id is not None:
+        query = select([func.count(table.c.id)]).where(table.c.id == job_id)
+    result = db['conn'].execute(query)
+    count = result.fetchone()[0]
+    result.close()
+    if count > 0:
+        return True
+    return False
+
+@app.teardown_appcontext
+def close_db(error):
+    """Closes the database again at the end of the request."""
+    if hasattr(g, 'database'):
+        g.database['conn'].close()
 
 def abs_url_for(rule, **options):
     return urljoin(request.url_root, url_for(rule, **options))
@@ -54,11 +120,16 @@ def index():
 
 @app.route("/schedule", methods=["GET"])
 @login_required
-def schedule_job():
+def schedule_job(errors=None, values=None):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
-    return render_template('schedule.html')
+
+    jobs = []
+    for job in get_jobs(current_user.email):
+        jobs.append(job)
+
+    return render_template('schedule.html', jobs=jobs, errors=errors, values=values)
 
 def get_required_int(request, field, label, min_value=0, max_value=100):
     value = request.form[field]
@@ -157,31 +228,45 @@ def create_scheduled_job():
     else:
         errors['code-tarball'] = "File is required (.tar.gz or .tgz)"
 
-    # TODO: Check if job_name is already in use
-
-    # If there were any errors, stop and re-display the form.
-    # TODO: It would be polite to render the form with the previously-supplied
-    #       values filled in.
-    if errors:
-        return render_template('schedule.html', errors=errors)
-
-    # Now do it!
-    # What do we need to know about a job?
-    # job_owner
-    # job_id
-    # job_schedule
-    # job_name
-    # job_timeout_minutes
-    # job_code_uri
-    # job_commandline
-    # job_data_bucket (telemetry-public-analysis)
-    # job_output_dir
-
+    # Last bit is the command to execute.
+    # TODO: this is a placeholder.
     cron_bits.append("/path/to/run/script.sh")
 
+    # Check if job_name is already in use
+    if job_exists(name=request.form['job-name']):
+        errors['job-name'] = "The name '{}' is already in use. Choose another name.".format(request.form['job-name'])
+
+    # If there were any errors, stop and re-display the form.
+    # It's only polite to render the form with the previously-supplied
+    # values filled in. Unfortunately doing so for files doesn't seem to be
+    # worth the effort.
+    if errors:
+        return schedule_job(errors, request.form)
+
+    # Now do it!
     code_s3path = "s3://telemetry-analysis-code/{0}/{1}".format(request.form["job-name"], request.files["code-tarball"].filename)
     data_s3path = "s3://telemetry-public-analysis/{0}/data/".format(request.form["job-name"])
+
+    jerb = {
+        "owner": current_user.email,
+        "name": request.form['job-name'],
+        "timeout_minutes": timeout,
+        "code_uri": code_s3path,
+        "commandline": request.form['commandline'],
+        "data_bucket": "telemetry-public-analysis", #TODO: get this from config
+        "output_dir": request.form['output-dir'],
+        "schedule_minute": cron_bits[CRON_IDX_MIN],
+        "schedule_hour": cron_bits[CRON_IDX_HOUR],
+        "schedule_day_of_month": cron_bits[CRON_IDX_DOM],
+        "schedule_month": cron_bits[CRON_IDX_MON],
+        "schedule_day_of_week": cron_bits[CRON_IDX_DOW],
+        "schedule_command": cron_bits[CRON_IDX_CMD]
+    }
+
+    result = save_job(jerb)
+
     return render_template('schedule_create.html',
+        result = result,
         code_s3path = code_s3path,
         data_s3path = data_s3path,
         commandline = request.form['commandline'],
@@ -221,11 +306,10 @@ def spawn_worker_instance():
     if not request.files['public-ssh-key']:
         errors['code-tarball'] = "Public key file is required"
 
-    # TODO: Bug 961200: Check that a proper OpenSSH public key was uploaded.
+    # Bug 961200: Check that a proper OpenSSH public key was uploaded.
     # It should start with "ssh-rsa AAAAB3"
     pubkey = request.files['public-ssh-key'].read()
     if not pubkey.startswith("ssh-rsa AAAAB3"):
-        print "Found a pubkey of:", pubkey
         errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
 
     if errors:
@@ -342,6 +426,12 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='Launch Telemetry Analysis Service')
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", default=80, type=int)
+    parser.add_argument("--db-url", default='sqlite:///telemetry_analysis.db')
     args = parser.parse_args()
 
-    app.run(host = args.host, port = args.port, debug=True)
+    app.config.update(dict(
+        DB_URL = args.db_url,
+        DEBUG = True
+    ))
+
+    app.run(host = args.host, port = args.port, debug=app.config['DEBUG'])
