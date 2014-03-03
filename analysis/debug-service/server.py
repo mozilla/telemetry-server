@@ -43,8 +43,35 @@ def connect_db():
     db['engine'] = create_engine(app.config['DB_URL'])
     db['metadata'] = MetaData(bind=db['engine'])
     db['metadata'].reflect()
+    initialize_db(db)
     db['conn'] = db['engine'].connect()
     return db
+
+def initialize_db(db):
+    from sqlalchemy import Table, Column, Integer, String, Sequence
+    if 'scheduled_jobs' in db['metadata'].tables:
+        # Table already exists. Nothing to do.
+        return
+
+    scheduled_jobs = Table('scheduled_jobs', db['metadata'],
+        Column("id",                    Integer,
+            Sequence('scheduled_jobs_id_seq', start=1000), primary_key=True),
+        Column("owner",                 String(50),  nullable=False, index=True),
+        Column("name",                  String(100), nullable=False, unique=True),
+        Column("timeout_minutes",       Integer,     nullable=False),
+        Column("code_uri",              String(300), nullable=False),
+        Column("commandline",           String,      nullable=False),
+        Column("data_bucket",           String(200), nullable=False),
+        Column("output_dir",            String(100), nullable=False),
+        Column("schedule_minute",       String(20),  nullable=False),
+        Column("schedule_hour",         String(20),  nullable=False),
+        Column("schedule_day_of_month", String(20),  nullable=False),
+        Column("schedule_month",        String(20),  nullable=False),
+        Column("schedule_day_of_week",  String(20),  nullable=False),
+        Column("schedule_command",      String(300), nullable=False)
+    )
+    # Create the table
+    db['metadata'].create_all(tables=[scheduled_jobs])
 
 def get_db():
     """Opens a new database connection if there is none yet for the
@@ -87,6 +114,11 @@ def job_exists(name=None, job_id=None):
     if count > 0:
         return True
     return False
+
+def update_crontab():
+    # TODO: implement me
+    pass
+
 
 @app.teardown_appcontext
 def close_db(error):
