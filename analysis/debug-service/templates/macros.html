@@ -1,4 +1,4 @@
-{% macro begin_input(errors, name, label, type='text', value=None, digits=False) -%}
+{% macro make_input(name, label, type='text', value=None) -%}
  <tr>
   <!-- value: {{ value}} -->
   <td class="field-label"> <label> {{ label }}: </label> </td>
@@ -18,6 +18,9 @@
    {% endif %}
   </td>
   <td class="field-desc">
+   {{ caller() }}
+  </td>
+ </tr>
 {%- endmacro %}
 
 {% macro begin_select(errors, name, label) -%}
@@ -46,27 +49,7 @@
     <td class="field-desc">
 {%- endmacro %}
 
-{% macro end_input() -%}
+{% macro end_select() -%}
   </td>
  </tr>
 {%- endmacro %}
-
-{% macro input(errors, name, label, desc, type='text', value=None) -%}
- {{ begin_input(errors, name, label, type, value) }}
- {{ desc|safe }}
- {{ end_input() }}
-{%- endmacro %}
-
-{% macro render_dialog(title, class='dialog') -%}
-    <div class="{{ class }}">
-        <h2>{{ title }}</h2>
-        <div class="contents">
-            {{ caller() }}
-        </div>
-    </div>
-{%- endmacro %}
-
-{% call render_dialog('Hello World') %}
-    This is a simple dialog rendered by using a macro and
-    a call block.
-{% endcall %}

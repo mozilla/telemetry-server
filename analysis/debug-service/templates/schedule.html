@@ -21,27 +21,28 @@
  <form action="{{ url_for('create_scheduled_job') }}" method="post" enctype="multipart/form-data">
   <hr/>
   <table>
-   {{ macros.begin_input(errors, 'job-name', 'Job Name') }}
+
+   {% call macros.make_input('job-name', 'Job Name') %}
     The job name will form part of the location of the code tarball below, as
     well as part of the path to the public data in S3
-   {{ macros.end_input() }}
+   {% endcall %}
 
-   {{ macros.begin_input(errors, 'code-tarball', 'Code Tarball', type='file') }}
+   {% call macros.make_input('code-tarball', 'Code Tarball', type='file') %}
     This <code>.tar.gz</code> file should contain all the code needed to run
     your job. Recommended form: <code>job-name-0.1.tar.gz</code>
-   {{ macros.end_input() }}
+   {% endcall %}
 
-   {{ macros.begin_input(errors, 'commandline', 'Execution Commandline', value='./run.sh') }}
+   {% call macros.make_input('commandline', 'Execution Commandline', value='./run.sh') %}
     The tarball will be unpacked on a worker node, then this command will be
     invoked from the same directory
-   {{ macros.end_input() }}
+   {% endcall %}
 
-   {{ macros.begin_input(errors, 'output-dir', 'Output Directory', value='output') }}
+   {% call macros.make_input('output-dir', 'Output Directory', value='output') %}
     After running the above command, any files found in this dir (relative to
     the root where the tarball is unpacked) will be made publicly available in
     Amazon S3.  Any files that are already in S3 at the above location will be
     overwritten by new files of the same name.
-   {{ macros.end_input() }}
+   {% endcall %}
 
    {{ macros.begin_select(errors, 'schedule-frequency', 'Schedule Frequency') }}
    {{ macros.select_option('daily',   'Daily') }}
@@ -49,7 +50,7 @@
    {{ macros.select_option('monthly', 'Monthly') }}
    {{ macros.end_select_options() }}
     The job will be run periodically per this selection
-   {{ macros.end_input() }}
+   {{ macros.end_select() }}
 
    {{ macros.begin_select(errors, 'schedule-day-of-week', 'Day of Week') }}
     {{ macros.select_option('0', 'Sunday') }}
@@ -61,11 +62,11 @@
     {{ macros.select_option('6', 'Saturday') }}
    {{ macros.end_select_options() }}
     The job will run weekly on this day
-   {{ macros.end_input() }}
+   {{ macros.end_select() }}
 
-   {{ macros.begin_input(errors, 'schedule-day-of-month', 'Day of Month', value='1') }}
+   {% call macros.make_input('schedule-day-of-month', 'Day of Month', value='1') %}
     The job will run monthly on this day
-   {{ macros.end_input() }}
+   {% endcall %}
 
    {{ macros.begin_select(errors, 'schedule-time-of-day', 'Time of Day (UTC)') }}
     {{ macros.select_option('0', 'Midnight') }}
@@ -96,12 +97,12 @@
     The job will be run at this time.  Note: if you want to process the
     previous day's data, it's good to leave a few hours' buffer for the data
     to be published, so start those types of jobs later in the day.
-   {{ macros.end_input() }}
+   {{ macros.end_select() }}
 
-   {{ macros.begin_input(errors, 'timeout', 'Job Timeout (minutes)', value='120') }}
+   {% call macros.make_input('timeout', 'Job Timeout (minutes)', value='120') %}
     If the job does not complete within this many minutes, it will
     automatically be killed.
-   {{ macros.end_input() }}
+   {% endcall %}
   </table>
   <hr/>
   <input type="submit" name="submit" value="Submit">
