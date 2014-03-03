@@ -281,11 +281,12 @@ def create_scheduled_job():
 
 @app.route("/worker", methods=["GET"])
 @login_required
-def get_worker_params():
+def get_worker_params(errors=None, values=None):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
-    return render_template('worker.html', token = str(uuid4()))
+    return render_template('worker.html', errors=errors, values=values,
+        token=str(uuid4()))
 
 @app.route("/worker/new", methods=["POST"])
 @login_required
@@ -313,7 +314,7 @@ def spawn_worker_instance():
         errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
 
     if errors:
-        return render_template('worker.html', errors=errors, token=str(uuid4()))
+        return get_worker_params(errors, request.form)
 
     # Upload s3 key to bucket
     sshkey = bucket.new_key("keys/%s.pub" % request.form['token'])
