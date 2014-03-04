@@ -12,6 +12,8 @@ from urlparse import urljoin
 from uuid import uuid4
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.sql import select, func
+from subprocess import check_output, CalledProcessError
+from tempfile import mkstemp
 
 # Create flask app
 app = Flask(__name__)
@@ -22,6 +24,7 @@ ec2 = ec2_connect(app.config['AWS_REGION'])
 ses = ses_connect('us-east-1') # only supported region!
 s3  = s3_connect(app.config['AWS_REGION'])
 bucket = s3.get_bucket(app.config['TEMPORARY_BUCKET'], validate = False)
+code_bucket = s3.get_bucket(app.config['CODE_BUCKET'], validate = False)
 
 # Create login manager
 login_manager = LoginManager()
@@ -91,7 +94,12 @@ def save_job(job):
 def get_jobs(owner):
     db = get_db()
     table = db['metadata'].tables['scheduled_jobs']
-    query = select([table]).where(table.c.owner == owner).order_by(table.c.id)
+    if owner is None:
+        # Get all jobs
+        query = select([table]).order_by(table.c.id)
+    else:
+        # Get jobs for the given owner
+        query = select([table]).where(table.c.owner == owner).order_by(table.c.id)
     result = db['conn'].execute(query)
     try:
         for row in result:
@@ -246,6 +254,10 @@ def create_scheduled_job():
     else:
         cron_bits.extend(['*', '*', '*'])
 
+    # Last bit is the command to execute.
+    # TODO: this is a placeholder.
+    cron_bits.append("/path/to/run/script.sh")
+
     try:
         timeout = get_required_int(request, 'timeout',
                 "Job Timeout", max_value=24*60)
@@ -260,10 +272,6 @@ def create_scheduled_job():
     else:
         errors['code-tarball'] = "File is required (.tar.gz or .tgz)"
 
-    # Last bit is the command to execute.
-    # TODO: this is a placeholder.
-    cron_bits.append("/path/to/run/script.sh")
-
     # Check if job_name is already in use
     if job_exists(name=request.form['job-name']):
         errors['job-name'] = "The name '{}' is already in use. Choose another name.".format(request.form['job-name'])
@@ -275,9 +283,19 @@ def create_scheduled_job():
     if errors:
         return schedule_job(errors, request.form)
 
+    try:
+        code_key = code_bucket.new_key("{0}/{1}".format(request.form["job-name"], request.files["code-tarball"].filename))
+        code_key.set_contents_from_file(request.files["code-tarball"])
+    except Exception, e:
+        # TODO: display error to user.
+        errors['code-tarball'] = e.message
+        return schedule_job(errors, request.form)
+
     # Now do it!
-    code_s3path = "s3://telemetry-analysis-code/{0}/{1}".format(request.form["job-name"], request.files["code-tarball"].filename)
-    data_s3path = "s3://telemetry-public-analysis/{0}/data/".format(request.form["job-name"])
+    code_s3path = "s3://{0}/{1}/{2}".format(app.config['CODE_BUCKET'],
+        request.form["job-name"], request.files["code-tarball"].filename)
+    data_s3path = "s3://{0}/{1}/data/".format(app.config['PUBLIC_DATA_BUCKET'],
+        request.form["job-name"])
 
     jerb = {
         "owner": current_user.email,
@@ -285,7 +303,7 @@ def create_scheduled_job():
         "timeout_minutes": timeout,
         "code_uri": code_s3path,
         "commandline": request.form['commandline'],
-        "data_bucket": "telemetry-public-analysis", #TODO: get this from config
+        "data_bucket": app.config['PUBLIC_DATA_BUCKET'],
         "output_dir": request.form['output-dir'],
         "schedule_minute": cron_bits[CRON_IDX_MIN],
         "schedule_hour": cron_bits[CRON_IDX_HOUR],
@@ -309,7 +327,7 @@ def create_scheduled_job():
         job_dom = display_dom(day_of_month),
         job_timeout = timeout,
         cron_spec = " ".join([str(c) for c in cron_bits])
-        )
+    )
 
 @app.route("/worker", methods=["GET"])
 @login_required
