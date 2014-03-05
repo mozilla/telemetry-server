@@ -1,13 +1,12 @@
-{% macro make_input(name, label, type='text', value=None) -%}
+{% macro make_input(name, label, type='text', value=None, required=True) -%}
  <tr>
-  <!-- value: {{ value}} -->
   <td class="field-label"> <label> {{ label }}: </label> </td>
   <td class="field-input">
    {% if errors and name in errors %}
     <div class="field-error">
      {{ errors[name] }}
    {% endif %}
-   <input type="{{ type }}" name="{{ name }}" required
+   <input type="{{ type }}" name="{{ name }}" {% if required %} required {% endif %}
    {% if values and values[name] %}
     value="{{ values[name] }}"
    {% elif value %}

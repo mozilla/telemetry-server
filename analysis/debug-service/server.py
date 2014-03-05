@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, MetaData
 from sqlalchemy.sql import select, func
 from subprocess import check_output, CalledProcessError
 from tempfile import mkstemp
+import crontab
 
 # Create flask app
 app = Flask(__name__)
@@ -41,9 +42,11 @@ CRON_IDX_MON  = 3
 CRON_IDX_DOW  = 4
 CRON_IDX_CMD  = 5
 
-def connect_db():
+def connect_db(db_url=None):
+    if db_url is None:
+        db_url = app.config['DB_URL']
     db = {}
-    db['engine'] = create_engine(app.config['DB_URL'])
+    db['engine'] = create_engine(db_url)
     db['metadata'] = MetaData(bind=db['engine'])
     db['metadata'].reflect()
     initialize_db(db)
@@ -84,14 +87,19 @@ def get_db():
         g.database = connect_db()
     return g.database
 
-def save_job(job):
+def insert_job(job):
     db = get_db()
     table = db['metadata'].tables['scheduled_jobs']
     insert = table.insert().values(job)
-    print "Insert:", str(insert)
     return db['conn'].execute(insert)
 
-def get_jobs(owner):
+def update_job(job):
+    db = get_db()
+    table = db['metadata'].tables['scheduled_jobs']
+    update = table.update().where(table.c.id == job['id']).values(job)
+    return db['conn'].execute(update)
+
+def get_jobs(owner=None):
     db = get_db()
     table = db['metadata'].tables['scheduled_jobs']
     if owner is None:
@@ -109,7 +117,26 @@ def get_jobs(owner):
         raise
     result.close()
 
+def get_job(name=None, job_id=None):
+    db = get_db()
+    table = db['metadata'].tables['scheduled_jobs']
+    if name is not None:
+        query = select([table]).where(table.c.name == name)
+    elif job_id is not None:
+        query = select([table]).where(table.c.id == job_id)
+    result = db['conn'].execute(query)
+    job = result.fetchone()
+    result.close()
+    return job
+
+def delete_job(job_id, owner):
+    db = get_db()
+    table = db['metadata'].tables['scheduled_jobs']
+    result = db['conn'].execute(table.delete().where(table.c.id == job_id).where(table.c.owner == owner))
+    return result
+
 def job_exists(name=None, job_id=None):
+
     db = get_db()
     table = db['metadata'].tables['scheduled_jobs']
     if name is not None:
@@ -124,8 +151,23 @@ def job_exists(name=None, job_id=None):
     return False
 
 def update_crontab():
-    # TODO: implement me
-    pass
+    jobs = []
+    for job in get_jobs():
+        jobs.append(job)
+    new_crontab = crontab.update_crontab(jobs)
+    if app.config['DEBUG']:
+        print "Debug mode, would have updated crontab to:"
+        print new_crontab
+    else:
+        crontab.save_crontab(new_crontab)
+
+def upload_code(job_name, code_file):
+    try:
+        code_key = code_bucket.new_key("{0}/{1}".format(job_name, code_file.filename))
+        code_key.set_contents_from_file(code_file)
+    except Exception, e:
+        return e.message
+    return None
 
 def get_required_int(request, field, label, min_value=0, max_value=100):
     value = request.form[field]
@@ -147,7 +189,7 @@ def display_dow(dow):
     if dow is None:
         return ''
 
-    dayname = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dow]
+    dayname = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dow % 7]
     return " every {0}".format(dayname)
 
 def display_dom(dom):
@@ -162,6 +204,36 @@ def display_dom(dom):
         nth = "{0}rd".format(dom)
     return " on the {0} day of each month".format(nth)
 
+def job_to_form(job):
+    form = {}
+    field_map = {
+        "name": "job-name",
+        "id": "job-id",
+        "timeout_minutes": "timeout",
+        "owner": "job-owner",
+        "code_uri": "code-uri",
+        "commandline": "commandline",
+        "data-bucket": "data-bucket",
+        "output_dir": "output-dir",
+        "schedule_hour": "schedule-time-of-day"
+    }
+
+    for k, v in field_map.iteritems():
+        if k in job:
+            form[v] = job[k]
+
+    dow = job["schedule_day_of_week"]
+    if dow != '*':
+        form['schedule-frequency'] = 'weekly'
+        form['schedule-day-of-week'] = dow
+    dom = job["schedule_day_of_month"]
+    if dom != '*':
+        form['schedule-frequency'] = 'monthly'
+        form['schedule-day-of-month'] = dom
+
+    if dow == '*' and dom == '*':
+        form['schedule-frequency'] = 'daily'
+    return form
 
 @app.teardown_appcontext
 def close_db(error):
@@ -283,12 +355,9 @@ def create_scheduled_job():
     if errors:
         return schedule_job(errors, request.form)
 
-    try:
-        code_key = code_bucket.new_key("{0}/{1}".format(request.form["job-name"], request.files["code-tarball"].filename))
-        code_key.set_contents_from_file(request.files["code-tarball"])
-    except Exception, e:
-        # TODO: display error to user.
-        errors['code-tarball'] = e.message
+    err = upload_code(request.form["job-name"], request.files["code-tarball"])
+    if err is not None:
+        errors["code-tarball"] = err
         return schedule_job(errors, request.form)
 
     # Now do it!
@@ -297,7 +366,7 @@ def create_scheduled_job():
     data_s3path = "s3://{0}/{1}/data/".format(app.config['PUBLIC_DATA_BUCKET'],
         request.form["job-name"])
 
-    jerb = {
+    job = {
         "owner": current_user.email,
         "name": request.form['job-name'],
         "timeout_minutes": timeout,
@@ -313,7 +382,11 @@ def create_scheduled_job():
         "schedule_command": cron_bits[CRON_IDX_CMD]
     }
 
-    result = save_job(jerb)
+    result = insert_job(job)
+
+    if result.inserted_primary_key > 0:
+        print "Inserted job id", result.inserted_primary_key
+        update_crontab()
 
     return render_template('schedule_create.html',
         result = result,
@@ -328,6 +401,185 @@ def create_scheduled_job():
         job_timeout = timeout,
         cron_spec = " ".join([str(c) for c in cron_bits])
     )
+
+@app.route("/schedule/edit/<job_id>", methods=["GET","POST"])
+@login_required
+def edit_scheduled_job(job_id):
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+
+    if request.method != 'GET' and request.method != 'POST':
+        return "Unsupported method: {0}".format(request.method), 405
+
+    job = get_job(job_id=job_id)
+    if job is None:
+        return "No such job {0}".format(job_id), 404
+    elif job['owner'] != current_user.email:
+        return "Can't edit job {0}".format(job_id), 401
+
+    if request.method == 'GET':
+        # Show job details.
+        return render_template("schedule.html", values=job_to_form(job))
+    # else: request.method == 'POST'
+    # update this job's details
+    if request.form['job-id'] != job_id:
+        return "Mismatched job id", 400
+
+    errors = {}
+    for f in ['job-name', 'commandline', 'output-dir',
+              'schedule-frequency', 'schedule-time-of-day', 'timeout']:
+        val = request.form[f]
+        if val is None or val.strip() == '':
+            errors[f] = "This field is required"
+
+    time_of_day = -1
+    try:
+        time_of_day = get_required_int(request, 'schedule-time-of-day',
+                "Time of Day", max_value=23)
+    except ValueError, e:
+        errors['schedule-time-of-day'] = e.message
+
+    frequency = request.form['schedule-frequency'].strip()
+    # m h  dom mon dow   command
+    cron_bits = [0, time_of_day]
+    day_of_week = None
+    day_of_month = None
+    if frequency == 'weekly':
+        # day of week is required
+        try:
+            day_of_week = get_required_int(request, 'schedule-day-of-week',
+                    "Day of Week", max_value=6)
+            cron_bits.extend(['*', '*', day_of_week])
+        except ValueError, e:
+            errors['schedule-day-of-week'] = e.message
+    elif frequency == 'monthly':
+        # day of month is required
+        try:
+            day_of_month = get_required_int(request, 'schedule-day-of-month',
+                    "Day of Month", max_value=31)
+            cron_bits.extend([day_of_month, '*', '*'])
+        except ValueError, e:
+            errors['schedule-day-of-month'] = e.message
+    elif frequency != 'daily':
+        # incoming value is bogus.
+        errors['schedule-frequency'] = "Pick one of the values in the list"
+    else:
+        cron_bits.extend(['*', '*', '*'])
+
+    # Last bit is the command to execute.
+    # TODO: this is a placeholder.
+    cron_bits.append("/path/to/run/script.sh")
+
+    try:
+        timeout = get_required_int(request, 'timeout',
+                "Job Timeout", max_value=24*60)
+    except ValueError, e:
+        errors['timeout'] = e.message
+
+    # You may update code-tarball *or* code-uri, but not both. Otherwise, what
+    # should we do with the other one?
+    if request.files['code-tarball']:
+        filename = request.files['code-tarball'].filename
+        if not (filename.endswith(".tar.gz") or filename.endswith(".tgz")):
+            errors['code-tarball'] = "Code file must be in .tar.gz or .tgz format"
+        if request.form['code-uri'] and request.form['code-uri'] != job['code_uri']:
+            errors['code-uri'] = "Cannot change code-uri and upload a new Code Tarball at the same time"
+    elif request.form['code-uri']:
+        if request.form['code-uri'] != job['code_uri']:
+            # Check if the Code URI exists within the expected bucket.
+            if request.form['code-uri'].startswith("s3://" + app.config['CODE_BUCKET']):
+                code_key_path = request.form['code-uri'][len(app.config['CODE_BUCKET']) + 6:]
+                try:
+                    code_key = code_bucket.get_key(code_key_path)
+                    if code_key is None or not code_key.exists():
+                        errors['code-uri'] = "Specified Code URI does not exist"
+                except Exception, e:
+                    errors['code-uri'] = e.message
+            else:
+                errors['code-uri'] = "Code URI must be within the '{0}' bucket in S3".format(app.config['CODE_BUCKET'])
+    else:
+        # Also, they can't both be missing, otherwise we have no job code.
+        errors['code-tarball'] = "Code Tarball or S3 Code URI is required (.tar.gz or .tgz)"
+        errors['code-uri'] = errors['code-tarball']
+
+    if request.form['job-name'] != job['name']:
+        errors['job-name'] = "Don't change the job name, that is confusing. " \
+            "Should be '{}'. To change a job name, delete and " \
+            "recreate it.".format(job['name'])
+
+    # If there were any errors, stop and re-display the form.
+    if errors:
+        return render_template("schedule.html", values=request.form, errors=errors)
+
+    if request.files['code-tarball']:
+        err = upload_code(request.form["job-name"], request.files["code-tarball"])
+        if err is not None:
+            errors["code-tarball"] = err
+            return render_template("schedule.html", values=request.form, errors=errors)
+        code_s3path = "s3://{0}/{1}/{2}".format(app.config['CODE_BUCKET'],
+            request.form["job-name"], request.files["code-tarball"].filename)
+    else:
+        code_s3path = request.form['code-uri']
+
+    data_s3path = "s3://{0}/{1}/data/".format(app.config['PUBLIC_DATA_BUCKET'],
+        request.form["job-name"])
+
+    job = {
+        "id": job_id,
+        "owner": current_user.email,
+        "name": request.form['job-name'],
+        "timeout_minutes": timeout,
+        "code_uri": code_s3path,
+        "commandline": request.form['commandline'],
+        "data_bucket": app.config['PUBLIC_DATA_BUCKET'],
+        "output_dir": request.form['output-dir'],
+        "schedule_minute": cron_bits[CRON_IDX_MIN],
+        "schedule_hour": cron_bits[CRON_IDX_HOUR],
+        "schedule_day_of_month": cron_bits[CRON_IDX_DOM],
+        "schedule_month": cron_bits[CRON_IDX_MON],
+        "schedule_day_of_week": cron_bits[CRON_IDX_DOW],
+        "schedule_command": cron_bits[CRON_IDX_CMD]
+    }
+
+    result = update_job(job)
+
+    if result.rowcount > 0:
+        print "Updated job id", job_id
+        update_crontab()
+
+    return render_template('schedule_create.html',
+        result = result,
+        code_s3path = code_s3path,
+        data_s3path = data_s3path,
+        commandline = request.form['commandline'],
+        output_dir = request.form['output-dir'],
+        job_frequency = frequency,
+        job_time = hour_to_time(time_of_day),
+        job_dow = display_dow(day_of_week),
+        job_dom = display_dom(day_of_month),
+        job_timeout = timeout,
+        cron_spec = " ".join([str(c) for c in cron_bits])
+    )
+
+@app.route("/schedule/delete/<job_id>", methods=["POST","GET","DELETE"])
+@login_required
+def delete_scheduled_job(job_id):
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+
+    job = get_job(job_id=job_id)
+    if job is None:
+        # TODO: 404
+        return "No such job {0}".format(job_id), 404
+    elif job['owner'] == current_user.email:
+        # OK, this job is yours. let's delete it.
+        result = delete_job(job_id, current_user.email)
+        if result.rowcount == 1:
+            update_crontab()
+        return render_template('schedule_delete.html', result=result, job=job)
+    return "Can't delete job {0}".format(job_id), 401
 
 @app.route("/worker", methods=["GET"])
 @login_required
