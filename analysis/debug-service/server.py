@@ -204,7 +204,7 @@ def update_crontab(jobs=None):
 
 def upload_code(job_name, code_file):
     try:
-        code_key = code_bucket.new_key("{0}/{1}".format(job_name, code_file.filename))
+        code_key = code_bucket.new_key("jobs/{0}/{1}".format(job_name, code_file.filename))
         code_key.set_contents_from_file(code_file)
     except Exception, e:
         return e.message
@@ -398,7 +398,7 @@ def create_scheduled_job():
         return schedule_job(errors, request.form)
 
     # Now do it!
-    code_s3path = "s3://{0}/{1}/{2}".format(app.config['CODE_BUCKET'],
+    code_s3path = "s3://{0}/jobs/{1}/{2}".format(app.config['CODE_BUCKET'],
         request.form["job-name"], request.files["code-tarball"].filename)
     data_s3path = "s3://{0}/{1}/data/".format(app.config['PUBLIC_DATA_BUCKET'],
         request.form["job-name"])
@@ -528,7 +528,7 @@ def edit_scheduled_job(job_id):
     elif request.form['code-uri']:
         if request.form['code-uri'] != job['code_uri']:
             # Check if the Code URI exists within the expected bucket.
-            if request.form['code-uri'].startswith("s3://" + app.config['CODE_BUCKET']):
+            if request.form['code-uri'].startswith("s3://" + app.config['CODE_BUCKET'] + "/jobs/"):
                 code_key_path = request.form['code-uri'][len(app.config['CODE_BUCKET']) + 6:]
                 try:
                     code_key = code_bucket.get_key(code_key_path)
@@ -537,7 +537,7 @@ def edit_scheduled_job(job_id):
                 except Exception, e:
                     errors['code-uri'] = e.message
             else:
-                errors['code-uri'] = "Code URI must be within the '{0}' bucket in S3".format(app.config['CODE_BUCKET'])
+                errors['code-uri'] = "Code URI must begin with 's3://{0}/jobs/'".format(app.config['CODE_BUCKET'])
     else:
         # Also, they can't both be missing, otherwise we have no job code.
         errors['code-tarball'] = "Code Tarball or S3 Code URI is required (.tar.gz or .tgz)"
@@ -557,7 +557,7 @@ def edit_scheduled_job(job_id):
         if err is not None:
             errors["code-tarball"] = err
             return render_template("schedule.html", values=request.form, errors=errors)
-        code_s3path = "s3://{0}/{1}/{2}".format(app.config['CODE_BUCKET'],
+        code_s3path = "s3://{0}/jobs/{1}/{2}".format(app.config['CODE_BUCKET'],
             request.form["job-name"], request.files["code-tarball"].filename)
     else:
         code_s3path = request.form['code-uri']
