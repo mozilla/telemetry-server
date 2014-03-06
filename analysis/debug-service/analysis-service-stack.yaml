@@ -179,7 +179,7 @@ Resources:
       UserData:               {'Fn::Base64': {'Fn::Join': ['', [
               "#!/bin/bash\n",
               "sudo apt-get -y install python-pip git python-dateutil python-dev nginx\n",
-              "sudo pip install --upgrade boto flask flask-login uwsgi\n",
+              "sudo pip install --upgrade boto flask flask-login sqlalchemy uwsgi\n",
               "sudo pip install git+https://github.com/garbados/flask-browserid.git\n",
               "cd /home/ubuntu\n",
               "sudo -u ubuntu git clone https://github.com/mozilla/telemetry-server.git\n",
@@ -202,6 +202,7 @@ Resources:
               "echo \"TEMPORARY_BUCKET = '", {Ref: temporaryBucket} , "'\" >> config.py\n",
               "echo \"CODE_BUCKET = '", {Ref: sourcesBucket} , "'\" >> config.py\n",
               "echo \"PUBLIC_DATA_BUCKET = '", {Ref: publicDataBucket} , "'\" >> config.py\n",
+              "echo \"DB_URL = '", {Ref: databaseURL} , "'\" >> config.py\n",
               "echo \"DEBUG = False\" >> config.py\n",
               "sudo echo 'server {' >> /etc/nginx/sites-enabled/analysis-service\n",
               "sudo echo '        listen 80;' >> /etc/nginx/sites-enabled/analysis-service\n",
@@ -213,7 +214,7 @@ Resources:
               "sudo echo '        }' >> /etc/nginx/sites-enabled/analysis-service\n",
               "sudo echo '}' >> /etc/nginx/sites-enabled/analysis-service\n",
               "sudo service nginx restart\n",
-              "sudo -u ubuntu uwsgi --plugins python --chmod-socket=666 -s /tmp/uwsgi.sock --logto /tmp/analysis-service.log -w server:app\n"
+              "sudo -u ubuntu uwsgi --chmod-socket=666 -s /tmp/uwsgi.sock --logto /tmp/analysis-service.log -w server:app\n"
             ]
           ]
         }
