@@ -7,9 +7,9 @@ INSTANCE_TYPE      = 'c3.2xlarge'
 SECURITY_GROUPS    = []
 INSTANCE_PROFILE   = 'telemetry-analysis-profile'
 INSTANCE_APP_TAG   = 'telemetry-analysis-worker-instance'
-EMAIL_SOURCE       = 'jonasfj@mozilla.com'
+EMAIL_SOURCE       = 'telemetry-alerts@mozilla.com'
 
 # Buckets for storing S3 data
 TEMPORARY_BUCKET   = 'bucket-for-ssh-keys'
-CODE_BUCKET        = 'bucket-for-job-code'
-PUBLIC_DATA_BUCKET = 'bucket-for-job-data'
+CODE_BUCKET        = 'telemetry-analysis-code'
+PUBLIC_DATA_BUCKET = 'telemetry-public-analysis'

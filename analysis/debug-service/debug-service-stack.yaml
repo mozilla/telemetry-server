@@ -45,12 +45,22 @@ Parameters:
   sourcesBucket:
     Description:              Bucket containing sources and templates
     Type:                     String
-    Default:                   jonasfj-telemetry-code
+    Default:                   telemetry-analysis-code
 
   sourcesVersion:
     Description:              Version of sources to load from sources bucket
     Type:                     String
-    Default:                  '1'
+    Default:                  '2'
+
+  publicDataBucket:
+    Description:              Bucket in which to publish public analysis results
+    Type:                     String
+    Default:                   telemetry-public-analysis
+
+  databaseURL:
+    Description:              Database Connection URL
+    Type:                     String
+    Default:                   sqlite:///telemetry_analysis.db
 
 ################################################################################
 
@@ -84,7 +94,7 @@ Resources:
   serverSecurityGroup:
     Type:                     AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription:       telemetry-analysis debug service security group
+      GroupDescription:       telemetry-analysis service security group
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
         - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
@@ -103,9 +113,9 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Path:                   /telemetry/analysis/debug-service/
+      Path:                   /telemetry/analysis-service/
       Policies:
-        - PolicyName:         startDebugInstancesPolicy
+        - PolicyName:         startWorkerInstancesPolicy
           PolicyDocument:
             Statement:
               - Effect:       Allow
@@ -133,7 +143,7 @@ Resources:
                   - {'Fn::Join': ["", [
                       'arn:aws:s3:::',
                       {Ref: sourcesBucket},
-                      '/v', {Ref: sourcesVersion}, '/telemetry-analysis-debug-service.tar.gz'
+                      '/v', {Ref: sourcesVersion}, '/telemetry-analysis-service.tar.gz'
                     ]]}
 
   # IAM instance profile granting serverInstanceIAMRole to service server
@@ -142,7 +152,7 @@ Resources:
     DependsOn:
       - serverInstanceIAMRole
     Properties:
-      Path:                   /telemetry/analysis/debug-service/
+      Path:                   /telemetry/analysis-service/
       Roles:
         - {Ref: serverInstanceIAMRole}
 
@@ -152,9 +162,9 @@ Resources:
       - serverInstanceProfile
       - serverSecurityGroup
       - workerInstanceProfile
-      - debugInstanceSecurityGroup
+      - workerInstanceSecurityGroup
     Metadata:
-      Comment:                telemetry-analysis-debug-service
+      Comment:                telemetry-analysis-service
     Properties:
       KeyName:                {Ref: keyName}
       ImageId:                {'Fn::FindInMap': [
@@ -171,34 +181,37 @@ Resources:
               "sudo apt-get -y install python-pip git python-dateutil python-dev nginx\n",
               "sudo pip install --upgrade boto flask flask-login uwsgi\n",
               "sudo pip install git+https://github.com/garbados/flask-browserid.git\n",
-              "cd /home/ubuntu\n",
+              "mkdir /home/ubuntu/telemetry_analysis\n"
+              "cd /home/ubuntu/telemetry_analysis\n",
               "python - << END\n",
               "from boto.s3 import connect_to_region\n",
               "s3 = connect_to_region('", {Ref: 'AWS::Region'} ,"')\n",
               "b = s3.get_bucket('", {Ref: sourcesBucket}, "', validate = False)\n",
-              "k = b.get_key('v", {Ref: sourcesVersion}, "/telemetry-analysis-debug-service.tar.gz')\n",
+              "k = b.get_key('v", {Ref: sourcesVersion}, "/telemetry-analysis-service.tar.gz')\n",
               "k.get_contents_to_filename('sources.tar.gz')\n",
               "END\n",
               "tar -xzf sources.tar.gz\n",
-              "sudo echo '42 * * * * ubuntu /home/ubuntu/terminate-expired-instances.py' >> /etc/crontab\n",
+              "sudo echo '42 * * * * ubuntu /home/ubuntu/telemetry_analysis/terminate-expired-instances.py' >> /etc/crontab\n",
               "echo '' >> config.py\n",
               "echo \"SECRET_KEY = '", {Ref: serverSecret} , "'\" >> config.py\n",
               "echo \"AWS_REGION = '", {Ref: 'AWS::Region'} , "'\" >> config.py\n",
-              "echo \"SECURITY_GROUPS = ['", {Ref: debugInstanceSecurityGroup} , "']\" >> config.py\n",
+              "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , "']\" >> config.py\n",
               "echo \"INSTANCE_PROFILE = '", {Ref: workerInstanceProfile} , "'\" >> config.py\n",
               "echo \"TEMPORARY_BUCKET = '", {Ref: temporaryBucket} , "'\" >> config.py\n",
-              "echo \"DEBUG = True\" >> config.py\n",
-              "sudo echo 'server {' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        listen 80;' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        server_name debugservice;' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        location / { try_files $uri @debugservice; }' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        location @debugservice {' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '                include uwsgi_params;' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '                uwsgi_pass unix:/tmp/uwsgi.sock;' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        }' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '}' >> /etc/nginx/sites-enabled/debug-service\n",
+              "echo \"CODE_BUCKET = '", {Ref: sourcesBucket} , "'\" >> config.py\n",
+              "echo \"PUBLIC_DATA_BUCKET = '", {Ref: publicDataBucket} , "'\" >> config.py\n",
+              "echo \"DEBUG = False\" >> config.py\n",
+              "sudo echo 'server {' >> /etc/nginx/sites-enabled/analysis-service\n",
+              "sudo echo '        listen 80;' >> /etc/nginx/sites-enabled/analysis-service\n",
+              "sudo echo '        server_name analysisservice;' >> /etc/nginx/sites-enabled/analysis-service\n",
+              "sudo echo '        location / { try_files $uri @analysisservice; }' >> /etc/nginx/sites-enabled/analysis-service\n",
+              "sudo echo '        location @analysisservice {' >> /etc/nginx/sites-enabled/analysis-service\n",
+              "sudo echo '                include uwsgi_params;' >> /etc/nginx/sites-enabled/analysis-service\n",
+              "sudo echo '                uwsgi_pass unix:/tmp/uwsgi.sock;' >> /etc/nginx/sites-enabled/analysis-service\n",
+              "sudo echo '        }' >> /etc/nginx/sites-enabled/analysis-service\n",
+              "sudo echo '}' >> /etc/nginx/sites-enabled/analysis-service\n",
               "sudo service nginx restart\n",
-              "sudo -u ubuntu uwsgi --plugins python --chmod-socket=666 -s /tmp/uwsgi.sock --logto /tmp/debug-service.log -w server:app\n"
+              "sudo -u ubuntu uwsgi --plugins python --chmod-socket=666 -s /tmp/uwsgi.sock --logto /tmp/analysis-service.log -w server:app\n"
             ]
           ]
         }
@@ -218,16 +231,16 @@ Resources:
 
 ################################################################################
 
-  # Security group for debug instances, this should be s3 and ssh only
-  debugInstanceSecurityGroup:
+  # Security group for worker instances, this should be s3 and ssh only
+  workerInstanceSecurityGroup:
     Type:                     AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription:       telemetry-analysis debug instance security group
+      GroupDescription:       telemetry-analysis worker instance security group
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
 
-  # IAM role for analysis debug instances
-  debugInstanceIAMRole:
+  # IAM role for analysis worker instances
+  workerInstanceIAMRole:
     Type:                     AWS::IAM::Role
     DependsOn:
       - temporaryBucket
@@ -240,10 +253,10 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Path:                   /telemetry/analysis/debug-instance/
+      Path:                   /telemetry/analysis/worker-instance/
       Policies:
         # Grant read access to telemetry-published-v1
-        - PolicyName:         telemetryPublishedDebugAccess
+        - PolicyName:         telemetryPublishedWorkerAccess
           PolicyDocument:
             Statement:
               - Effect:       Allow
@@ -266,12 +279,12 @@ Resources:
                                 '/*'
                               ]]}
 
-  # IAM instance profile granting debugInstanceIAMRole to debug instances
+  # IAM instance profile granting workerInstanceIAMRole to worker instances
   workerInstanceProfile:
     Type:                     AWS::IAM::InstanceProfile
     DependsOn:
-      - debugInstanceIAMRole
+      - workerInstanceIAMRole
     Properties:
-      Path:                   /telemetry/analysis/debug-instance/
+      Path:                   /telemetry/analysis/worker-instance/
       Roles:
-        - {Ref: debugInstanceIAMRole}
+        - {Ref: workerInstanceIAMRole}
