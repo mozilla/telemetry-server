@@ -10,49 +10,65 @@
  </div>
  {% if jobs %}
   <div class="jobs">
-   <ul>
+   Your currently scheduled jobs:
+   <table>
     {% for job in jobs %}
-     <li>{{ job.id }} {{ job.name }}
-      <a href="{{ url_for('edit_scheduled_job', job_id=job.id) }}">Edit</a>
-      <a href="{{ url_for('delete_scheduled_job', job_id=job.id) }}">Delete</a> </li>
+     <tr>
+      <td>{{ job.id }}</td><td>{{ job.name }}</td>
+      <td>
+       <a href="{{ url_for('edit_scheduled_job', job_id=job.id) }}">Edit</a>
+       <a href="{{ url_for('delete_scheduled_job', job_id=job.id) }}">Delete</a>
+      </td>
+     </tr>
     {% endfor %}
-   </ul>
+   </table>
   </div>
  {% endif %}
 
+ <hr/>
+
  {% set form_target = url_for('create_scheduled_job') %}
  {% set is_update = False %}
+ <div class="form-label">
  {% if values and values["job-id"] %}
   {% set is_update = True %}
   {% set form_target = url_for('edit_scheduled_job', job_id=values["job-id"]) %}
+  Edit job <strong>{{ values["job-id"] }}</strong>:
+  <strong>{{ values["job-name"] }}</strong>
+ {% else %}
+  Schedule a new job:
  {% endif %}
- <form action="{{ form_target }}" method="post" enctype="multipart/form-data">
+ </div>
+ <form action="{{ form_target }}" method="POST" enctype="multipart/form-data">
   {% if is_update %}
    <input type="hidden" name="job-id" value="{{ values['job-id'] }}" />
+   <input type="hidden" name="job-name" value="{{ values['job-name'] }}" />
   {% endif %}
-  <hr/>
   <table>
-
-   {% call macros.make_input('job-name', 'Job Name') %}
-    The job name will form part of the location of the code tarball below, as
-    well as part of the path to the public data in S3
-   {% endcall %}
-
    {% if is_update %}
 
     {% call macros.make_input('code-uri', 'S3 Code URI', required=False) %}
      The location of the job code in S3. Either update this URI or upload a new
      file below, but not both at the same time.
     {% endcall %}
+
     {% call macros.make_input('code-tarball', 'Code Tarball', type='file', required=False) %}
      If desired, upload a new code tarball. If you don't want to change the
      code, leave this blank. Recommended form: <code>{{ values['job-name'] }}-0.1.tar.gz</code>
     {% endcall %}
+
    {% else %}
+
+    {% call macros.make_input('job-name', 'Job Name') %}
+     The job name will form part of the location of the code tarball below, as
+     well as part of the path to the public data in S3
+    {% endcall %}
+
     {% call macros.make_input('code-tarball', 'Code Tarball', type='file') %}
      This <code>.tar.gz</code> file should contain all the code needed to run
      your job. Recommended form: <code>job-name-0.1.tar.gz</code>
     {% endcall %}
+
    {% endif %}
 
    {% call macros.make_input('commandline', 'Execution Commandline', value='./run.sh') %}

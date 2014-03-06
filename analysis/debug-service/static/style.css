@@ -64,6 +64,10 @@ tr:nth-child(odd) {
     background-color: #eee;
 }
 
+td {
+    padding-right: 10px;
+}
+
 td.field-desc {
     font-size: 0.6em;
     color: #555;
@@ -97,4 +101,10 @@ div.field-error {
 
 .blurb {
     padding: 20px;
+}
+
+.jobs {
+    text-align: left;
+    font-size: 80%;
+    padding: 10px;
 }

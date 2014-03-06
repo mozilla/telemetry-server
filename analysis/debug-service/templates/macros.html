@@ -35,9 +35,9 @@
 
 {% macro select_option(value, label, selected=False) -%}
       <option value="{{ value }}"
-       {%- if values and values[name] == value -%}
+       {% if values and values[name] == value %}
         selected
-       {%- elif selected -%}
+       {% elif selected %}
         selected
        {%- endif %}>{{ label }}</option>
 {%- endmacro %}
