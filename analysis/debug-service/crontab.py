@@ -7,6 +7,8 @@ CRON_DISCLAIMER = """#### DO NOT EDIT THIS SECTION BY HAND ####
 #### YOUR CHANGES WILL BE OVERWRITTEN ####"""
 CRON_END      = "#--END TELEMETRY SCHEDULED JOBS--"
 CRONTAB_CMD = "/usr/bin/crontab"
+# Yuck - it's very ugly to have the path specified here :(
+CRON_RUNNER_LOCATION = "/home/ubuntu/telemetry_analysis/jobs/run.sh"
 
 def get_existing_crontab():
     # Note: annoyingly, OSX's crontab exits non-zero if there
@@ -15,6 +17,12 @@ def get_existing_crontab():
     #  non-zero exit status 1
     #       Then you should manually 'crontab -e' first and save an empty one.
     return check_output([CRONTAB_CMD, "-l"])
+
+def job_to_line(job, runner_location=CRON_RUNNER_LOCATION):
+    time = " ".join((job["schedule_minute"],
+            job["schedule_hour"], job["schedule_day_of_month"],
+            job["schedule_month"], job["schedule_day_of_week"]))
+    return "{0} {1} {2}".format(time, CRON_RUNNER_LOCATION, job['id'])
 
 def update_crontab(jobs, existing_crontab=None):
     # Get current crontab
@@ -39,10 +47,7 @@ def update_crontab(jobs, existing_crontab=None):
     new_crontab_lines.append(CRON_DISCLAIMER)
     for job in jobs:
         new_crontab_lines.append("# Specification for job {id}: {name}, owned by {owner}:".format(**job))
-        new_crontab_lines.append(" ".join((job["schedule_minute"],
-            job["schedule_hour"], job["schedule_day_of_month"],
-            job["schedule_month"], job["schedule_day_of_week"],
-            job["schedule_command"])))
+        new_crontab_lines.append(job_to_line(job))
     new_crontab_lines.append(CRON_END)
     return "\n".join(new_crontab_lines)
     # save updated crontab

@@ -15,6 +15,7 @@ from sqlalchemy.sql import select, func
 from subprocess import check_output, CalledProcessError
 from tempfile import mkstemp
 import crontab
+import json
 
 # Create flask app
 app = Flask(__name__)
@@ -73,8 +74,7 @@ def initialize_db(db):
         Column("schedule_hour",         String(20),  nullable=False),
         Column("schedule_day_of_month", String(20),  nullable=False),
         Column("schedule_month",        String(20),  nullable=False),
-        Column("schedule_day_of_week",  String(20),  nullable=False),
-        Column("schedule_command",      String(300), nullable=False)
+        Column("schedule_day_of_week",  String(20),  nullable=False)
     )
     # Create the table
     db['metadata'].create_all(tables=[scheduled_jobs])
@@ -150,10 +150,51 @@ def job_exists(name=None, job_id=None):
         return True
     return False
 
-def update_crontab():
-    jobs = []
-    for job in get_jobs():
-        jobs.append(job)
+def update_configs(jobs):
+    for job in jobs:
+        config = {
+            "ssl_key_name": "mreid",
+            "base_dir": "/mnt/telemetry",
+            # TODO: move this to config.py
+            "instance_type": "c3.2xlarge",
+            "image": "ami-0e98fe3e",
+            # TODO: ssh-only securiry group
+            "security_groups": ["telemetry"],
+            "iam_role": "telemetry-public-analysis-worker",
+            "region": app.config['AWS_REGION'],
+            "shutdown_behavior": "terminate",
+            "name": "telemetry-analysis-{0}".format(job['name']),
+            "default_tags": {
+              "Owner": "mreid",
+              "Application": "telemetry-server"
+            },
+            "ephemeral_map": {
+              "/dev/xvdb": "ephemeral0",
+              "/dev/xvdc": "ephemeral1"
+            },
+            "skip_ssh": True,
+            "skip_bootstrap": True,
+            "job_name": job['name'],
+            "job_timeout_minutes": job['timeout_minutes'],
+            "job_code_uri": job['code_uri'],
+            "job_commandline": job['commandline'],
+            "job_data_bucket": job['data_bucket'],
+            "job_output_dir": job['output_dir']
+        }
+        #FIXME: find a better way than embedding the path all over the place.
+        filename = "/home/ubuntu/telemetry_analysis/jobs/{0}.json".format(job['id'])
+        if app.config['DEBUG']:
+            print "Debug mode, would have written config to", filename
+            print json.dumps(config)
+        else:
+            with open(filename, 'w') as f:
+                json.dump(config, f)
+
+def update_crontab(jobs=None):
+    if jobs is None:
+        jobs = []
+        for job in get_jobs():
+            jobs.append(job)
     new_crontab = crontab.update_crontab(jobs)
     if app.config['DEBUG']:
         print "Debug mode, would have updated crontab to:"
@@ -326,10 +367,6 @@ def create_scheduled_job():
     else:
         cron_bits.extend(['*', '*', '*'])
 
-    # Last bit is the command to execute.
-    # TODO: this is a placeholder.
-    cron_bits.append("/path/to/run/script.sh")
-
     try:
         timeout = get_required_int(request, 'timeout',
                 "Job Timeout", max_value=24*60)
@@ -378,15 +415,22 @@ def create_scheduled_job():
         "schedule_hour": cron_bits[CRON_IDX_HOUR],
         "schedule_day_of_month": cron_bits[CRON_IDX_DOM],
         "schedule_month": cron_bits[CRON_IDX_MON],
-        "schedule_day_of_week": cron_bits[CRON_IDX_DOW],
-        "schedule_command": cron_bits[CRON_IDX_CMD]
+        "schedule_day_of_week": cron_bits[CRON_IDX_DOW]
     }
 
     result = insert_job(job)
-
     if result.inserted_primary_key > 0:
         print "Inserted job id", result.inserted_primary_key
-        update_crontab()
+        jobs = []
+        for j in get_jobs():
+            jobs.append(j)
+        update_configs(jobs)
+        update_crontab(jobs)
+
+    # Last bit is the command to execute.
+    # This is just a placeholder - the real command is added when we update
+    # the crontab.
+    cron_bits.append("jobs/run.sh '{0}'".format(result.inserted_primary_key))
 
     return render_template('schedule_create.html',
         result = result,
@@ -467,10 +511,6 @@ def edit_scheduled_job(job_id):
     else:
         cron_bits.extend(['*', '*', '*'])
 
-    # Last bit is the command to execute.
-    # TODO: this is a placeholder.
-    cron_bits.append("/path/to/run/script.sh")
-
     try:
         timeout = get_required_int(request, 'timeout',
                 "Job Timeout", max_value=24*60)
@@ -538,15 +578,23 @@ def edit_scheduled_job(job_id):
         "schedule_hour": cron_bits[CRON_IDX_HOUR],
         "schedule_day_of_month": cron_bits[CRON_IDX_DOM],
         "schedule_month": cron_bits[CRON_IDX_MON],
-        "schedule_day_of_week": cron_bits[CRON_IDX_DOW],
-        "schedule_command": cron_bits[CRON_IDX_CMD]
+        "schedule_day_of_week": cron_bits[CRON_IDX_DOW]
     }
 
     result = update_job(job)
 
     if result.rowcount > 0:
         print "Updated job id", job_id
-        update_crontab()
+        jobs = []
+        for j in get_jobs():
+            jobs.append(j)
+        update_configs(jobs)
+        update_crontab(jobs)
+
+    # Last bit is the command to execute.
+    # This is just a placeholder - the real command is added when we update
+    # the crontab.
+    cron_bits.append("jobs/run.sh '{0}'".format(job_id))
 
     return render_template('schedule_create.html',
         result = result,
@@ -577,6 +625,8 @@ def delete_scheduled_job(job_id):
         # OK, this job is yours. let's delete it.
         result = delete_job(job_id, current_user.email)
         if result.rowcount == 1:
+            # We don't have to update the configs, though maybe we should
+            # delete this job's config to clean up.
             update_crontab()
         return render_template('schedule_delete.html', result=result, job=job)
     return "Can't delete job {0}".format(job_id), 401
