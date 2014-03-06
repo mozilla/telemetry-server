@@ -181,6 +181,8 @@ Resources:
               "sudo apt-get -y install python-pip git python-dateutil python-dev nginx\n",
               "sudo pip install --upgrade boto flask flask-login uwsgi\n",
               "sudo pip install git+https://github.com/garbados/flask-browserid.git\n",
+              "cd /home/ubuntu\n",
+              "sudo -u ubuntu git clone https://github.com/mozilla/telemetry-server.git\n",
               "mkdir /home/ubuntu/telemetry_analysis\n"
               "cd /home/ubuntu/telemetry_analysis\n",
               "python - << END\n",
