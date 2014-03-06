@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
   This deploys a service that allows users to spawn EC2 instances that they can
-  use to analysis telemetry published data bucket.
+  use to analyze telemetry published data bucket.
 
 ################################################################################
 
@@ -183,7 +183,7 @@ Resources:
               "sudo pip install git+https://github.com/garbados/flask-browserid.git\n",
               "cd /home/ubuntu\n",
               "sudo -u ubuntu git clone https://github.com/mozilla/telemetry-server.git\n",
-              "mkdir /home/ubuntu/telemetry_analysis\n"
+              "sudo -u ubuntu mkdir /home/ubuntu/telemetry_analysis\n",
               "cd /home/ubuntu/telemetry_analysis\n",
               "python - << END\n",
               "from boto.s3 import connect_to_region\n",
