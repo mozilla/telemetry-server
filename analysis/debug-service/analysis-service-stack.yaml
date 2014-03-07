@@ -78,7 +78,7 @@ Mappings:
     sa-east-1:                {AMI: ami-f1dd7bec}
     us-east-1:                {AMI: ami-3d257954}
     us-west-1:                {AMI: ami-20e5d265}
-    us-west-2:                {AMI: ami-2460f914}
+    us-west-2:                {AMI: ami-7eaecc4e}
 
 ################################################################################
 
@@ -178,22 +178,32 @@ Resources:
         - {Ref: serverSecurityGroup}
       UserData:               {'Fn::Base64': {'Fn::Join': ['', [
               "#!/bin/bash\n",
-              "sudo apt-get -y install python-pip git python-dateutil python-dev nginx\n",
-              "sudo pip install --upgrade boto flask flask-login sqlalchemy uwsgi\n",
-              "sudo pip install git+https://github.com/garbados/flask-browserid.git\n",
+              "install()\n",
+              "{\n",
+              "    apt-get update\n",
+              "    DEBIAN_FRONTEND=noninteractive apt-get -y \\\n",
+              "        -o DPkg::Options::=--force-confdef \\\n",
+              "        -o DPkg::Options::=--force-confold \\\n",
+              "        install $@\n",
+              "}\n",
+              "install python-pip git python-dateutil python-dev nginx\n",
+              "pip install --upgrade boto fabric flask flask-login simplejson sqlalchemy uwsgi\n",
+              "pip install git+https://github.com/garbados/flask-browserid.git\n",
               "cd /home/ubuntu\n",
               "sudo -u ubuntu git clone https://github.com/mozilla/telemetry-server.git\n",
               "sudo -u ubuntu mkdir /home/ubuntu/telemetry_analysis\n",
               "cd /home/ubuntu/telemetry_analysis\n",
-              "python - << END\n",
+              "echo '# m h dom mon dow command' >> crontab.txt\n",
+              "crontab -u ubuntu ./crontab.txt\n",
+              "sudo -u ubuntu python - << END\n",
               "from boto.s3 import connect_to_region\n",
               "s3 = connect_to_region('", {Ref: 'AWS::Region'} ,"')\n",
               "b = s3.get_bucket('", {Ref: sourcesBucket}, "', validate = False)\n",
               "k = b.get_key('v", {Ref: sourcesVersion}, "/telemetry-analysis-service.tar.gz')\n",
               "k.get_contents_to_filename('sources.tar.gz')\n",
               "END\n",
-              "tar -xzf sources.tar.gz\n",
-              "sudo echo '42 * * * * ubuntu /home/ubuntu/telemetry_analysis/terminate-expired-instances.py' >> /etc/crontab\n",
+              "sudo -u ubuntu tar -xzf sources.tar.gz\n",
+              "echo '42 * * * * ubuntu /home/ubuntu/telemetry_analysis/terminate-expired-instances.py' >> /etc/crontab\n",
               "echo '' >> config.py\n",
               "echo \"SECRET_KEY = '", {Ref: serverSecret} , "'\" >> config.py\n",
               "echo \"AWS_REGION = '", {Ref: 'AWS::Region'} , "'\" >> config.py\n",
@@ -204,16 +214,16 @@ Resources:
               "echo \"PUBLIC_DATA_BUCKET = '", {Ref: publicDataBucket} , "'\" >> config.py\n",
               "echo \"DB_URL = '", {Ref: databaseURL} , "'\" >> config.py\n",
               "echo \"DEBUG = False\" >> config.py\n",
-              "sudo echo 'server {' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo echo '        listen 80;' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo echo '        server_name analysisservice;' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo echo '        location / { try_files $uri @analysisservice; }' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo echo '        location @analysisservice {' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo echo '                include uwsgi_params;' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo echo '                uwsgi_pass unix:/tmp/uwsgi.sock;' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo echo '        }' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo echo '}' >> /etc/nginx/sites-enabled/analysis-service\n",
-              "sudo service nginx restart\n",
+              "echo 'server {' > /etc/nginx/sites-enabled/default\n",
+              "echo '        listen 80;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        server_name analysisservice;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        location / { try_files $uri @analysisservice; }' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        location @analysisservice {' >> /etc/nginx/sites-enabled/default\n",
+              "echo '                include uwsgi_params;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '                uwsgi_pass unix:/tmp/uwsgi.sock;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        }' >> /etc/nginx/sites-enabled/default\n",
+              "echo '}' >> /etc/nginx/sites-enabled/default\n",
+              "service nginx restart\n",
               "sudo -u ubuntu uwsgi --chmod-socket=666 -s /tmp/uwsgi.sock --logto /tmp/analysis-service.log -w server:app\n"
             ]
           ]
