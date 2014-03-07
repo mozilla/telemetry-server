@@ -150,7 +150,11 @@ def job_exists(name=None, job_id=None):
         return True
     return False
 
-def update_configs(jobs):
+def update_configs(jobs=None):
+    if jobs is None:
+        jobs = []
+        for j in get_jobs():
+            jobs.append(j)
     for job in jobs:
         config = {
             "ssl_key_name": "mreid",
@@ -275,6 +279,15 @@ def job_to_form(job):
     if dow == '*' and dom == '*':
         form['schedule-frequency'] = 'daily'
     return form
+
+@app.before_first_request
+def initialize_jobs():
+    # We want to make sure that the server starts off with a full set
+    # of config files and crontab entries. This will NOT be executed until
+    # a request hits the server. The Load Balancer will hit the '/status'
+    # endpoint frequently, so that should do the trick.
+    update_configs()
+    update_crontab()
 
 @app.teardown_appcontext
 def close_db(error):
