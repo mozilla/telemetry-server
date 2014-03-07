@@ -33,13 +33,13 @@
      <select name="{{ name }}" required>
 {%- endmacro %}
 
-{% macro select_option(value, label, selected=False) -%}
+{% macro select_option(value, label, selected=False, name=None) -%}
       <option value="{{ value }}"
-       {% if values and values[name] == value %}
-        selected
+       {% if values[name] -%}
+        {% if values[name] == value %} selected {% endif -%}
        {% elif selected %}
         selected
-       {%- endif %}>{{ label }}</option>
+       {%- endif -%}>{{ label }}</option>
 {%- endmacro %}
 
 {% macro end_select_options() -%}

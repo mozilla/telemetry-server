@@ -84,21 +84,21 @@
    {% endcall %}
 
    {{ macros.begin_select(errors, 'schedule-frequency', 'Schedule Frequency') }}
-   {{ macros.select_option('daily',   'Daily') }}
-   {{ macros.select_option('weekly',  'Weekly') }}
-   {{ macros.select_option('monthly', 'Monthly') }}
+   {{ macros.select_option('daily',   'Daily', name='schedule-frequency') }}
+   {{ macros.select_option('weekly',  'Weekly', name='schedule-frequency') }}
+   {{ macros.select_option('monthly', 'Monthly', name='schedule-frequency') }}
    {{ macros.end_select_options() }}
     The job will be run periodically per this selection
    {{ macros.end_select() }}
 
    {{ macros.begin_select(errors, 'schedule-day-of-week', 'Day of Week') }}
-    {{ macros.select_option('0', 'Sunday') }}
-    {{ macros.select_option('1', 'Monday') }}
-    {{ macros.select_option('2', 'Tuesday') }}
-    {{ macros.select_option('3', 'Wednesday') }}
-    {{ macros.select_option('4', 'Thursday') }}
-    {{ macros.select_option('5', 'Friday') }}
-    {{ macros.select_option('6', 'Saturday') }}
+    {{ macros.select_option('0', 'Sunday', name='schedule-day-of-week') }}
+    {{ macros.select_option('1', 'Monday', name='schedule-day-of-week') }}
+    {{ macros.select_option('2', 'Tuesday', name='schedule-day-of-week') }}
+    {{ macros.select_option('3', 'Wednesday', name='schedule-day-of-week') }}
+    {{ macros.select_option('4', 'Thursday', name='schedule-day-of-week') }}
+    {{ macros.select_option('5', 'Friday', name='schedule-day-of-week') }}
+    {{ macros.select_option('6', 'Saturday', name='schedule-day-of-week') }}
    {{ macros.end_select_options() }}
     The job will run weekly on this day
    {{ macros.end_select() }}
@@ -108,30 +108,30 @@
    {% endcall %}
 
    {{ macros.begin_select(errors, 'schedule-time-of-day', 'Time of Day (UTC)') }}
-    {{ macros.select_option('0', 'Midnight') }}
-    {{ macros.select_option('1', '1am') }}
-    {{ macros.select_option('2', '2am') }}
-    {{ macros.select_option('3', '3am') }}
-    {{ macros.select_option('4', '4am') }}
-    {{ macros.select_option('5', '5am') }}
-    {{ macros.select_option('6', '6am') }}
-    {{ macros.select_option('7', '7am') }}
-    {{ macros.select_option('8', '8am') }}
-    {{ macros.select_option('9', '9am') }}
-    {{ macros.select_option('10', '10am') }}
-    {{ macros.select_option('11', '11am') }}
-    {{ macros.select_option('12', 'Noon', True) }}
-    {{ macros.select_option('13', '1pm') }}
-    {{ macros.select_option('14', '2pm') }}
-    {{ macros.select_option('15', '3pm') }}
-    {{ macros.select_option('16', '4pm') }}
-    {{ macros.select_option('17', '5pm') }}
-    {{ macros.select_option('18', '6pm') }}
-    {{ macros.select_option('19', '7pm') }}
-    {{ macros.select_option('20', '8pm') }}
-    {{ macros.select_option('21', '9pm') }}
-    {{ macros.select_option('22', '10pm') }}
-    {{ macros.select_option('23', '11pm') }}
+    {{ macros.select_option('0', 'Midnight', name='schedule-time-of-day') }}
+    {{ macros.select_option('1', '1am', name='schedule-time-of-day') }}
+    {{ macros.select_option('2', '2am', name='schedule-time-of-day') }}
+    {{ macros.select_option('3', '3am', name='schedule-time-of-day') }}
+    {{ macros.select_option('4', '4am', name='schedule-time-of-day') }}
+    {{ macros.select_option('5', '5am', name='schedule-time-of-day') }}
+    {{ macros.select_option('6', '6am', name='schedule-time-of-day') }}
+    {{ macros.select_option('7', '7am', name='schedule-time-of-day') }}
+    {{ macros.select_option('8', '8am', name='schedule-time-of-day') }}
+    {{ macros.select_option('9', '9am', name='schedule-time-of-day') }}
+    {{ macros.select_option('10', '10am', name='schedule-time-of-day') }}
+    {{ macros.select_option('11', '11am', name='schedule-time-of-day') }}
+    {{ macros.select_option('12', 'Noon', True, name='schedule-time-of-day') }}
+    {{ macros.select_option('13', '1pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('14', '2pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('15', '3pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('16', '4pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('17', '5pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('18', '6pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('19', '7pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('20', '8pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('21', '9pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('22', '10pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('23', '11pm', name='schedule-time-of-day') }}
    {{ macros.end_select_options() }}
     The job will be run at this time.  Note: if you want to process the
     previous day's data, it's good to leave a few hours' buffer for the data
