@@ -238,6 +238,8 @@ Resources:
       AvailabilityZones:        {'Fn::GetAZs': ''}
       LaunchConfigurationName:  {Ref: serverLaunchConfig}
       MinSize:                  1
+      # NOTE: MaxSize MUST be 1. Each machine runs all the scheduled tasks, so
+      # if we have multiple servers, each job will be run multiple times.
       MaxSize:                  1
       LoadBalancerNames:
         - {Ref: LoadBalancer}
