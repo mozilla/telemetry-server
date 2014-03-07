@@ -177,7 +177,7 @@ class Launcher(object):
                 key_name=self.config["ssl_key_name"],
                 instance_type=itype,
                 security_groups=self.config["security_groups"],
-                placement=self.config["placement"],
+                placement=self.config.get("placement", None),
                 block_device_map=mapping,
                 user_data=self.get_user_data(),
                 instance_profile_name=self.config.get("iam_role"),
