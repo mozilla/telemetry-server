@@ -135,7 +135,8 @@
    {{ macros.end_select_options() }}
     The job will be run at this time.  Note: if you want to process the
     previous day's data, it's good to leave a few hours' buffer for the data
-    to be published, so start those types of jobs later in the day.
+    to be published, so start those types of jobs later in the day. For
+    reference, the UTC time right now is <span id="utcnow"></span>.
    {{ macros.end_select() }}
 
    {% call macros.make_input('timeout', 'Job Timeout (minutes)', value='120') %}

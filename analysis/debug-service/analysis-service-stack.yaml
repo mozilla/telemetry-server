@@ -36,7 +36,7 @@ Parameters:
   keyName:
     Description:              Name of key pair for SSH
     Type:                     String
-    Default:                  jonasfj
+    Default:                  mreid
 
   serverSecret:
     Description:              Secret key for signing cookies on the server
