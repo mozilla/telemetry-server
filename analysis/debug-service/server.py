@@ -78,6 +78,26 @@ def initialize_db(db):
     )
     # Create the table
     db['metadata'].create_all(tables=[scheduled_jobs])
+    # TODO: The above does not create the serial column properly in PostgreSQL.
+    #       Use this SQL:
+    # CREATE TABLE scheduled_jobs (
+    #     id                    SERIAL PRIMARY KEY,
+    #     owner                 VARCHAR(50) NOT NULL,
+    #     name                  VARCHAR(100) UNIQUE NOT NULL,
+    #     timeout_minutes       INT NOT NULL,
+    #     code_uri              VARCHAR(300) NOT NULL,
+    #     commandline           VARCHAR NOT NULL,
+    #     data_bucket           VARCHAR(200) NOT NULL,
+    #     output_dir            VARCHAR(100) NOT NULL,
+    #     schedule_minute       VARCHAR(20) NOT NULL,
+    #     schedule_hour         VARCHAR(20) NOT NULL,
+    #     schedule_day_of_month VARCHAR(20) NOT NULL,
+    #     schedule_month        VARCHAR(20) NOT NULL,
+    #     schedule_day_of_week  VARCHAR(20) NOT NULL
+    # );
+    # -- Make job id start from 1000
+    # ALTER SEQUENCE scheduled_jobs_id_seq RESTART WITH 1000;
+    # CREATE INDEX scheduled_jobs_owner_idx on scheduled_jobs(owner);
 
 def get_db():
     """Opens a new database connection if there is none yet for the
