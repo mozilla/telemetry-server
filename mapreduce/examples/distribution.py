@@ -1,18 +1,28 @@
 """
-Get the distribution of a boolean measurement.
+Get the distribution of one or more boolean/enumerated measurements.
 """
 
 import simplejson as json
 
-key = "NEWTAB_PAGE_SHOWN"
+keys = [
+    ("NEWTAB_PAGE_SHOWN", 2), # boolean
+    ("NEWTAB_PAGE_SITE_CLICKED", 10), # 9-bucket
+]
 
 def map(k, d, v, cx):
     j = json.loads(v)
     histograms = j.get("histograms", {})
-    count = 0
-    if key in histograms:
-        count = histograms[key][1]
-    cx.write(count, 1)
+
+    counts = ()
+    for key, buckets in keys:
+        if key in histograms:
+            val = histograms[key]
+            if len(val) != buckets + 5:
+                raise ValueError("Unexpected length for key %s: %s" % (key, val))
+            counts += tuple(val[0:buckets])
+        else:
+            counts += (0,) * buckets
+    cx.write(counts, 1)
 
 def reduce(k, v, cx):
-    cx.write(k, sum(v))
+    cx.writeline(",".join(list(k) + [sum(v)]))
