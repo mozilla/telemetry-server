@@ -2,7 +2,7 @@
 Get the distribution of one or more boolean/enumerated measurements.
 """
 
-import simplejson as json
+import json
 
 keys = [
     ("NEWTAB_PAGE_SHOWN", 2), # boolean
