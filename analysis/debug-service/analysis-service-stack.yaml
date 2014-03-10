@@ -2,7 +2,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
   This deploys a service that allows users to spawn EC2 instances that they can
-  use to analyze telemetry published data bucket.
+  use to analyze telemetry published data bucket. Users can also schedule
+  analysis jobs to run via cron.
 
 ################################################################################
 
@@ -66,20 +67,20 @@ Parameters:
 
 Mappings:
 
-  # A map from region to 64 bit Ubuntu 13.04 backed by instance storage
+  # A map from region to 64 bit Ubuntu 13.10 backed by instance storage
   # We use instance storage to avoid stability issues with EBS also we don't
   # have to pay for IO. We'll initialize these with CloudInit, later.
   # See: http://cloud-images.ubuntu.com/locator/ec2/
+  # Use the 'ubuntu/images/ubuntu-saucy-13.10-amd64-server-20140212' image.
   regionToAMI:
-    ap-northeast-1:           {AMI: ami-7f41da7e}
-    ap-southeast-1:           {AMI: ami-3af8b268}
-    ap-southeast-2:           {AMI: ami-a5960a9f}
-    eu-west-1:                {AMI: ami-2adc3c5d}
-    sa-east-1:                {AMI: ami-f1dd7bec}
-    us-east-1:                {AMI: ami-3d257954}
-    us-west-1:                {AMI: ami-20e5d265}
-    us-west-2:                {AMI: ami-7eaecc4e}
-
+    ap-northeast-1:           {AMI: ami-4d04714c}
+    ap-southeast-1:           {AMI: ami-c8cf999a}
+    ap-southeast-2:           {AMI: ami-0329b739}
+    eu-west-1:                {AMI: ami-5a6e9f2d}
+    sa-east-1:                {AMI: ami-41ec4f5c}
+    us-east-1:                {AMI: ami-11dfda78}
+    us-west-1:                {AMI: ami-2491ac61}
+    us-west-2:                {AMI: ami-10a9cb20}
 ################################################################################
 
 Resources:
