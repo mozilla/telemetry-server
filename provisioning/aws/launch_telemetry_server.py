@@ -37,13 +37,17 @@ class TelemetryServerLauncher(Launcher):
             run("make")
             sudo("make install")
 
-    def heka_pkg_name(self):
-        return "heka_0.5.0_amd64.deb"
+    def heka_pkg_version(self):
+        return "0.5.0"
+
+    def heka_pkg_url(self):
+        return "https://github.com/mozilla-services/heka/releases/" \
+            "download/v{0}/heka_{0}_amd64.deb".format(self.heka_pkg_version())
 
     def install_heka(self):
         heka_pkg = self.heka_pkg_name()
-        run("wget http://people.mozilla.org/~mreid/{0}".format(heka_pkg))
-        sudo("dpkg -i {0}".format(heka_pkg))
+        run("wget {0} -O heka.deb".format(self.heka_pkg_url()))
+        sudo("dpkg -i heka.deb"
 
     def create_logrotate_config(self, lr_file, target_log, create=True):
         sudo("echo '%s {' > %s" % (target_log, lr_file))
