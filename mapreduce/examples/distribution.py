@@ -9,6 +9,8 @@ keys = [
     ("NEWTAB_PAGE_SITE_CLICKED", 10), # 9-bucket
 ]
 
+extra_histogram_entries = 6 # bucketN, sum, log_sum, log_sum_squares, sum_squares_lo, sum_squares_hi
+
 def map(k, d, v, cx):
     j = json.loads(v)
     histograms = j.get("histograms", {})
@@ -17,7 +19,7 @@ def map(k, d, v, cx):
     for key, buckets in keys:
         if key in histograms:
             val = histograms[key]
-            if len(val) != buckets + 5:
+            if len(val) != buckets + extra_histogram_entries:
                 raise ValueError("Unexpected length for key %s: %s" % (key, val))
             counts += tuple(val[0:buckets])
         else:
@@ -25,4 +27,4 @@ def map(k, d, v, cx):
     cx.write(counts, 1)
 
 def reduce(k, v, cx):
-    cx.writeline(",".join(list(k) + [sum(v)]))
+    cx.writecsv(list(k) + [sum(v)])

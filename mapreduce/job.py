@@ -20,6 +20,7 @@ from telemetry.persist import StorageLayout
 import telemetry.util.s3 as s3util
 import telemetry.util.timer as timer
 import subprocess
+import csv
 from subprocess import Popen, PIPE
 try:
     from boto.s3.connection import S3Connection
@@ -330,6 +331,10 @@ class TextContext(Context):
         self._sink.write(self.field_separator)
         self._sink.write(str(value))
         self._sink.write(self.record_separator)
+
+    def writecsv(self, values):
+        w = csv.writer(self._sink)
+        w.writerow(values)
 
     def writeline(self, value):
         self._sink.write(value)
