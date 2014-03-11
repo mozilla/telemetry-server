@@ -1,0 +1,54 @@
+{% macro make_input(name, label, type='text', value=None, required=True) -%}
+ <tr>
+  <td class="field-label"> <label> {{ label }}: </label> </td>
+  <td class="field-input">
+   {% if errors and name in errors %}
+    <div class="field-error">
+     {{ errors[name] }}
+   {% endif %}
+   <input type="{{ type }}" name="{{ name }}" {% if required %} required {% endif %}
+   {% if values and values[name] %}
+    value="{{ values[name] }}"
+   {% elif value %}
+    value="{{ value }}"
+   {% endif %} />
+   {% if errors and name in errors %}
+    </div>
+   {% endif %}
+  </td>
+  <td class="field-desc">
+   {{ caller() }}
+  </td>
+ </tr>
+{%- endmacro %}
+
+{% macro begin_select(errors, name, label) -%}
+ <tr>
+    <td class="field-label"> <label> {{ label }}: </label> </td>
+    <td class="field-input">
+     {% if errors and name in errors %}
+      <div class="field-error">
+       {{ errors[name] }}
+     {% endif %}
+     <select name="{{ name }}" required>
+{%- endmacro %}
+
+{% macro select_option(value, label, selected=False, name=None) -%}
+      <option value="{{ value }}"
+       {% if values[name] -%}
+        {% if values[name] == value %} selected {% endif -%}
+       {% elif selected %}
+        selected
+       {%- endif -%}>{{ label }}</option>
+{%- endmacro %}
+
+{% macro end_select_options() -%}
+     </select>
+    </td>
+    <td class="field-desc">
+{%- endmacro %}
+
+{% macro end_select() -%}
+  </td>
+ </tr>
+{%- endmacro %}

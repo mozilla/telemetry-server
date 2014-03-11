@@ -1,0 +1,39 @@
+{% import 'macros.html' as macros with context %}
+{% extends "base.html" %}
+{% block title %}
+ <img width="48" src="{{ url_for('static', filename='worker.png') }}" />
+ Launch an ad-hoc analysis worker
+{% endblock %}
+{% block content %}
+ <br>
+ <div class="blurb">
+  Launch a server in the cloud and use it for custom data analysis.
+  The machine will be available for 24 hours, then it will be automatically
+  terminated.
+ </div>
+ <br>
+ <hr/>
+ <form action="{{ url_for('spawn_worker_instance') }}" method="post" enctype="multipart/form-data">
+  <input type="hidden" name="token" value="{{ token }}">
+  <table>
+   {% set username = current_user.email.split('@')[0] %}
+   {% call macros.make_input('name', 'Server Name', 'text', username + '-telemetry-analysis') %}
+    The server name identifies this machine within AWS. Use something short
+    like &quot;{{ username }}-charset-usage&quot;
+   {% endcall %}
+
+   {% call macros.make_input('public-ssh-key', 'SSH Public Key', type='file') %}
+    Your public key file. Usually <code>id_rsa.pub</code>. This will be appended
+    to the server's <code>authorized_keys</code> to grant you SSH access. Do
+    <strong>not</strong> upload a private key file.'
+   {% endcall %}
+  </table>
+  <hr/>
+  <input type="submit" name="submit" value="Submit">
+ </form>
+{% endblock %}
+
+{% block footer %}
+ <a href="{{ url_for('index') }}">Home</a> <br/>
+ <a href="{{ url_for('schedule_job') }}">Schedule an analysis job</a>
+{% endblock %}

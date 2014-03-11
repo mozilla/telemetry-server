@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}
+ Delete a scheduled analysis job
+{% endblock %}
+{% block content %}
+ <div class="blurb">
+  Job <code>{{ job.name }}</code> has been deleted (deleted
+   {{ result.rowcount }} record{% if result.rowcount > 1 %}s{% endif %}).
+ </div>
+ <a href="{{ url_for('schedule_job') }}">Go back</a>
+{% endblock %}
+{% block footer %}
+ <a href="{{ url_for('get_worker_params') }}">Launch an ad-hoc analysis worker</a>
+{% endblock %}

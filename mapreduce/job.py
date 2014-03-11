@@ -20,6 +20,7 @@ from telemetry.persist import StorageLayout
 import telemetry.util.s3 as s3util
 import telemetry.util.timer as timer
 import subprocess
+import csv
 from subprocess import Popen, PIPE
 import signal
 try:
@@ -346,6 +347,13 @@ class TextContext(Context):
         self._sink.write(str(value))
         self._sink.write(self.record_separator)
 
+    def writecsv(self, values):
+        w = csv.writer(self._sink)
+        w.writerow(values)
+
+    def writeline(self, value):
+        self._sink.write(value)
+        self._sink.write(self.record_separator)
 
 class Mapper:
     def __init__(self, mapper_id, inputs, work_dir, module, partition_count):

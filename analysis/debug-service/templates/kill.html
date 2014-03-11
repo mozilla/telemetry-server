@@ -1,5 +1,16 @@
+{% extends "base.html" %}
+{% block title %}
+ Your instance is now dying, and will soon be dead.
+{% endblock %}
+{% block content %}
 <h1>We've killed your instance</h1>
 
 state: {{ instance_state }}<br>
 <br>
-You can still monitor it here {{ monitoring_url }} just to make sure it terminates.
+You can still <a href="{{ monitoring_url }}">monitor it</a> just to make sure it terminates.
+{% endblock %}
+
+{% block footer %}
+ <a href="{{ url_for('index') }}">Home</a> <br/>
+{% endblock %}
+
