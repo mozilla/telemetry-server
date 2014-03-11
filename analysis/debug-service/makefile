@@ -1,23 +1,25 @@
 CFYAML = ../cf-yaml-helper.py
 
-SOURCES_BUCKET = jonasfj-telemetry-code
-VERSION = 1
+SOURCES_BUCKET = telemetry-analysis-code
+VERSION = 2
 
 FILES = $(shell find * -name "*.py") \
 		$(shell find * -name "*.sh") \
+		$(shell find * -name "*.css") \
+		$(shell find * -name "*.png") \
 		$(shell find * -name "*.html")
 
-telemetry-analysis-debug-service.tar.gz: $(FILES)
+telemetry-analysis-service.tar.gz: $(FILES)
 	tar -czf $@ $^
 
-debug-service-stack.json: debug-service-stack.yaml
+analysis-service-stack.json: analysis-service-stack.yaml
 	$(CFYAML) $< > $@
 
-put: telemetry-analysis-debug-service.tar.gz debug-service-stack.json
-	aws s3 cp telemetry-analysis-debug-service.tar.gz s3://$(SOURCES_BUCKET)/v$(VERSION)/telemetry-analysis-debug-service.tar.gz
-	aws s3 cp debug-service-stack.json s3://$(SOURCES_BUCKET)/v$(VERSION)/debug-service-stack.json
+put: telemetry-analysis-service.tar.gz analysis-service-stack.json
+	aws s3 cp telemetry-analysis-service.tar.gz s3://$(SOURCES_BUCKET)/v$(VERSION)/telemetry-analysis-service.tar.gz
+	aws s3 cp analysis-service-stack.json s3://$(SOURCES_BUCKET)/v$(VERSION)/analysis-service-stack.json
 
 clean:
-	rm -f telemetry-analysis-debug-service.tar.gz debug-service-stack.json
+	rm -f telemetry-analysis-service.tar.gz analysis-service-stack.json
 
 .PHONY: put

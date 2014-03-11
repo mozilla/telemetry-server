@@ -2,7 +2,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
   This deploys a service that allows users to spawn EC2 instances that they can
-  use to analysis telemetry published data bucket.
+  use to analyze telemetry published data bucket. Users can also schedule
+  analysis jobs to run via cron.
 
 ################################################################################
 
@@ -36,7 +37,7 @@ Parameters:
   keyName:
     Description:              Name of key pair for SSH
     Type:                     String
-    Default:                  jonasfj
+    Default:                  mreid
 
   serverSecret:
     Description:              Secret key for signing cookies on the server
@@ -45,31 +46,41 @@ Parameters:
   sourcesBucket:
     Description:              Bucket containing sources and templates
     Type:                     String
-    Default:                   jonasfj-telemetry-code
+    Default:                   telemetry-analysis-code
 
   sourcesVersion:
     Description:              Version of sources to load from sources bucket
     Type:                     String
-    Default:                  '1'
+    Default:                  '2'
+
+  publicDataBucket:
+    Description:              Bucket in which to publish public analysis results
+    Type:                     String
+    Default:                   telemetry-public-analysis
+
+  databaseURL:
+    Description:              Database Connection URL
+    Type:                     String
+    Default:                   sqlite:///telemetry_analysis.db
 
 ################################################################################
 
 Mappings:
 
-  # A map from region to 64 bit Ubuntu 13.04 backed by instance storage
+  # A map from region to 64 bit Ubuntu 13.10 backed by instance storage
   # We use instance storage to avoid stability issues with EBS also we don't
   # have to pay for IO. We'll initialize these with CloudInit, later.
   # See: http://cloud-images.ubuntu.com/locator/ec2/
+  # Use the 'ubuntu/images/ubuntu-saucy-13.10-amd64-server-20140212' image.
   regionToAMI:
-    ap-northeast-1:           {AMI: ami-7f41da7e}
-    ap-southeast-1:           {AMI: ami-3af8b268}
-    ap-southeast-2:           {AMI: ami-a5960a9f}
-    eu-west-1:                {AMI: ami-2adc3c5d}
-    sa-east-1:                {AMI: ami-f1dd7bec}
-    us-east-1:                {AMI: ami-3d257954}
-    us-west-1:                {AMI: ami-20e5d265}
-    us-west-2:                {AMI: ami-2460f914}
-
+    ap-northeast-1:           {AMI: ami-4d04714c}
+    ap-southeast-1:           {AMI: ami-c8cf999a}
+    ap-southeast-2:           {AMI: ami-0329b739}
+    eu-west-1:                {AMI: ami-5a6e9f2d}
+    sa-east-1:                {AMI: ami-41ec4f5c}
+    us-east-1:                {AMI: ami-11dfda78}
+    us-west-1:                {AMI: ami-2491ac61}
+    us-west-2:                {AMI: ami-10a9cb20}
 ################################################################################
 
 Resources:
@@ -84,7 +95,7 @@ Resources:
   serverSecurityGroup:
     Type:                     AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription:       telemetry-analysis debug service security group
+      GroupDescription:       telemetry-analysis service security group
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
         - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
@@ -103,9 +114,9 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Path:                   /telemetry/analysis/debug-service/
+      Path:                   /telemetry/analysis-service/
       Policies:
-        - PolicyName:         startDebugInstancesPolicy
+        - PolicyName:         startWorkerInstancesPolicy
           PolicyDocument:
             Statement:
               - Effect:       Allow
@@ -133,7 +144,7 @@ Resources:
                   - {'Fn::Join': ["", [
                       'arn:aws:s3:::',
                       {Ref: sourcesBucket},
-                      '/v', {Ref: sourcesVersion}, '/telemetry-analysis-debug-service.tar.gz'
+                      '/v', {Ref: sourcesVersion}, '/telemetry-analysis-service.tar.gz'
                     ]]}
 
   # IAM instance profile granting serverInstanceIAMRole to service server
@@ -142,7 +153,7 @@ Resources:
     DependsOn:
       - serverInstanceIAMRole
     Properties:
-      Path:                   /telemetry/analysis/debug-service/
+      Path:                   /telemetry/analysis-service/
       Roles:
         - {Ref: serverInstanceIAMRole}
 
@@ -152,9 +163,9 @@ Resources:
       - serverInstanceProfile
       - serverSecurityGroup
       - workerInstanceProfile
-      - debugInstanceSecurityGroup
+      - workerInstanceSecurityGroup
     Metadata:
-      Comment:                telemetry-analysis-debug-service
+      Comment:                telemetry-analysis-service
     Properties:
       KeyName:                {Ref: keyName}
       ImageId:                {'Fn::FindInMap': [
@@ -166,39 +177,57 @@ Resources:
       IamInstanceProfile:     {Ref: serverInstanceProfile}
       SecurityGroups:
         - {Ref: serverSecurityGroup}
+        # We need the "telemetry" group to have access to the RDS database.
+        - "telemetry"
       UserData:               {'Fn::Base64': {'Fn::Join': ['', [
               "#!/bin/bash\n",
-              "sudo apt-get -y install python-pip git python-dateutil python-dev nginx\n",
-              "sudo pip install --upgrade boto flask flask-login uwsgi\n",
-              "sudo pip install git+https://github.com/garbados/flask-browserid.git\n",
+              "install()\n",
+              "{\n",
+              "    apt-get update\n",
+              "    DEBIAN_FRONTEND=noninteractive apt-get -y \\\n",
+              "        -o DPkg::Options::=--force-confdef \\\n",
+              "        -o DPkg::Options::=--force-confold \\\n",
+              "        install $@\n",
+              "}\n",
+              "install python-pip git python-psycopg2 python-dateutil python-dev nginx\n",
+              "pip install --upgrade boto fabric flask flask-login simplejson sqlalchemy uwsgi\n",
+              "pip install git+https://github.com/garbados/flask-browserid.git\n",
               "cd /home/ubuntu\n",
-              "python - << END\n",
+              "sudo -u ubuntu git clone https://github.com/mozilla/telemetry-server.git\n",
+              "sudo -u ubuntu mkdir /home/ubuntu/telemetry_analysis\n",
+              "cd /home/ubuntu/telemetry_analysis\n",
+              "echo '# m h dom mon dow command' >> crontab.txt\n",
+              "crontab -u ubuntu ./crontab.txt\n",
+              "sudo -u ubuntu python - << END\n",
               "from boto.s3 import connect_to_region\n",
               "s3 = connect_to_region('", {Ref: 'AWS::Region'} ,"')\n",
               "b = s3.get_bucket('", {Ref: sourcesBucket}, "', validate = False)\n",
-              "k = b.get_key('v", {Ref: sourcesVersion}, "/telemetry-analysis-debug-service.tar.gz')\n",
+              "k = b.get_key('v", {Ref: sourcesVersion}, "/telemetry-analysis-service.tar.gz')\n",
               "k.get_contents_to_filename('sources.tar.gz')\n",
               "END\n",
-              "tar -xzf sources.tar.gz\n",
-              "sudo echo '42 * * * * ubuntu /home/ubuntu/terminate-expired-instances.py' >> /etc/crontab\n",
+              "sudo -u ubuntu tar -xzf sources.tar.gz\n",
+              "echo '42 * * * * ubuntu /home/ubuntu/telemetry_analysis/terminate-expired-instances.py' >> /etc/crontab\n",
               "echo '' >> config.py\n",
               "echo \"SECRET_KEY = '", {Ref: serverSecret} , "'\" >> config.py\n",
               "echo \"AWS_REGION = '", {Ref: 'AWS::Region'} , "'\" >> config.py\n",
-              "echo \"SECURITY_GROUPS = ['", {Ref: debugInstanceSecurityGroup} , "']\" >> config.py\n",
+              "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , "']\" >> config.py\n",
               "echo \"INSTANCE_PROFILE = '", {Ref: workerInstanceProfile} , "'\" >> config.py\n",
               "echo \"TEMPORARY_BUCKET = '", {Ref: temporaryBucket} , "'\" >> config.py\n",
-              "echo \"DEBUG = True\" >> config.py\n",
-              "sudo echo 'server {' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        listen 80;' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        server_name debugservice;' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        location / { try_files $uri @debugservice; }' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        location @debugservice {' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '                include uwsgi_params;' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '                uwsgi_pass unix:/tmp/uwsgi.sock;' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '        }' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo echo '}' >> /etc/nginx/sites-enabled/debug-service\n",
-              "sudo service nginx restart\n",
-              "sudo -u ubuntu uwsgi --plugins python --chmod-socket=666 -s /tmp/uwsgi.sock --logto /tmp/debug-service.log -w server:app\n"
+              "echo \"CODE_BUCKET = '", {Ref: sourcesBucket} , "'\" >> config.py\n",
+              "echo \"PUBLIC_DATA_BUCKET = '", {Ref: publicDataBucket} , "'\" >> config.py\n",
+              "echo \"DB_URL = '", {Ref: databaseURL} , "'\" >> config.py\n",
+              "echo \"DEBUG = False\" >> config.py\n",
+              "echo 'server {' > /etc/nginx/sites-enabled/default\n",
+              "echo '        listen 80;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        server_name analysisservice;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        location / { try_files $uri @analysisservice; }' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        location @analysisservice {' >> /etc/nginx/sites-enabled/default\n",
+              "echo '                include uwsgi_params;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '                uwsgi_pass unix:/tmp/uwsgi.sock;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        }' >> /etc/nginx/sites-enabled/default\n",
+              "echo '}' >> /etc/nginx/sites-enabled/default\n",
+              "service nginx restart\n",
+              "sudo -u ubuntu uwsgi --chmod-socket=666 -s /tmp/uwsgi.sock --logto /tmp/analysis-service.log -w server:app\n"
             ]
           ]
         }
@@ -212,22 +241,24 @@ Resources:
       AvailabilityZones:        {'Fn::GetAZs': ''}
       LaunchConfigurationName:  {Ref: serverLaunchConfig}
       MinSize:                  1
+      # NOTE: MaxSize MUST be 1. Each machine runs all the scheduled tasks, so
+      # if we have multiple servers, each job will be run multiple times.
       MaxSize:                  1
       LoadBalancerNames:
         - {Ref: LoadBalancer}
 
 ################################################################################
 
-  # Security group for debug instances, this should be s3 and ssh only
-  debugInstanceSecurityGroup:
+  # Security group for worker instances, this should be s3 and ssh only
+  workerInstanceSecurityGroup:
     Type:                     AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription:       telemetry-analysis debug instance security group
+      GroupDescription:       telemetry-analysis worker instance security group
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
 
-  # IAM role for analysis debug instances
-  debugInstanceIAMRole:
+  # IAM role for analysis worker instances
+  workerInstanceIAMRole:
     Type:                     AWS::IAM::Role
     DependsOn:
       - temporaryBucket
@@ -240,10 +271,10 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Path:                   /telemetry/analysis/debug-instance/
+      Path:                   /telemetry/analysis/worker-instance/
       Policies:
         # Grant read access to telemetry-published-v1
-        - PolicyName:         telemetryPublishedDebugAccess
+        - PolicyName:         telemetryPublishedWorkerAccess
           PolicyDocument:
             Statement:
               - Effect:       Allow
@@ -266,12 +297,12 @@ Resources:
                                 '/*'
                               ]]}
 
-  # IAM instance profile granting debugInstanceIAMRole to debug instances
+  # IAM instance profile granting workerInstanceIAMRole to worker instances
   workerInstanceProfile:
     Type:                     AWS::IAM::InstanceProfile
     DependsOn:
-      - debugInstanceIAMRole
+      - workerInstanceIAMRole
     Properties:
-      Path:                   /telemetry/analysis/debug-instance/
+      Path:                   /telemetry/analysis/worker-instance/
       Roles:
-        - {Ref: debugInstanceIAMRole}
+        - {Ref: workerInstanceIAMRole}
