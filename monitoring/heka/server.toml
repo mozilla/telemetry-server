@@ -1,0 +1,38 @@
+[TelemetryServerInput]
+type = "LogstreamerInput"
+log_directory = "/var/log/telemetry"
+file_match = 'telemetry-server\.log'
+decoder = "TelemetryServerDecoder"
+
+[TelemetryServerDecoder]
+type = "SandboxDecoder"
+script_type = "lua"
+filename = "lua_decoders/telemetry_server.lua"
+
+[TelemetryServerMetrics]
+type = "SandboxFilter"
+message_matcher = "Type == 'telemetry.server'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/telemetry_server_metrics.lua"
+preserve_data = true
+
+[TelemetryChannelMetrics]
+type = "SandboxFilter"
+message_matcher = "Type == 'telemetry.server'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/telemetry_channel_metrics.lua"
+preserve_data = true
+
+[TelemetryChannelMetrics60Days]
+type = "SandboxFilter"
+message_matcher = "Type == 'telemetry.server'"
+ticker_interval = 60
+script_type = "lua"
+filename = "lua_filters/telemetry_channel_metrics.lua"
+preserve_data = true
+
+[TelemetryChannelMetrics60Days.config]
+rows = 1440
+sec_per_row = 3600

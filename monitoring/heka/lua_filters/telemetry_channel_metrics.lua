@@ -13,10 +13,10 @@ local TOTAL_SIZE  = 2
 channels = {}
 
 local function add_channel(channel)
-    channels[channel] = circular_buffer.new(rows, 2, sec_per_row, true)
-    local c = channels[channel]
+    local c = circular_buffer.new(rows, 2, sec_per_row, true)
     c:set_header(REQUESTS, "Requests")
     c:set_header(TOTAL_SIZE, "Total Size", "KiB")
+    channels[channel] = c
     return c
 end
 
@@ -24,11 +24,9 @@ all = add_channel("ALL")
 
 function process_message ()
     local ts = read_message("Timestamp")
-    local rs = tonumber(read_message("Fields[size]"))
-    local url = read_message("Fields[url]")
+    if not all:add(ts, REQUESTS, 1) then return 0 end -- outside the buffer
 
-    local cnt = all:add(ts, REQUESTS, 1)
-    if not cnt then return 0 end -- outside the buffer
+    local rs = read_message("Fields[size]")
     if rs then
         rs = rs / 1024
     else
@@ -36,6 +34,7 @@ function process_message ()
     end
     all:add(ts, TOTAL_SIZE, rs)
 
+    local url = read_message("Fields[url]")
     local channel = url:match("^/submit/telemetry/[^/]+/[^/]+/[^/]+/[^/]+/([^/]+)")
     if not channel then return 0 end
     if channel ~= "release" and channel ~= "beta" and channel ~= "aurora" and channel ~= "nightly" then
