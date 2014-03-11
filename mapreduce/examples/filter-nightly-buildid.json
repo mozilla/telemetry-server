@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "dimensions": [
+    {
+      "field_name": "reason",
+      "allowed_values": ["saved-session", "idle-daily"]
+    },
+    {
+      "field_name": "appName",
+      "allowed_values": ["Firefox"]
+    },
+    {
+      "field_name": "appUpdateChannel",
+      "allowed_values": ["nightly"]
+    },
+    {
+      "field_name": "appVersion",
+      "allowed_values": "*"
+    },
+    {
+      "field_name": "appBuildID",
+      "allowed_values": {
+        "min": "20140228"
+      }
+    },
+    {
+      "field_name": "submission_date",
+      "allowed_values": {
+        "min": "20140308",
+        "max": "20140309"
+      }
+    }
+  ]
+}
