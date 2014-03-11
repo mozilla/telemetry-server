@@ -1,25 +1,3 @@
-[hekad]
-maxprocs = 4
-max_timer_inject = 100
-max_process_duration = 1000000
-
-[ProtobufDecoder]
-encoding_name = "PROTOCOL_BUFFER"
-
-[TCP:5565]
-type = "TcpInput"
-parser_type = "message.proto"
-decoder = "ProtobufDecoder"
-address = ":5565"
-	[TCP:5565.signer.telemetry_0]
-	hmac_key = "TODO change on deploy" # TODO update on deploy
-
-[TelemetrySandboxManager]
-type = "SandboxManagerFilter"
-message_signer = "telemetry"
-message_matcher = "Type == 'heka.control.sandbox'"
-max_filters = 10
-
 [TelemetryIncomingStatsInput]
 type = "LogstreamerInput"
 log_directory = "/var/log/telemetry"
@@ -54,12 +32,3 @@ ticker_interval = 10
 script_type = "lua"
 filename = "lua_filters/telemetry_stats_errors.lua"
 preserve_data = true
-
-[Dashboard]
-type = "DashboardOutput"
-address = ":4352"
-ticker_interval = 10
-
-[TcpOutput]
-address = "10.250.68.186:5565"
-message_matcher =  "Type == 'heka.sandbox-output' && Fields[payload_type] == 'cbufd'"
