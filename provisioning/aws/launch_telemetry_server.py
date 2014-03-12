@@ -168,13 +168,13 @@ class TelemetryServerLauncher(Launcher):
 
         c_file = "/etc/init/telemetry-heka.conf"
         self.start_suid_script(c_file, self.ssl_user)
-        sudo("echo '    cd {1}/monitoring/heka' >> {0}".format(c_file, code_base))
-        sudo("echo \"    /usr/bin/hekad -config /etc/heka.d/ >> /var/log/telemetry/telemetry-heka.out\" >> {0}".format(c_file))
+        # If you want to see the hekad output, look in
+        #  /var/log/upstart/telemetry-heka.log
+        sudo("echo '    /usr/bin/hekad -config /etc/heka.d' >> {0}".format(c_file))
         self.end_suid_script(c_file)
         sudo("echo 'kill signal INT' >> {0}".format(c_file))
-        # Start/stop this in lock step with telemetry-server
-        sudo("echo 'start on started telemetry-server' >> {0}".format(c_file))
-        sudo("echo 'stop on stopped telemetry-server' >> {0}".format(c_file))
+        # Start heka in lock step with the services that emit logs
+        sudo("echo 'start on started telemetry-server or started telemetry-incoming' >> {0}".format(c_file))
 
         # Service configuration for telemetry-analysis
         c_file = "/etc/init/telemetry-analysis.conf"
