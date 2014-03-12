@@ -45,9 +45,10 @@ class TelemetryServerLauncher(Launcher):
             "download/v{0}/heka_{0}_amd64.deb".format(self.heka_pkg_version())
 
     def install_heka(self):
-        heka_pkg = self.heka_pkg_name()
         run("wget {0} -O heka.deb".format(self.heka_pkg_url()))
-        sudo("dpkg -i heka.deb"
+        sudo("dpkg -i heka.deb")
+        sudo("mkdir /etc/heka.d")
+        sudo("mkdir /var/cache/hekad")
 
     def create_logrotate_config(self, lr_file, target_log, create=True):
         sudo("echo '%s {' > %s" % (target_log, lr_file))
@@ -99,8 +100,16 @@ class TelemetryServerLauncher(Launcher):
         self.create_logrotate_config("/etc/logrotate.d/telemetry-incoming-stats",
                 "/var/log/telemetry/telemetry-incoming-stats.log")
 
-        # Create startup scripts:
         code_base = self.home + "/telemetry-server"
+        # Configure heka
+        with cd(code_base + "/monitoring/heka"):
+            sudo("cp *.toml /etc/heka.d/")
+            for d in ["lua_decoders", "lua_filters", "lua_modules"]:
+                sudo("if [ -d {0} ]; then cp {0}/* /usr/share/heka/{0}; fi".format(d))
+            # See https://github.com/mozilla-services/heka/issues/739
+            sudo("chown {0} /var/cache/hekad".format(self.ssl_user))
+
+        # Create startup scripts:
         c_file = "/etc/init/telemetry-server.conf"
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}/http' >> {0}".format(c_file, code_base))
@@ -160,7 +169,7 @@ class TelemetryServerLauncher(Launcher):
         c_file = "/etc/init/telemetry-heka.conf"
         self.start_suid_script(c_file, self.ssl_user)
         sudo("echo '    cd {1}/monitoring/heka' >> {0}".format(c_file, code_base))
-        sudo("echo \"    /usr/bin/hekad -config heka.toml >> /var/log/telemetry/telemetry-heka.out\" >> {0}".format(c_file))
+        sudo("echo \"    /usr/bin/hekad -config /etc/heka.d/ >> /var/log/telemetry/telemetry-heka.out\" >> {0}".format(c_file))
         self.end_suid_script(c_file)
         sudo("echo 'kill signal INT' >> {0}".format(c_file))
         # Start/stop this in lock step with telemetry-server
