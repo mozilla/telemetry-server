@@ -42,12 +42,12 @@
 
   "Mappings": {
     "Region2WebServerAMI": {
-      "us-west-2": { "AMIpv": "ami-60b6d450" }
+      "us-west-2": { "AMIpv": "ami-7e66084e" }
     },
     "Region2ProcessIncomingAMI": {
       "us-west-2": {
-        "AMIpv":  "ami-60b6d450",
-        "AMIhvm": "ami-78b6d448"
+        "AMIpv":  "ami-7e66084e",
+        "AMIhvm": "ami-72660842"
       }
     }
   },
@@ -164,6 +164,10 @@
           "chown -R ubuntu:ubuntu /mnt/telemetry",
           "if [ ! -e '/var/log/telemetry' ]; then",
           "  ln -s /mnt/telemetry/log /var/log/telemetry",
+          "fi",
+          "if [ -f /etc/heka.d/incoming_stats.toml ]; then",
+          "  # Web servers don't produce these logs, so delete the config:",
+          "  rm /etc/heka.d/incoming_stats.toml",
           "fi",
           { "Fn::Join": [ "", [
             "echo '{\"incoming_bucket\":\"", { "Ref": "IncomingBucketName" }, "\",",
@@ -358,6 +362,10 @@
           "if [ ! -e '/var/log/telemetry' ]; then",
           "  ln -s /mnt/telemetry/log /var/log/telemetry",
           "fi",
+          "if [ -f /etc/heka.d/server.toml ]; then",
+          "  # PI servers don't produce these logs, so delete the config:",
+          "  rm /etc/heka.d/server.toml",
+          "fi",
           { "Fn::Join": [ "", [
             "echo '{\"incoming_bucket\":\"", { "Ref": "IncomingBucketName" }, "\",",
             "\"incoming_queue\":\"", { "Ref": "IncomingQueueName" }, "\",",
@@ -536,6 +544,10 @@
           "chown -R ubuntu:ubuntu /mnt/telemetry",
           "if [ ! -e '/var/log/telemetry' ]; then",
           "  ln -s /mnt/telemetry/log /var/log/telemetry",
+          "fi",
+          "if [ -f /etc/heka.d/server.toml ]; then",
+          "  # PI servers don't produce these logs, so delete the config:",
+          "  rm /etc/heka.d/server.toml",
           "fi",
           { "Fn::Join": [ "", [
             "echo '{\"incoming_bucket\":\"", { "Ref": "IncomingBucketName" }, "\",",

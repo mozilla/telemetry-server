@@ -1,6 +1,6 @@
 [TelemetryServerInput]
 type = "LogstreamerInput"
-log_directory = "/var/log/telemetry"
+log_directory = "/mnt/telemetry/log"
 file_match = 'telemetry-server\.log'
 decoder = "TelemetryServerDecoder"
 
