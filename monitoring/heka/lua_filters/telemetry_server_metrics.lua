@@ -21,7 +21,7 @@ function process_message ()
 
     request:add(ts, REQUEST_SIZE, read_message("Fields[size]"))
 
-    if sc == read_message("Fields[code]") then
+    if 200 == read_message("Fields[code]") then
         request:add(ts, SUCCESS, 1)
     else
         request:add(ts, FAILURE, 1)
