@@ -38,9 +38,6 @@ def main():
         # Give it a good name %s-yyyymmdd where %s is instance name stolen from
         # launcher which reads it from config or commandline
         base_name = launcher.config["name"]
-        if instance.virtualization_type == "hvm":
-            base_name += "-hvm"
-
         ami_name = "{0}-{1}".format(base_name, date.today().strftime("%Y%m%d"))
         ami_desc = 'Pre-loaded image for telemetry nodes. Knows how to run all the core services, but does not auto-start them on boot.'
         # This automatically stops the image first (unless you tell it not to)
