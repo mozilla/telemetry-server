@@ -652,7 +652,6 @@ def delete_scheduled_job(job_id):
 
     job = get_job(job_id=job_id)
     if job is None:
-        # TODO: 404
         return "No such job {0}".format(job_id), 404
     elif job['owner'] == current_user.email:
         # OK, this job is yours. let's delete it.
@@ -757,15 +756,16 @@ def monitor(instance_id):
         reservations = ec2.get_all_reservations(instance_ids = [instance_id])
         instance = reservations[0].instances[0]
     except IndexError:
-        return "No such instance"
+        return "No such instance: {}".format(instance_id), 404
 
     # Check that it is the owner who is logged in
     if instance.tags['Owner'] != current_user.email:
-        return  login_manager.unauthorized()
+        return "No such instance: {}".format(instance_id), 404
 
     # Alright then, let's report status
     return render_template(
         'monitor.html',
+        instance_id  = instance_id,
         instance_state  = instance.state,
         public_dns      = instance.public_dns_name,
         terminate_url   = abs_url_for('kill', instance_id = instance.id)
@@ -783,11 +783,11 @@ def kill(instance_id):
         reservations = ec2.get_all_reservations(instance_ids = [instance_id])
         instance = reservations[0].instances[0]
     except IndexError:
-        return "No such instance"
+        return "No such instance: {}".format(instance_id), 404
 
     # Check that it is the owner who is logged in
     if instance.tags['Owner'] != current_user.email:
-        return login_manager.unauthorized()
+        return "No such instance: {}".format(instance_id), 404
 
     # Terminate and update instance
     instance.terminate()
@@ -796,6 +796,7 @@ def kill(instance_id):
     # Alright then, let's report status
     return render_template(
         'kill.html',
+        instance_id  = instance_id,
         instance_state  = instance.state,
         public_dns      = instance.public_dns_name,
         monitoring_url  = abs_url_for('monitor', instance_id = instance.id)
