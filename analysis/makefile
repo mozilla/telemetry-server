@@ -1,4 +1,4 @@
-CFYAML = ./cf-yaml-helper.py
+CFYAML = ../telemetry/util/cf-yaml-helper.py
 SOURCES_BUCKET = jonasfj-telemetry-code
 VERSION = 1
 
