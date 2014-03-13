@@ -246,6 +246,12 @@ Resources:
       MaxSize:                  1
       LoadBalancerNames:
         - {Ref: LoadBalancer}
+    # Support Rolling updates if/when we roll out changes
+    UpdatePolicy:
+        AutoScalingRollingUpdate:
+          MinInstancesInService: "1"
+          MaxBatchSize: "1"
+          PauseTime: PT2M
 
 ################################################################################
 
