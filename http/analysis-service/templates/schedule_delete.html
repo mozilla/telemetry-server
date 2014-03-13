@@ -1,14 +1,13 @@
-{% extends "base.html" %}
+{% extends "schedule.html" %}
 {% block title %}
- Delete a scheduled analysis job
+ <h1>Delete a scheduled analysis job</h1>
 {% endblock %}
 {% block content %}
- <div class="blurb">
+ <p class="lead">
   Job <code>{{ job.name }}</code> has been deleted (deleted
-   {{ result.rowcount }} record{% if result.rowcount > 1 %}s{% endif %}).
- </div>
- <a href="{{ url_for('schedule_job') }}">Go back</a>
-{% endblock %}
-{% block footer %}
- <a href="{{ url_for('get_worker_params') }}">Launch an ad-hoc analysis worker</a>
-{% endblock %}
+  {{ result.rowcount }} record{% if result.rowcount > 1 %}s{% endif %}).
+ </p>
+ <p>
+  <a class="btn btn btn-success" href="{{ url_for('schedule_job') }}">Go back</a>
+ </p>
+{% en block %}

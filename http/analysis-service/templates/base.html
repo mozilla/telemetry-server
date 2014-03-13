@@ -3,9 +3,17 @@
  <head>
   {% block head %}
    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" />
+
+   <!-- Bootstrap core CSS -->
+   <link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+
+   <!-- jQuery -->
    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
    <script type="text/javascript" src="http://ajax.aspnetcdn.com/ajax/jquery.validate/1.11.1/jquery.validate.min.js"></script>
+
+   <!-- Persona -->
    <script src="https://login.persona.org/include.js" type="text/javascript"></script>
+
    <script type="text/javascript">{{ auth_script|safe }}</script>
    <script type="text/javascript">
     $(document).ready(function() {
@@ -21,43 +29,93 @@
    <title>Telemetry Self-Serve Data Analysis</title>
   {% endblock %}
  </head>
- <body>
-  <div id="header"> Telemetry Self-Serve Data Analysis </div>
-  <div id="subheader">
-   {% block title %}
-    Your one stop shop when the dashboards just don't cut it
-   {% endblock %}
+ <body role="document">
+  <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+   <div class="container">
+    <div class="navbar-header">
+     <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+      <span class="sr-only">Toggle navigation</span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+      <span class="icon-bar"></span>
+     </button>
+     <a class="navbar-brand" href="/">Telemetry Self-Serve Data Analysis</a>
+    </div>
+    <div class="navbar-collapse collapse">
+     {% if current_user.is_authenticated() %}
+      <ul class="nav navbar-nav">
+       <li {% block home_active %} {% endblock %}><a href="/">Home</a></li>
+       <li {% block worker_active %} {% endblock %} >
+        <a href="{{ url_for('get_worker_params') }}">Launch a Worker</a>
+       </li>
+       <li {% block schedule_active %} {% endblock %}>
+        <a href="{{ url_for('schedule_job') }}">Schedule a Job</a>
+       </li>
+       <li><a href="https://github.com/mozilla/telemetry-server" target="_blank">Contribute</a></li>
+       <li class="button-margin">
+        <p>
+         <a id="browserid-logout" class="btn btn-sm btn-primary" href="#" role="button">
+          Sign out
+         </a>
+        </p>
+       </li>
+      </ul>
+     {% else %}
+      <form class="navbar-form navbar-right" role="form">
+       <p>
+        <a id="browserid-login" class="btn btn-lg btn-success" href="#" role="button">
+         Sign in with Persona
+        </a>
+       </p>
+      </form>
+     {% endif %}
+    </div><!--/.navbar-collapse -->
+   </div>
   </div>
-  <div id="content">
-   {% if current_user.is_authenticated() %}
-    {% if current_user.is_authorized() %}
-     {% block content %}
-      You are signed in.
-     {% endblock %}
-    {% else %}
-     {% block not_authorized %}
-      Sorry, self-serve data analysis is currently limited to <em>@mozilla.com</em> addresses.
-      The address you signed in with ({{ current_user.email }}) does not grant you access.
-      Please <button id="browserid-logout">Sign out</button> and sign in with an authorized account.
-     {% endblock %}
-    {% endif %}
-   {% else %}
-    {% block not_signed_in %}
-     <button id="browserid-login">Sign in with Persona</button>
-     <p>
-      For Ad-hoc data analysis and for scheduling analysis tasks,
-      please <strong>sign in</strong> above with an <em>@mozilla.com</em>
-      email address.
-     </p>
+  <div class="jumbotron">
+   <div class="container">
+    {% block title %}
+     <h1>Self-Serve Data Analysis</h1>
+     <p class="lead"> Your one stop shop when the dashboards just don't cut it </p>
+     {% if not current_user.is_authenticated() %}
+      <p>
+       For Ad-hoc data analysis and for scheduling analysis tasks,
+       please <strong>sign in</strong> above with an <em>@mozilla.com</em>
+       email address.
+      </p>
+      <p>
+       There are several existing Telemetry dashboards at
+       <a href="http://telemetry.mozilla.org" target="_blank">telemetry.mozilla.org</a>.
+       You may find what you're looking for there.
+      </p>
+     {% elif not current_user.is_authorized() %}
+      {% block not_authorized %}
+      <p>
+       Sorry, self-serve data analysis is currently limited to <em>@mozilla.com</em> addresses.
+       The address you signed in with ({{ current_user.email }}) does not grant you access.
+      </p>
+      <p>
+       Please <strong> Sign out </strong> above and sign in with an authorized account.
+      </p>
+      {% endblock %}
+     {% else %}
+     {% endif %}
     {% endblock %}
-   {% endif %}
+   </div>
+  </div>
+  <div class="container">
+  {% if current_user.is_authenticated() and current_user.is_authorized() %}
+   {% block content %}
+   {% endblock %}
+  {% endif %}
   </div>
   <div id="footer">
-   {% if current_user.is_authenticated() %}
-    <div id="signout"> <button id="browserid-logout">Sign out</button> </div>
-   {% endif %}
-   {% block footer %} {% endblock %}
-   <p>For existing telemetry dashboards, please visit <a href="http://telemetry.mozilla.org">telemetry.mozilla.org</a>.</p>
+   <div class="container">
+    <p class="text-muted text-right">
+     For existing telemetry dashboards, please visit
+     <a href="http://telemetry.mozilla.org" target="_blank">telemetry.mozilla.org</a>.
+    </p>
+   </div>
   </div>
  </body>
 </html>

@@ -1,31 +1,35 @@
 {% import 'macros.html' as macros with context %}
 {% extends "base.html" %}
+
+{% block schedule_active %} class="active" {% endblock %}
+
 {% block title %}
- <img width="48" src="{{ url_for('static', filename='schedule.png') }}" />
- Schedule an analysis job
+ <h1>Schedule an analysis job</h1>
+ <p>
+  <img width="48" src="{{ url_for('static', filename='schedule.png') }}" />
+  Run a telemetry analysis on a scheduled basis. The output of the analysis will be publicly available.
+ </p>
 {% endblock %}
+
 {% block content %}
- <div class="blurb">
- Run a telemetry analysis on a scheduled basis. The output of the analysis will be publicly available.
- </div>
  {% if jobs %}
   <div class="jobs">
-   Your currently scheduled jobs:
-   <table>
-    {% for job in jobs %}
-     <tr>
-      <td>{{ job.id }}</td><td>{{ job.name }}</td>
-      <td>
-       <a href="{{ url_for('edit_scheduled_job', job_id=job.id) }}">Edit</a>
-       <a href="{{ url_for('delete_scheduled_job', job_id=job.id) }}">Delete</a>
-      </td>
-     </tr>
-    {% endfor %}
-   </table>
+   <p class="lead">
+    Your currently scheduled jobs:
+   </p>
+   {% for job in jobs %}
+    <div class="row">
+     <div class="col-md-2"><p>Job {{ job.id }}: {{ job.name }}</p></div>
+     <div class="col-md-10">
+      <a href="{{ url_for('edit_scheduled_job', job_id=job.id) }}">Edit</a>
+      |
+      <a href="{{ url_for('delete_scheduled_job', job_id=job.id) }}">Delete</a>
+     </div>
+    </div>
+   {% endfor %}
   </div>
+  <hr/>
  {% endif %}
-
- <hr/>
 
  {% set form_target = url_for('create_scheduled_job') %}
  {% set is_update = False %}
@@ -33,10 +37,12 @@
  {% if values and values["job-id"] %}
   {% set is_update = True %}
   {% set form_target = url_for('edit_scheduled_job', job_id=values["job-id"]) %}
-  Edit job <strong>{{ values["job-id"] }}</strong>:
-  <strong>{{ values["job-name"] }}</strong>
+  <p class="lead">
+   Edit job <strong>{{ values["job-id"] }}</strong>:
+   <strong>{{ values["job-name"] }}</strong>
+  </p>
  {% else %}
-  Schedule a new job:
+  <p class="lead">Schedule a new job:</p>
  {% endif %}
  </div>
  <form action="{{ form_target }}" method="POST" enctype="multipart/form-data">
@@ -144,12 +150,8 @@
     automatically be killed.
    {% endcall %}
   </table>
-  <hr/>
-  <input type="submit" name="submit" value="Submit">
+  <div class="button-margin">
+   <input type="submit" class="btn btn-success" name="submit" value="Submit">
+  </div>
  </form>
-{% endblock %}
-
-{% block footer %}
- <a href="{{ url_for('index') }}">Home</a> <br/>
- <a href="{{ url_for('get_worker_params') }}">Launch an ad-hoc analysis worker</a>
 {% endblock %}

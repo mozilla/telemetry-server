@@ -11,6 +11,9 @@
     value="{{ values[name] }}"
    {% elif value %}
     value="{{ value }}"
+   {% endif %}
+   {% if type == 'text' %}
+    size="35"
    {% endif %} />
    {% if errors and name in errors %}
     </div>

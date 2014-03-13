@@ -2,58 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-html, body {
-    background-color: white;
-    color: black;
-    font-family: Verdana, sans-serif;
-}
-
-#header {
-    margin: 30px auto 0px auto;
-    font-size: 3em;
-    text-align: center;
-    text-transform: capitalize;
-}
-
-#subheader {
-    margin: 0px auto;
-    font-size: 2em;
-    text-align: center;
-}
-
-#content {
-    margin: 0px auto;
-    font-size: 1.5em;
-    text-align: center;
-    padding: 20px;
-}
-
-#navbar {
-    text-align: center;
-    margin: 20px auto;
-}
-
 img {
     vertical-align: middle;
-}
-
-#analysis-nav ul {
-    list-style-type: none;
-}
-
-#analysis-nav li {
-    padding: 10px;
-    margin: 5px;
-}
-
-button {
-    margin: 20px;
-    font-size: larger;
-}
-
-input[type=submit] {
-    margin: 20px;
-    font-size: larger;
 }
 
 table {
@@ -69,7 +19,7 @@ td {
 }
 
 td.field-desc {
-    font-size: 0.6em;
+    font-size: 85%;
     color: #555;
     text-align: left;
 }
@@ -81,30 +31,44 @@ td.field-input {
 }
 
 td.field-label {
-    font-size: 0.8em;
+    min-width: 15%;
     font-weight: bold;
     text-align: right;
 }
 
 label.error {
-    font-size: 0.6em;
+    font-size: 85%;
     color: red;
     text-align: left;
 }
 
 div.field-error {
-    font-size: 0.6em;
+    font-size: 85%;
     color: red;
     text-align: left;
     border: 1px dotted red;
 }
 
-.blurb {
-    padding: 20px;
+body {
+  /* Padding to leave room for header and footer */
+  padding-top: 50px;
+  padding-bottom: 80px;
 }
 
-.jobs {
-    text-align: left;
-    font-size: 80%;
-    padding: 10px;
+.button-margin {
+    margin-top: 10px;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+#footer {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  /* Set the fixed height of the footer here */
+  height: 60px;
+  background-color: #eee;
 }

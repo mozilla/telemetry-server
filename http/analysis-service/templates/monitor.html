@@ -1,42 +1,84 @@
 {% extends "base.html" %}
+
+{% block worker_active %} class="active" {% endblock %}
+
 {% block title %}
- Instance Monitoring
+ <h1>Instance Monitoring</h1>
 {% endblock %}
+
 {% block content %}
-state: {{ instance_state }}<br>
-public dns: {{ public_dns }}<br>
-terminate it here: {{ terminate_url }}<br>
-ssh into the server with the user 'ubuntu', ie<br>
+
+<p class="lead">Summary:</p>
+<div class="row">
+ <div class="col-md-2"><strong>ID:</strong></div>
+ <div class="col-md-10">{{ instance_id }}</div>
+</div>
+<div class="row">
+ <div class="col-md-2"><strong>State:</strong></div>
+ <div class="col-md-10">{{ instance_state }}</div>
+</div>
+<div class="row">
+ <div class="col-md-2"><strong>Public DNS:</strong></div>
+ <div class="col-md-10">
+  {% if public_dns %}
+   {{ public_dns }}
+  {% elif instance_state != 'running' %}
+   Not available
+  {% else %}
+   Not ready yet, please wait a minute and refresh this page.
+  {% endif %}
+ </div>
+</div>
+<div class="row">
+ <div class="col-md-2"><strong>Terminate it here:</strong></div>
+ <div class="col-md-10"><a href="{{ terminate_url }}">{{ terminate_url }}</a></div>
+</div>
+<div>
+
+<h3>Your instance will be killed in 24 hours! Be sure to save any work!</h3>
+</div>
+<br>
+<p class="lead">Connecting:</p>
+<p>
+The default username is <code>ubuntu</code>, so you may SSH into the server
+using a command like:</p>
 <pre>
 $ ssh -i my-private-key ubuntu@{{ public_dns }}
-</pre><br>
-Note, wait 5min before SSH'ing in, it'll report ready before it really is!<br>
+</pre>
 
-Configure awscli, if you want to use it<br>
+<p>
+ You may need to wait up to 5 minutes before SSH'ing in, the server will
+ report ready before it really is!
+</p>
+
+<p class="lead">
+ Configure AWS Commandline Tools:
+</p>
+<p>If you want to use the awscli tools: </p>
 <pre>
 $ mkdir .aws
 $ echo -e "[default]\nregion = us-west-2" > .aws/config
-</pre><br>
-Now you can use awscli to list files:
+</pre>
+
+<p>
+ Now you can use awscli to list files:
+</p>
 <pre>
 $ aws s3 ls s3://telemetry-published-v1
-</pre><br>
+</pre>
 
-Good luck :)<br>
-<i>Oh, by the way, we'll kill your instance in 24 hours!</i>
+<p class="lead">Further Reading:</p>
+<p>
+ For an example of how to use this shiny new instance, check out
+ <a href="http://mreid-moz.github.io/blog/2013/11/06/current-state-of-telemetry-analysis/">
+ :mreid's blog post on the topic</a>.
+</p>
+<p>
+ Or you can read the docs for the
+ <a href="https://github.com/mozilla/telemetry-server/blob/master/docs/MapReduce.md">
+ Telemetry MapReduce framework</a>.
+</p>
 
-For an example of how to use this shiny new instance, check out
-<a href="http://mreid-moz.github.io/blog/2013/11/06/current-state-of-telemetry-analysis/">
-:mreid's blog post on the topic
-</a>.
-
-Or you can read the docs for the
-<a href="https://github.com/mozilla/telemetry-server/blob/master/docs/MapReduce.md">
-Telemetry MapReduce framework
-</a>.
-{% endblock %}
-
-{% block footer %}
- <a href="{{ url_for('index') }}">Home</a> <br/>
+<h3> Good luck :)</h3>
 {% endblock %}
 

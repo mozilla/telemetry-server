@@ -1,18 +1,20 @@
 {% import 'macros.html' as macros with context %}
 {% extends "base.html" %}
+
+{% block worker_active %} class="active" {% endblock %}
+
 {% block title %}
- <img width="48" src="{{ url_for('static', filename='worker.png') }}" />
- Launch an ad-hoc analysis worker
-{% endblock %}
-{% block content %}
- <br>
- <div class="blurb">
-  Launch a server in the cloud and use it for custom data analysis.
+ <h1>Launch an ad-hoc analysis worker</h1>
+ <p>
+  <img width="48" src="{{ url_for('static', filename='worker.png') }}" />
+  Launch a server in the cloud and use it for custom data analysis.</p>
+ <p>
   The machine will be available for 24 hours, then it will be automatically
   terminated.
- </div>
- <br>
- <hr/>
+ </p>
+{% endblock %}
+{% block content %}
+ <p class="lead">Launch a worker:</p>
  <form action="{{ url_for('spawn_worker_instance') }}" method="post" enctype="multipart/form-data">
   <input type="hidden" name="token" value="{{ token }}">
   <table>
@@ -28,12 +30,6 @@
     <strong>not</strong> upload a private key file.'
    {% endcall %}
   </table>
-  <hr/>
-  <input type="submit" name="submit" value="Submit">
+  <input type="submit" class="btn btn-success" name="submit" value="Submit">
  </form>
-{% endblock %}
-
-{% block footer %}
- <a href="{{ url_for('index') }}">Home</a> <br/>
- <a href="{{ url_for('schedule_job') }}">Schedule an analysis job</a>
 {% endblock %}

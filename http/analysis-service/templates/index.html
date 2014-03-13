@@ -1,21 +1,28 @@
 {% extends "base.html" %}
+{% block home_active %} class="active" {% endblock %}
 {% block content %}
- <div id="analysis-nav">
-  <br>
-  Would you like to:<br>
-  <ul>
-   <li>
-    <a href="{{ url_for('get_worker_params') }}">
-     <img width="48" src="{{ url_for('static', filename='worker.png') }}" />
-     Launch an ad-hoc analysis worker
-    </a>
-   </li>
-   <li>
+<div class="row">
+ <div class="col-md-6">
+  <h2>Launch a Worker</h2>
+  <p>Launch a server in the cloud and use it for custom data analysis.
+  The machine will be available for 24 hours, then it will be automatically
+  terminated.</p>
+  <p class="lead">
+   <a href="{{ url_for('get_worker_params') }}">
+    <img width="48" src="{{ url_for('static', filename='worker.png') }}" />
+    Launch an ad-hoc analysis worker
+   </a>
+  </p>
+ </div>
+ <div class="col-md-6">
+   <h2>Schedule a Job</h2>
+   <p>Run a telemetry analysis on a scheduled basis. The output of the analysis will be publicly available. </p>
+   <p class="lead">
     <a href="{{ url_for('schedule_job') }}">
      <img width="48" src="{{ url_for('static', filename='schedule.png') }}" />
      Schedule an analysis job
     </a>
-   </li>
-  </ul>
+   </p>
  </div>
+</div>
 {% endblock %}

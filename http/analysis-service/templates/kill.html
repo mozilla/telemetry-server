@@ -1,16 +1,26 @@
 {% extends "base.html" %}
+
+{% block worker_active %} class="active" {% endblock %}
+
 {% block title %}
- Your instance is now dying, and will soon be dead.
+ <h1>Your instance is now dying, and will soon be dead.</h1>
 {% endblock %}
+
 {% block content %}
-<h1>We've killed your instance</h1>
+<p class="lead">We've requested that your instance ({{ instance_id }}) be killed.</p>
 
-state: {{ instance_state }}<br>
-<br>
-You can still <a href="{{ monitoring_url }}">monitor it</a> just to make sure it terminates.
-{% endblock %}
-
-{% block footer %}
- <a href="{{ url_for('index') }}">Home</a> <br/>
+<div class="row">
+ <div class="col-md-2"><strong>ID:</strong></div>
+ <div class="col-md-10">{{ instance_id }}</div>
+</div>
+<div class="row">
+ <div class="col-md-2"><strong>State:</strong></div>
+ <div class="col-md-10">{{ instance_state }}</div>
+</div>
+<br/>
+<p class="lead">
+ You can still <a href="{{ monitoring_url }}">monitor it</a> just to
+ make sure it terminates.
+</p>
 {% endblock %}
 
