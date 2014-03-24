@@ -34,7 +34,8 @@ def map(k, d, v, cx):
     cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "TOTAL"]), [0, 0, 0, 0, 0, 0])
 
     for f, arr in parsed["fileIOReports"].iteritems():
-        cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, clean(f)]), arr)
+        if arr[1] is not None:
+            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, clean(f)]), arr[1])
 
 def setup_reduce(cx):
     cx.field_separator = ","
