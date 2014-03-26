@@ -30,6 +30,7 @@ class Converter:
     """A class for converting incoming payloads to a more compact form"""
     VERSION_UNCONVERTED = 1
     VERSION_CONVERTED = 2
+    VERSION_FXOS_1_3 = 3
 
     def __init__(self, cache, schema):
         self._histocache = {}
