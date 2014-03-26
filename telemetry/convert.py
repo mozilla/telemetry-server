@@ -158,6 +158,10 @@ class Converter:
                     "appVersion": self.get_dimension(json_dict, "deviceinfo.platform_version")
                 }
                 json_dict["info"] = info
+
+                # Remove the pingID field if present.
+                if "pingID" in json_dict:
+                    del json_dict["pingID"]
                 json_dict["ver"] = Converter.VERSION_CONVERTED
             elif json_dict["ver"] != Converter.VERSION_CONVERTED:
                 raise ValueError("Unknown payload version: " + str(json_dict["ver"]))
