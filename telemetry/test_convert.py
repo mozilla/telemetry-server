@@ -225,8 +225,10 @@ try:
 
     test_fxos_converted, dimensions = converter.convert_json(json.dumps(test_fxos), "20131114")
     assert dimensions[0] == "ftu"
-    assert test_anr["ver"] == Converter.VERSION_FXOS_1_3
-    assert test_anr_converted["ver"] == Converter.VERSION_CONVERTED
+    assert test_fxos["ver"] == Converter.VERSION_FXOS_1_3
+    assert test_fxos_converted["ver"] == Converter.VERSION_CONVERTED
+    assert test_fxos_converted["info"]["reason"] == "ftu"
+    assert test_fxos_converted["info"]["appVersion"] == test_fxos["deviceinfo.platform_version"]
 
     test_normal_converted, dimensions = converter.convert_json(json.dumps(test_normal), "20131114")
     assert dimensions[0] == "saved-session"
