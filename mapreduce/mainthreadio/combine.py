@@ -9,10 +9,11 @@ SUB_COLUMN=0
 APP_COLUMN=1
 VER_COLUMN=2
 CHAN_COLUMN=3
-FILE_COLUMN=4
-SUBMISSION_COUNT_COLUMN=5
-MEDIAN_TIME_COLUMN=6
-MEDIAN_COUNT_COLUMN=7
+INTERVAL_COLUMN=4
+FILE_COLUMN=5
+SUBMISSION_COUNT_COLUMN=6
+MEDIAN_TIME_COLUMN=7
+MEDIAN_COUNT_COLUMN=8
 version_regex = re.compile(r'^([0-9]+).*$')
 
 def clean_version(ver):
@@ -82,7 +83,8 @@ for a in inputs:
                 totals[total_key] = 0
             totals[total_key] += int(row[SUBMISSION_COUNT_COLUMN])
         else:
-            fk = "\t".join([row[FILE_COLUMN], row[APP_COLUMN], row[CHAN_COLUMN], clean_version(row[VER_COLUMN])])
+            fk = "\t".join([row[FILE_COLUMN], row[APP_COLUMN], row[CHAN_COLUMN],
+                 clean_version(row[VER_COLUMN]), row[INTERVAL_COLUMN]])
             if fk not in filenames:
                 filenames[fk] = []
             filenames[fk].append(row)
@@ -107,6 +109,6 @@ for stub, column in [["frequency", 1], ["median_time", 2], ["median_count", 3]]:
 
     for row in sorted(combined, key=lambda r: r[column], reverse=True):
         f = row[-1]
-        filename, app, chan, ver = f.split("\t")
-        writer.writerow(row[0:-1] + [filename, app, chan, ver])
+        filename, app, chan, ver, interval = f.split("\t")
+        writer.writerow(row[0:-1] + [filename, app, chan, ver, interval])
     outfile.close()

@@ -31,11 +31,31 @@ def map(k, d, v, cx):
     if not parsed["fileIOReports"]:
         return
 
-    cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "TOTAL"]), [0, 0, 0, 0, 0, 0])
+    startup_sub = False
+    execution_sub = False
+    shutdown_sub = False
 
     for f, arr in parsed["fileIOReports"].iteritems():
+        if len(arr) != 3: # Don't support the old format
+            continue
+
+        if arr[0] is not None:
+            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "startup", clean(f)]), arr[0])
+            if not startup_sub:
+                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "startup", "TOTAL"]), [0, 0, 0, 0, 0, 0])
+                startup_sub = True
+
         if arr[1] is not None:
-            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, clean(f)]), arr[1])
+            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "execution", clean(f)]), arr[1])
+            if not execution_sub:
+                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "execution", "TOTAL"]), [0, 0, 0, 0, 0, 0])
+                execution_sub = True
+
+        if arr[2] is not None:
+            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "shutdown", clean(f)]), arr[2])
+            if not shutdown_sub:
+                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "shutdown", "TOTAL"]), [0, 0, 0, 0, 0, 0])
+                shutdown_sub = True
 
 def setup_reduce(cx):
     cx.field_separator = ","
@@ -65,6 +85,6 @@ def reduce(k, v, cx):
 
     if n_pings > 100:
         # Output fields:
-        # submission_date, app_name, app_version
-        # app_update_channel, filename, submission_count, median_time, median_count
+        # submission_date, app_name, app_version, app_update_channel, interval, filename,
+        # submission_count, median_time, median_count
         cx.write(k, ",".join([str(n_pings), str(numpy.median(totals)), str(numpy.median(count))]))
