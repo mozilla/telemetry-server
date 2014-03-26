@@ -34,6 +34,9 @@ def map(k, d, v, cx):
     cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "TOTAL"]), [0, 0, 0, 0, 0, 0])
 
     for f, arr in parsed["fileIOReports"].iteritems():
+        if len(arr) != 3: # Don't support the old format
+            continue
+
         if arr[1] is not None:
             cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, clean(f)]), arr[1])
 
