@@ -229,6 +229,9 @@ try:
     assert test_fxos_converted["ver"] == Converter.VERSION_CONVERTED
     assert test_fxos_converted["info"]["reason"] == "ftu"
     assert test_fxos_converted["info"]["appVersion"] == test_fxos["deviceinfo.platform_version"]
+    # Make sure we removed the pingID:
+    assert test_fxos["pingID"] == "e426da9f-2a29-4e09-895b-c883903956cb"
+    assert test_fxos_converted.get("pingID") is None
 
     test_normal_converted, dimensions = converter.convert_json(json.dumps(test_normal), "20131114")
     assert dimensions[0] == "saved-session"
