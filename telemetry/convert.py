@@ -30,6 +30,7 @@ class Converter:
     """A class for converting incoming payloads to a more compact form"""
     VERSION_UNCONVERTED = 1
     VERSION_CONVERTED = 2
+    VERSION_FXOS_1_3 = 3
 
     def __init__(self, cache, schema):
         self._histocache = {}
@@ -123,14 +124,13 @@ class Converter:
 
     def convert_json(self, jsonstr, date):
         json_dict = json.loads(jsonstr)
-        if "info" not in json_dict:
-            raise ValueError("Missing in payload: info")
-
-        info = json_dict.get("info")
-
+        info = json_dict.get("info", None)
         # Check if the payload is already converted:
         if "ver" in json_dict:
             if json_dict["ver"] == Converter.VERSION_UNCONVERTED:
+                if info is None:
+                    raise ValueError("Missing in payload: info")
+
                 # Convert it and update the version
                 if "revision" not in info:
                     # We need "revision" to correctly convert histograms. If
@@ -149,12 +149,28 @@ class Converter:
                     except KeyError, e:
                         raise ValueError("Bad Histogram key for revision {0}: {1}".format(revision, e))
                 json_dict["ver"] = Converter.VERSION_CONVERTED
+            elif json_dict["ver"] == Converter.VERSION_FXOS_1_3:
+                info = {
+                    "reason": "ftu",
+                    "appUpdateChannel": self.get_dimension(json_dict, "deviceinfo.update_channel"),
+                    "appBuildID": self.get_dimension(json_dict, "deviceinfo.platform_build_id"),
+                    "appName": "FirefoxOS",
+                    "appVersion": self.get_dimension(json_dict, "deviceinfo.platform_version")
+                }
+                json_dict["info"] = info
+
+                # Remove the pingID field if present.
+                if "pingID" in json_dict:
+                    del json_dict["pingID"]
+                json_dict["ver"] = Converter.VERSION_CONVERTED
             elif json_dict["ver"] != Converter.VERSION_CONVERTED:
                 raise ValueError("Unknown payload version: " + str(json_dict["ver"]))
             # else it's already converted.
         else:
             raise ValueError("Missing payload version")
 
+        if info is None:
+            raise ValueError("Missing in payload: info")
         # Get dimensions in order from schema (field_name)
         dimensions = self._schema.dimensions_from(info, date)
         return json_dict, dimensions

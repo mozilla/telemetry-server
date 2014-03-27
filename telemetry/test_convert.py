@@ -90,6 +90,36 @@ test_anr = {
   "ver": 1
 }
 
+# See https://bugzilla.mozilla.org/show_bug.cgi?id=969101#c37
+test_fxos = {
+  "ver": 3,
+  "activationTime": 1395769944966,
+  "devicePixelRatio": 1,
+  "deviceinfo.firmware_revision": "",
+  "deviceinfo.hardware": "qcom",
+  "deviceinfo.os": "1.5.0.0-prerelease",
+  "deviceinfo.platform_build_id": "20140325104133",
+  "deviceinfo.platform_version": "31.0a1",
+  "deviceinfo.product_model": "ALCATEL ONE TOUCH FIRE",
+  "deviceinfo.software": "Boot2Gecko 1.5.0.0-prerelease",
+  "deviceinfo.update_channel": "default",
+  "icc": {
+      "mcc": "310",
+      "mnc": "410",
+      "spn": None
+  },
+  "locale": "en-US",
+  "network": {
+      "mcc": "310",
+      "mnc": "410",
+      "operator": "AT&T"
+  },
+  "pingID": "e426da9f-2a29-4e09-895b-c883903956cb",
+  "pingTime": 1395852542588,
+  "screenHeight": 480,
+  "screenWidth": 320
+}
+
 test_normal = {
   "info": {
     "flashVersion": "11,2,202,327",
@@ -192,6 +222,16 @@ try:
     assert dimensions[0] == "android-anr-report"
     assert test_anr["ver"] == Converter.VERSION_UNCONVERTED
     assert test_anr_converted["ver"] == Converter.VERSION_CONVERTED
+
+    test_fxos_converted, dimensions = converter.convert_json(json.dumps(test_fxos), "20131114")
+    assert dimensions[0] == "ftu"
+    assert test_fxos["ver"] == Converter.VERSION_FXOS_1_3
+    assert test_fxos_converted["ver"] == Converter.VERSION_CONVERTED
+    assert test_fxos_converted["info"]["reason"] == "ftu"
+    assert test_fxos_converted["info"]["appVersion"] == test_fxos["deviceinfo.platform_version"]
+    # Make sure we removed the pingID:
+    assert test_fxos["pingID"] == "e426da9f-2a29-4e09-895b-c883903956cb"
+    assert test_fxos_converted.get("pingID") is None
 
     test_normal_converted, dimensions = converter.convert_json(json.dumps(test_normal), "20131114")
     assert dimensions[0] == "saved-session"
