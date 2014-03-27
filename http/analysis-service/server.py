@@ -137,6 +137,28 @@ def get_jobs(owner=None):
         raise
     result.close()
 
+def get_job_logs(job):
+    # Sort logs in descending order (oldest first)
+    return sorted(get_job_files(job, "logs"), key=lambda f: f["url"], reverse=True)
+
+def get_job_files(job, path_snippet):
+    job_files = []
+    try:
+        # find the S3 bucket
+        data_bucket = s3.get_bucket(job.data_bucket, validate = False)
+        if data_bucket:
+            # calculate the log path
+            s3path = "{0}/{1}/".format(job.name, path_snippet)
+            urlbase = "https://s3-us-west-2.amazonaws.com"
+            urlprefixlen = len(urlbase) + len(job.data_bucket) + len(s3path) + 2
+            for key in data_bucket.list(prefix=s3path):
+                url = "{0}/{1}/{2}".format(urlbase, job.data_bucket, key.name)
+                title = url[urlprefixlen:]
+                job_files.append({"url": url, "title": title})
+    except Exception, e:
+        job_files.append({"url": "#", "title": "Error fetching job files: {}".format(e)})
+    return job_files
+
 def get_job(name=None, job_id=None):
     db = get_db()
     table = db['metadata'].tables['scheduled_jobs']
@@ -662,6 +684,41 @@ def delete_scheduled_job(job_id):
             update_crontab()
         return render_template('schedule_delete.html', result=result, job=job)
     return "Can't delete job {0}".format(job_id), 401
+
+@app.route("/schedule/logs/<job_id>", methods=["GET"])
+@login_required
+def view_job_logs(job_id):
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+
+    job = get_job(job_id=job_id)
+    if job is None:
+        return "No such job {0}".format(job_id), 404
+    elif job['owner'] == current_user.email:
+        # OK, this job is yours. Time to dig up the logs.
+        logs = get_job_logs(job)
+
+        # TODO: Add a "<delete>" link
+        #       Add a "<delete all logs>" link
+        return render_template('schedule_files.html', name="log", files=logs, job=job)
+    return "Can't view logs for job {0}".format(job_id), 401
+
+@app.route("/schedule/data/<job_id>", methods=["GET"])
+@login_required
+def view_job_data(job_id):
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+
+    job = get_job(job_id=job_id)
+    if job is None:
+        return "No such job {0}".format(job_id), 404
+    elif job['owner'] == current_user.email:
+        # OK, this job is yours. Time to dig up the logs.
+        files = get_job_files(job, "data")
+        return render_template('schedule_files.html', name="data", files=files, job=job)
+    return "Can't view data for job {0}".format(job_id), 401
 
 @app.route("/worker", methods=["GET"])
 @login_required

@@ -24,6 +24,10 @@
       <a href="{{ url_for('edit_scheduled_job', job_id=job.id) }}">Edit</a>
       |
       <a href="{{ url_for('delete_scheduled_job', job_id=job.id) }}">Delete</a>
+      |
+      <a href="{{ url_for('view_job_logs', job_id=job.id) }}">View Logs</a>
+      |
+      <a href="{{ url_for('view_job_data', job_id=job.id) }}">View Data</a>
      </div>
     </div>
    {% endfor %}

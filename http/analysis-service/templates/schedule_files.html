@@ -1,0 +1,30 @@
+{% import 'macros.html' as macros with context %}
+{% extends "base.html" %}
+
+{% block schedule_active %} class="active" {% endblock %}
+
+{% block title %}
+ <h1>View files for a scheduled job</h1>
+{% endblock %}
+
+{% block content %}
+ {% if files %}
+  <div class="files">
+   <p class="lead">
+    View {{ name }} output for job {{ job.id }}: <strong>{{ job.name }}</strong> below.
+   </p>
+   {% for f in files %}
+    <div class="row">
+     <p><a href="{{ f.url }}">{{ f.title|default(f.url) }}</a></p>
+    </div>
+   {% endfor %}
+  </div>
+  <hr/>
+ {% else %}
+  <p class="lead">
+   There is no {{ name }} output for job <strong>{{ job.name }}</strong> yet.
+   Either it hasn't successfully run, or it has always timed out.
+   Current time limit is {{ job.timeout_minutes }} minutes.
+  </p>
+ {% endif %}
+{% endblock %}
