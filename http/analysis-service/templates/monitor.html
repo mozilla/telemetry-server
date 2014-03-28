@@ -42,9 +42,7 @@
 <p>
 The default username is <code>ubuntu</code>, so you may SSH into the server
 using a command like:</p>
-<pre>
-$ ssh -i my-private-key ubuntu@{{ public_dns }}
-</pre>
+<p><span class="no-select"><code>$</code></span><code> ssh -i my-private-key ubuntu@{{ public_dns }}</code></p>
 
 <p>
  You may need to wait up to 5 minutes before SSH'ing in, the server will
@@ -55,17 +53,13 @@ $ ssh -i my-private-key ubuntu@{{ public_dns }}
  Configure AWS Commandline Tools:
 </p>
 <p>If you want to use the awscli tools: </p>
-<pre>
-$ mkdir .aws
-$ echo -e "[default]\nregion = us-west-2" > .aws/config
-</pre>
+<p><span class="no-select"><code>$</code></span><code> mkdir .aws</code></p>
+<p><span class="no-select"><code>$</code></span><code> echo -e "[default]\nregion = us-west-2" > .aws/config</code></p>
 
 <p>
  Now you can use awscli to list files:
 </p>
-<pre>
-$ aws s3 ls s3://telemetry-published-v1
-</pre>
+<p><span class="no-select"><code>$</code></span><code> aws s3 ls s3://telemetry-published-v1</code></p>
 
 <p class="lead">Further Reading:</p>
 <p>
