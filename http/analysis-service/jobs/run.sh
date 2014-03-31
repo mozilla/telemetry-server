@@ -10,3 +10,19 @@ elif [ ! -d "/home/ubuntu/telemetry-server" ]; then
 fi
 cd /home/ubuntu/telemetry-server
 /usr/bin/python -m provisioning.aws.launch_worker "$JOB_CONFIG"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 2 ]; then
+    # Job timed out.  Notify owner.
+    NOTIFY=monitoring/anomaly_detection/notify.py
+    FROM="telemetry-alerts@mozilla.com"
+    TO=$(/usr/bin/jq -r '.job_owner' < "$JOB_CONFIG")
+    JOB_NAME=$(/usr/bin/jq -r '.job_name' < "$JOB_CONFIG")
+    SUBJECT="Your scheduled Telemetry job '$JOB_NAME' timed out"
+    JOB_TIMEOUT=$(/usr/bin/jq -r '.job_timeout_minutes' < "$JOB_CONFIG")
+    /usr/bin/python $NOTIFY -f "$FROM" -t "$TO" -s "$SUBJECT" <<END
+Scheduled Telemetry job "$JOB_NAME" was forcibly terminated after the configured
+timeout ($JOB_TIMEOUT minutes).
+
+You can review the job's details at http://telemetry-dash.mozilla.org
+END
