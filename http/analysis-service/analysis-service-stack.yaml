@@ -249,7 +249,7 @@ Resources:
     # Support Rolling updates if/when we roll out changes
     UpdatePolicy:
         AutoScalingRollingUpdate:
-          MinInstancesInService: "1"
+          MinInstancesInService: "0"
           MaxBatchSize: "1"
           PauseTime: PT2M
 
