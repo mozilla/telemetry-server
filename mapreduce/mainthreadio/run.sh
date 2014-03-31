@@ -1,5 +1,6 @@
 #!/bin/bash
 
+cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
 sudo apt-get --yes install python-numpy
 
 OUTPUT=output
