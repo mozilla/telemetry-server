@@ -29,10 +29,13 @@ if __name__ == "__main__":
         if args.dry_run:
             print "Would not have sent any mail."
     else:
-        try:
-            config = json.load(args.config)
-        except:
-            traceback.print_exc()
+        if args.config:
+            try:
+                config = json.load(args.config)
+            except:
+                traceback.print_exc()
+                config = {}
+        else:
             config = {}
 
         if args.from_email:
