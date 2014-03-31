@@ -84,6 +84,7 @@ halt
     def run(self, instance):
         # TODO: periodically poll for the instance's state
         # if it doesn't die after some timeout, kill it.
+        self.timed_out = False
         timeout = self.config.get("job_timeout_minutes", 60)
         for i in range(1, timeout + 1):
             time.sleep(60)
@@ -96,12 +97,16 @@ halt
         print "After", i, "minutes, instance", instance.id, "was", instance.state
         if instance.state == 'running':
             print "Time to kill it."
+            self.timed_out = True
             self.terminate(self.conn, instance)
 
 def main():
     try:
         launcher = WorkerLauncher()
         launcher.go()
+        if launcher.timed_out:
+            # Exit with a special code if the job timed out.
+            return 2
         return 0
     except Exception, e:
         print "Error:", e
