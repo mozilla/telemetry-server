@@ -221,6 +221,7 @@ def update_configs(jobs=None):
             "skip_ssh": True,
             "skip_bootstrap": True,
             "job_name": job['name'],
+            "job_owner": job['owner'],
             "job_timeout_minutes": job['timeout_minutes'],
             "job_code_uri": job['code_uri'],
             "job_commandline": job['commandline'],
