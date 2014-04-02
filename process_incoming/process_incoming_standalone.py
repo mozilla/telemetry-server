@@ -342,6 +342,7 @@ class ReadRawStep(PipeStep):
                     # Convert data:
                     if self.converter is None:
                         serialized_data = data
+                        # TODO: Converter.VERSION_UNCONVERTED
                         data_version = 1
                     else:
                         parsed_data, parsed_dims = self.converter.convert_json(
@@ -355,6 +356,7 @@ class ReadRawStep(PipeStep):
                                             parsed_dims[i]))
                         serialized_data = self.converter.serialize(parsed_data)
                         dims = parsed_dims
+                        # TODO: Converter.VERSION_CONVERTED
                         data_version = 2
                     try:
                         # Write to persistent storage
