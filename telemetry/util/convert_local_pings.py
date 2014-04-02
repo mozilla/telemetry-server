@@ -54,10 +54,6 @@ def main():
     cache = RevisionCache(args.histogram_cache_dir, 'hg.mozilla.org')
     converter = Converter(cache, schema)
     storage = StorageLayout(schema, args.output_dir, 500000000)
-
-    # /Users/mark/Library/Application Support/Firefox/Profiles/a7xqbbbu.default
-    # /Users/mark/mozilla/github/telemetry-server/gunk/local_in
-
     ping_dir = args.input_dir
     ping_files = get_pings(ping_dir)
     if len(ping_files) == 0:
