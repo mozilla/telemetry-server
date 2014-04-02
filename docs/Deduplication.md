@@ -5,7 +5,7 @@ Firefox collects and submits data as follows.
 
 Each time the browser starts up, a new Telemetry ID is generated. Telemetry
 data is collected about the current session and is associated with that ID.
-Upon shutdown, the session data is written to disk using that session's ID. 
+Upon shutdown, the session data is written to disk using that session's ID.
 
 Once a day, the collected sessions' data is submitted as "saved-session"
 information, and the currently running session's data is submitted as
@@ -59,7 +59,7 @@ find duplicates)
 * where pos is position in file after readline()
 
 Idle-daily deduplication notes:
-* 86400(seconds in day)*250(submissions per second)*8(bytes per UUID)= 161mb -> 2gb for 12 weeks
+* 86400(seconds per day) x 250(submissions per second) x 8(bytes per UUID) = 161mb per day -> 2gb for 12 weeks
 * leveldb seems well-suited for this sort of workload, but a C++ implementation is trivial: https://github.com/tarasglek/tombstone_maker
 * skiplists(filename:offset)  are called tombstones
 * should have a compressed TOMBSTONE_INDEX for every IDLE_DAILY in a particular release. incoming_data EC2 job should generate those. Since these are basically sets they can be generated in parallel and UNIONED at the end of each EC2 job.
