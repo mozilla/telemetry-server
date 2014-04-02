@@ -68,7 +68,7 @@ Map-only jobs
 
 The `reduce` function is optional, so if you simply want to output a filtered subset of
 the data, you can write out the desired data from the `map` function, and simply omit the
-`reduce` function altogether. Each record written by `map_context.write(...)` will be 
+`reduce` function altogether. Each record written by `map_context.write(...)` will be
 written out to the final output file as-is.
 
 The `combine` function
@@ -84,7 +84,11 @@ If the reduce can be done incrementally, but not with the exact same code as the
 ```python
 def combine(key, values, reduce_context):
     # My fancy code here
+    # ... logic to reduce "values" to a single item ...
+    reduce_context.write(key, my_single_value)
 ```
+
+Your `combine` function should write out a single value to replace all the values for the key.
 
 Sometimes it's not feasible to do the reduce in pieces, so in that case, omit the `combine` function.
 
@@ -92,7 +96,7 @@ Setting up the reduce context
 -----------------------------
 
 There is an optional `setup_reduce(reduce_context)` function that, if implemented, allows
-you do do any initial configuration of the reduce context. It will be called before the 
+you do do any initial configuration of the reduce context. It will be called before the
 first invocation of the `reduce` function.
 
 This is where you would override the context's defaults for `field_separator` and
