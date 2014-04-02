@@ -124,6 +124,9 @@ class Converter:
 
     def convert_json(self, jsonstr, date):
         json_dict = json.loads(jsonstr)
+        return self.convert_obj(json_dict, date)
+
+    def convert_obj(self, json_dict, date):
         info = json_dict.get("info", None)
         # Check if the payload is already converted:
         if "ver" in json_dict:
