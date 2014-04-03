@@ -60,7 +60,7 @@ class StorageLayout:
         output_line = u"%s\t%s\n" % (uuid, jsonstr)
 
         dirname = os.path.dirname(filename)
-        if not os.path.exists(dirname):
+        if dirname != '' and not os.path.exists(dirname):
             fileutil.makedirs_concurrent(dirname)
 
         # According to SO, this should be atomic on a well-behaved OS:
