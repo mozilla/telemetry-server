@@ -3,6 +3,9 @@
 BASE=$(pwd)
 THIS_DIR=$(cd "`dirname "$0"`"; pwd)
 TELEMETRY_SERVER_DIR=$(cd "$THIS_DIR/../.."; pwd)
+if [ ! -d "$TELEMETRY_SERVER_DIR/mapreduce" ]; then
+    TELEMETRY_SERVER_DIR=$HOME/telemetry-server
+fi
 
 OUTPUT=${OUTPUT:-output}
 TODAY=$(date +%Y%m%d)
@@ -43,8 +46,9 @@ sed -r "s/__TARGET_DATE__/$TARGET_DATE/" \
 
 cd "$TELEMETRY_SERVER_DIR"
 
-OUTPUT_FILE=$BASE/$OUTPUT/fxosping_$TARGET.csv.tmp
+OUTPUT_FILE=$BASE/$OUTPUT/fxosping_$TARGET.csv
 
+echo "Starting fxosping export for $TARGET"
 python -m mapreduce.job "$THIS_DIR/fxosping.py" \
    --input-filter "$THIS_DIR/filter.json" \
    --num-mappers 16 \
@@ -53,3 +57,11 @@ python -m mapreduce.job "$THIS_DIR/fxosping.py" \
    --work-dir "$BASE/work" \
    --output "$OUTPUT_FILE" \
    --bucket "telemetry-published-v1"
+
+echo "Mapreduce job exited with code: $?"
+
+cd "$BASE"
+echo "Compressing output"
+gzip "$OUTPUT/fxosping_$TARGET.csv"
+
+echo "Done!"
