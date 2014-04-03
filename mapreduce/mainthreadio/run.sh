@@ -4,7 +4,7 @@ cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
 sudo apt-get --yes install python-numpy git
 
 rm -rf telemetry-server
-git clone https://github.com/vitillo/telemetry-server.git
+git clone https://github.com/mozilla/telemetry-server.git
 cd telemetry-server/mapreduce/mainthreadio
 
 OUTPUT=output
