@@ -1,5 +1,4 @@
 import argparse
-import os
 import psycopg2
 import sys
 import traceback
@@ -170,10 +169,11 @@ def insert_one_published_file(schema, bucket_name, key, cursor, dims=None):
 def main():
     parser = argparse.ArgumentParser(description="Populate/update the S3 file cache")
     parser.add_argument("--db-host", default="localhost")
-    parser.add_argument("--db-user", default=os.getlogin())
+    parser.add_argument("--db-user", default="telemetry")
     parser.add_argument("--db-port", type=int, default=5432)
     parser.add_argument("--db-pass")
-    parser.add_argument("--db-name", default=os.getlogin())
+    parser.add_argument("--db-name", default="telemetry")
+    parser.add_argument("--submission-date")
     parser.add_argument("--create-indexes", action="store_true")
     args = parser.parse_args()
 
@@ -204,19 +204,23 @@ def main():
             c.execute("CREATE INDEX published_files_{0}_idx ON published_files ({0});".format(field))
     conn.commit()
 
-    print "Checking if table is empty..."
-    c.execute("SELECT count(*) FROM published_files;");
-    countrow = c.fetchone();
-    if countrow[0] == 0:
-        print "Table was empty, populating from scratch"
-        update_published_files(conn, commit_batch_size=2000)
+    if args.submission_date:
+        print "Updating everything on or after", args.submission_date
+        update_published_files(conn, args.submission_date)
     else:
-        print "Table was not empty (contained", countrow[0], "rows). Checking last update date..."
-        c.execute("SELECT max(submission_date) FROM published_files;")
-        submissionrow = c.fetchone()
-        submission_date = submissionrow[0]
-        print "Updating everything on or after", submission_date
-        update_published_files(conn, submission_date)
+        print "Checking if table is empty..."
+        c.execute("SELECT count(*) FROM published_files;");
+        countrow = c.fetchone();
+        if countrow[0] == 0:
+            print "Table was empty, populating from scratch"
+            update_published_files(conn, commit_batch_size=2000)
+        else:
+            print "Table was not empty (contained", countrow[0], "rows). Checking last update date..."
+            c.execute("SELECT max(submission_date) FROM published_files;")
+            submissionrow = c.fetchone()
+            submission_date = submissionrow[0]
+            print "Updating everything on or after", submission_date
+            update_published_files(conn, submission_date)
 
     # Save the changes
     conn.commit()
