@@ -1,5 +1,6 @@
 import argparse
 import psycopg2
+import socket
 import sys
 import traceback
 from boto.s3.connection import S3Connection
@@ -72,7 +73,7 @@ INSERT INTO published_files (
 
 
 # Update all files on or after submission date.
-def update_published_files(conn, submission_date=None, commit_batch_size=200):
+def update_published_files(conn, submission_date=None, commit_batch_size=200, verbose=False):
     s3 = S3Connection()
     bucket_name = "telemetry-published-v1"
     bucket = s3.get_bucket(bucket_name)
@@ -85,39 +86,47 @@ def update_published_files(conn, submission_date=None, commit_batch_size=200):
     c = conn.cursor()
     # It's faster just to list everything than it is to do "list_partitions" on
     # such an unselective filter
-    for k in bucket.list():
-        total_count += 1
-        if total_count % 1000 == 0:
-            print "Looked at", total_count, "total records in", timer.delta_sec(start_time), "seconds, added", new_count, ". Last key was", k.name
+    done = False
+    last_key = ''
+    while not done:
         try:
-            try:
-                dims = schema.get_dimension_map(schema.get_dimensions(".", k.name))
-            except ValueError, e:
-                print "Skipping file with invalid dimensions:", k.name, "-", e
-                continue
-            if submission_date is None:
-                # Don't filter, just insert everything.
-                insert_one_published_file(schema, bucket_name, k, c, dims)
-                new_count += 1
-            else:
-                if dims["submission_date"] < submission_date:
-                    #print "Skipping old file:", k.name
-                    continue
-                c.execute(sql_file_exists, (k.name,))
-                result = c.fetchone()
-                if result[0] == 0:
-                    print "Adding new file:", k.name
-                    insert_one_published_file(schema, bucket_name, k, c, dims)
-                    new_count += 1
-                else:
-                    print "Skipping new but already present file:", k.name
+            for k in bucket.list(marker=last_key):
+                last_key = k.name
+                total_count += 1
+                if total_count % 5000 == 0:
+                    print "Looked at", total_count, "total records in", timer.delta_sec(start_time), "seconds, added", new_count, ". Last key was", k.name
+                try:
+                    try:
+                        dims = schema.get_dimension_map(schema.get_dimensions(".", k.name))
+                    except ValueError, e:
+                        print "Skipping file with invalid dimensions:", k.name, "-", e
+                        continue
+                    if submission_date is None:
+                        # Don't filter, just insert everything.
+                        insert_one_published_file(schema, bucket_name, k, c, dims)
+                        new_count += 1
+                    else:
+                        if dims["submission_date"] < submission_date:
+                            #print "Skipping old file:", k.name
+                            continue
+                        c.execute(sql_file_exists, (k.name,))
+                        result = c.fetchone()
+                        if result[0] == 0:
+                            print "Adding new file:", k.name
+                            insert_one_published_file(schema, bucket_name, k, c, dims)
+                            new_count += 1
 
-            if new_count > 0 and new_count % commit_batch_size == 0:
-                print "Inserted", new_count, "records, last one was", k.name
-                conn.commit()
-        except Exception, e:
-            print "Error with key", k.name, ":", e
+                    if new_count > 0 and new_count % commit_batch_size == 0:
+                        print "Inserted", new_count, "records, last one was", k.name
+                        conn.commit()
+                except Exception, e:
+                    print "Error with key", k.name, ":", e
+                    traceback.print_exc()
+            done = True
+        except socket.error, e:
+            print "Error listing keys:", e
             traceback.print_exc()
+            print "Continuing from last seen key:", last_key
     conn.commit()
     print "Overall, added", new_count, "of", total_count, "in", timer.delta_sec(start_time), "seconds"
 
@@ -175,6 +184,7 @@ def main():
     parser.add_argument("--db-name", default="telemetry")
     parser.add_argument("--submission-date")
     parser.add_argument("--create-indexes", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     connection_string = ""
