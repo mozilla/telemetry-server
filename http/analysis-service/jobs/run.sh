@@ -20,6 +20,11 @@ if [ $EXIT_CODE -eq 2 ]; then
     JOB_NAME=$(/usr/bin/jq -r '.job_name' < "$JOB_CONFIG")
     SUBJECT="Your scheduled Telemetry job '$JOB_NAME' timed out"
     JOB_TIMEOUT=$(/usr/bin/jq -r '.job_timeout_minutes' < "$JOB_CONFIG")
+    if [ -z "$TO" ]; then
+        # Send to a default address if the owner name is missing from the config.
+        TO=$FROM
+        SUBJECT="Scheduled Telemetry job '$JOB_NAME' timed out (and had no owner)"
+    fi
     /usr/bin/python $NOTIFY -f "$FROM" -t "$TO" -s "$SUBJECT" <<END
 Scheduled Telemetry job "$JOB_NAME" was forcibly terminated after the configured
 timeout ($JOB_TIMEOUT minutes).
