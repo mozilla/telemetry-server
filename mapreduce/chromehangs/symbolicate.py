@@ -18,6 +18,7 @@ help_message = '''
     Required:
         -i, --input <input_file>
         -o, --output <output_file>
+        -d, --date yyyymmdd
     Optional:
         -h, --help
 '''
@@ -58,14 +59,14 @@ def symbolicate(chromeHangsObj):
     except Exception as e:
         sys.stderr.write("Exception while reading server response to symbolication request: " + str(e) + "\n")
         return []
-    
+
     try:
         responseSymbols = json.loads(responseJson)
         # Sanity check
         if numStacks != len(responseSymbols):
             sys.stderr.write(str(len(responseSymbols)) + " hangs in response, " + str(numStacks) + " hangs in request!\n")
             return []
-        
+
         # Sanity check
         for hangIndex in range(0, numStacks):
             if version == 1:
@@ -80,10 +81,10 @@ def symbolicate(chromeHangsObj):
     except Exception as e:
         sys.stderr.write("Exception while parsing server response to forwarded request: " + str(e) + "\n")
         return []
-    
+
     return responseSymbols
 
-def process(input_file, output_file):
+def process(input_file, output_file, submission_date):
     if input_file == '-':
         fin = sys.stdin
     else:
@@ -91,31 +92,26 @@ def process(input_file, output_file):
 
     fout = gzip.open(output_file, "wb")
 
-    symbolication_erros = 0
+    symbolication_errors = 0
     symbolication_requests = 0
+    line_num = 0
 
     while True:
-        first_byte = fin.read(1)
-        if len(first_byte) == 0:
-            break;
-        assert len(first_byte) == 1
-
-        date = fin.read(8)
-        assert len(date) == 8
-
+        line_num += 1
         uuid = fin.read(36)
+        if len(uuid) == 0:
+            break
         assert len(uuid) == 36
-
-        first_uuid_byte = int(uuid[0:2], 16) - 128
-        if first_uuid_byte < 0:
-            first_uuid_byte += 256
-        assert first_uuid_byte == ord(first_byte)
 
         tab = fin.read(1)
         assert tab == '\t'
 
         jsonstr = fin.readline()
-        json_dict = json.loads(jsonstr)
+        try:
+            json_dict = json.loads(jsonstr)
+        except Exception, e:
+            print >> sys.stderr, "Error parsing json on line", line_num, ":", e
+            continue
 
         hang_stacks = []
         hangs = json_dict.get("chromeHangs")
@@ -124,7 +120,7 @@ def process(input_file, output_file):
           hang_stacks = symbolicate(hangs)
           symbolication_requests += 1
           if hang_stacks == []:
-              symbolication_erros += 1
+              symbolication_errors += 1
 
         late_writes_stacks = []
         writes = json_dict.get("lateWrites")
@@ -133,10 +129,11 @@ def process(input_file, output_file):
           late_writes_stacks = symbolicate(writes)
           symbolication_requests += 1
           if late_writes_stacks == []:
-              symbolication_erros += 1
+              symbolication_errors += 1
 
-        del json_dict["histograms"]
-        fout.write(date)
+        if "histograms" in json_dict:
+            del json_dict["histograms"]
+        fout.write(submission_date)
         fout.write("\t")
         fout.write(uuid)
         fout.write("\t")
@@ -153,40 +150,43 @@ def process(input_file, output_file):
             fout.write("\n----- END LATE WRITE STACK -----\n")
 
     fin.close()
-    fout.close()  
-    sys.stderr.write("Requested %s symbolications. Got %s errors." % (symbolication_requests, symbolication_erros))
+    fout.close()
+    sys.stderr.write("Requested %s symbolications. Got %s errors." % (symbolication_requests, symbolication_errors))
 
 class Usage(Exception):
-	def __init__(self, msg):
-		self.msg = msg
+    def __init__(self, msg):
+        self.msg = msg
 
 
 def main(argv=None):
-	if argv is None:
-		argv = sys.argv
-	try:
-		try:
-			opts, args = getopt.getopt(argv[1:], "hi:o:v", ["help", "input=", "output="])
-		except getopt.error, msg:
-			raise Usage(msg)
-		
-		input_file = None
-		output_file = None
-		# option processing
-		for option, value in opts:
-			if option == "-v":
-				verbose = True
-			if option in ("-h", "--help"):
-				raise Usage(help_message)
-			if option in ("-i", "--input"):
-			    input_file = value
-			if option in ("-o", "--output"):
-				output_file = value
-		process(input_file, output_file)
-	except Usage, err:
-	    print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
-	    print >> sys.stderr, " for help use --help"
-	    return 2
+    if argv is None:
+        argv = sys.argv
+    try:
+        try:
+            opts, args = getopt.getopt(argv[1:], "hi:o:d:v", ["help", "input=", "output=", "date="])
+        except getopt.error, msg:
+            raise Usage(msg)
+
+        input_file = None
+        output_file = None
+        submission_date = None
+        # option processing
+        for option, value in opts:
+            if option == "-v":
+                verbose = True
+            if option in ("-h", "--help"):
+                raise Usage(help_message)
+            if option in ("-i", "--input"):
+                input_file = value
+            if option in ("-o", "--output"):
+                output_file = value
+            if option in ("-d", "--date"):
+                submission_date = value
+        process(input_file, output_file, submission_date)
+    except Usage, err:
+        print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
+        print >> sys.stderr, " for help use --help"
+        return 2
 
 if __name__ == "__main__":
-	sys.exit(main())
+    sys.exit(main())
