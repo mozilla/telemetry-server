@@ -6,7 +6,6 @@ var http = require('http');
 var fs = require('fs');
 var os = require('os');
 var url = require('url');
-var geoip = null;
 
 var log_version = "v1";
 var config = {};
@@ -26,6 +25,9 @@ if (process.argv.length > 2) {
 var max_data_length = config.max_data_length || 200 * 1024;
 var max_path_length = config.max_path_length || 10 * 1024;
 
+// Even a full IPv6 address shouldn't be longer than this...
+var max_ip_length = config.max_ip_length || 100;
+
 // NOTE: This is for logging actual telemetry submissions
 var log_path = config.log_path || "./";
 var log_base = config.log_base || "telemetry.log";
@@ -35,9 +37,10 @@ var log_base = config.log_base || "telemetry.log";
 // See http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#658
 var url_prefix = config.url_prefix || "/submit/telemetry/";
 var url_prefix_len = url_prefix.length;
-if (config.enable_geoip) {
-  geoip = require('geoip-lite');
+var include_ip = false;
+if (config.include_request_ip) {
   log_version = "v2";
+  include_ip = true;
 }
 
 var max_log_size = config.max_log_size || 500 * 1024 * 1024;
@@ -168,24 +171,38 @@ function postRequest(request, response, process_time, callback) {
     // we don't want clients to retry these either.
     return finish(202, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes", process_time, 0);
   }
-  var data_offset = 15; // 1 sep + 2 path + 4 data + 8 timestamp
-  if (geoip) {
-    data_offset += 2; // 2 country
+
+  var client_ip = null;
+  var client_ip_length = 0;
+  var preamble_length = 15; // 1 sep + 2 path + 4 data + 8 timestamp
+  if (include_ip) {
+    preamble_length += 1; // length of client_ip
+    client_ip = get_client_ip(request);
+    client_ip_length = Buffer.byteLength(client_ip);
+    if (client_ip_length > max_ip_length) {
+      console.log("Received an excessively long ip address: " + client_ip_length + " > " + max_ip_length);
+      client_ip = "0.0.0.0";
+      client_ip_length = Buffer.byteLength(client_ip);
+    }
   }
-  var buffer_length = path_length + data_length + data_offset;
+  var buffer_length = client_ip_length + path_length + data_length + preamble_length;
   var buf = new Buffer(buffer_length);
 
   //console.log("Received " + data_length + " on " + url_path + " at " + request_time);
 
   // Write the preamble so we can read the pieces back out:
   // 1 byte record separator 0x1e (so we can find our spot if we encounter a corrupted record)
+  // [v2 only] 1 byte uint to indicate client ip address length
   // 2 byte uint to indicate path length
   // 4 byte uint to indicate data length
   // 8 byte uint to indicate request timestamp (epoch) split into two 4-byte writes
-  // 2 byte country code (or ?? if unknown)
-  buf.writeUInt8(0x1e, 0);
-  buf.writeUInt16LE(path_length, 1);
-  buf.writeUInt32LE(data_length, 3);
+  var buffer_location = 0;
+  buf.writeUInt8(0x1e, buffer_location);                  buffer_location += 1;
+  if (include_ip) {
+    buf.writeUInt8(client_ip_length, buffer_location);    buffer_location += 1;
+  }
+  buf.writeUInt16LE(path_length, buffer_location);        buffer_location += 2;
+  buf.writeUInt32LE(data_length, buffer_location);        buffer_location += 4;
 
   // Blast the lack of 64 bit int support :(
   // Standard bitwise operations treat numbers as 32-bit integers, so we have
@@ -193,31 +210,28 @@ function postRequest(request, response, process_time, callback) {
   // up to 2^53 so timestamps are safe for approximately a bazillion years.
   // This produces the equivalent of a single little-endian 64-bit value (and
   // can be read back out that way by other code).
-  buf.writeUInt32LE(request_time % 0x100000000, 7);
-  buf.writeUInt32LE(Math.floor(request_time / 0x100000000), 11);
+  buf.writeUInt32LE(request_time % 0x100000000, buffer_location);
+  buffer_location += 4;
+  buf.writeUInt32LE(Math.floor(request_time / 0x100000000), buffer_location);
+  buffer_location += 4;
 
-  if (geoip) {
-    // Write the 2-char country code:
-    var country = "??";
-    var client_ip = get_client_ip(request);
-    var geo = geoip.lookup(client_ip);
-    if (geo) {
-      country = geo.country;
-    } else if (client_ip) {
-      console.log("Geo lookup failed for " + client_ip);
-    }
-    buf.writeUInt8(country.charCodeAt(0), 15);
-    buf.writeUInt8(country.charCodeAt(1), 16);
+  if (buffer_location != preamble_length) {
+    // TODO: assert
+    console.log("ERROR: We should have written " + preamble_length +
+                "preamble bytes, but we actually wrote " + buffer_location);
   }
 
-  // now write the path:
-  buf.write(url_path, data_offset);
-  var pos = data_offset + path_length;
+  if (include_ip) {
+    // Write the client ip address if need be:
+    buf.write(client_ip, buffer_location);  buffer_location += client_ip_length;
+  }
+  // Now write the path:
+  buf.write(url_path, buffer_location);     buffer_location += path_length;
 
-  // Write the data as it comes in
+  // Write the data as it comes in:
   request.on('data', function(data) {
-    data.copy(buf, pos);
-    pos += data.length;
+    data.copy(buf, buffer_location);
+    buffer_location += data.length;
   });
 
   request.on('end', function() {
