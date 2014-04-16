@@ -6,6 +6,7 @@ var http = require('http');
 var fs = require('fs');
 var os = require('os');
 var url = require('url');
+var geoip = null;
 
 var log_version = "v1";
 var config = {};
@@ -34,12 +35,17 @@ var log_base = config.log_base || "telemetry.log";
 // See http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#658
 var url_prefix = config.url_prefix || "/submit/telemetry/";
 var url_prefix_len = url_prefix.length;
-var log_file = unique_name(log_base);
-var log_time = new Date().getTime();
-var log_size = 0;
+if (config.enable_geoip) {
+  geoip = require('geoip-lite');
+  log_version = "v2";
+}
 
 var max_log_size = config.max_log_size || 500 * 1024 * 1024;
 var max_log_age_ms = config.max_log_age_ms || 5 * 60 * 1000; // 5 minutes in milliseconds
+
+var log_file = unique_name(log_base);
+var log_time = new Date().getTime();
+var log_size = 0;
 
 // We keep track of "last touched" and then rotate after current logs have
 // been untouched for max_log_age_ms.
@@ -70,6 +76,18 @@ function finish(code, request, response, msg, start_time, bytes_stored) {
   //       listen for SIGHUP and close the log file so it can be rotated by
   //       logrotate
   fs.appendFileSync(request_log_file, log_message + "\n");
+}
+
+// Get the IP Address of the client. If we're receiving forwarded requests from
+// a load balancer, use the appropriate header value instead.
+function get_client_ip(request) {
+  var client_ip = null;
+  if (request.headers['x-forwarded-for']) {
+    client_ip = request.headers['x-forwarded-for'];
+  } else {
+    client_ip = request.connection.remoteAddress;
+  }
+  return client_ip;
 }
 
 // We don't want to do this calculation within rotate() because it is also
@@ -151,6 +169,9 @@ function postRequest(request, response, process_time, callback) {
     return finish(202, request, response, "Path too long (" + path_length + " bytes). Limit is " + max_path_length + " bytes", process_time, 0);
   }
   var data_offset = 15; // 1 sep + 2 path + 4 data + 8 timestamp
+  if (geoip) {
+    data_offset += 2; // 2 country
+  }
   var buffer_length = path_length + data_length + data_offset;
   var buf = new Buffer(buffer_length);
 
@@ -161,6 +182,7 @@ function postRequest(request, response, process_time, callback) {
   // 2 byte uint to indicate path length
   // 4 byte uint to indicate data length
   // 8 byte uint to indicate request timestamp (epoch) split into two 4-byte writes
+  // 2 byte country code (or ?? if unknown)
   buf.writeUInt8(0x1e, 0);
   buf.writeUInt16LE(path_length, 1);
   buf.writeUInt32LE(data_length, 3);
@@ -173,6 +195,20 @@ function postRequest(request, response, process_time, callback) {
   // can be read back out that way by other code).
   buf.writeUInt32LE(request_time % 0x100000000, 7);
   buf.writeUInt32LE(Math.floor(request_time / 0x100000000), 11);
+
+  if (geoip) {
+    // Write the 2-char country code:
+    var country = "??";
+    var client_ip = get_client_ip(request);
+    var geo = geoip.lookup(client_ip);
+    if (geo) {
+      country = geo.country;
+    } else if (client_ip) {
+      console.log("Geo lookup failed for " + client_ip);
+    }
+    buf.writeUInt8(country.charCodeAt(0), 15);
+    buf.writeUInt8(country.charCodeAt(1), 16);
+  }
 
   // now write the path:
   buf.write(url_path, data_offset);
