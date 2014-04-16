@@ -27,6 +27,12 @@ var max_path_length = config.max_path_length || 10 * 1024;
 
 // Even a full IPv6 address shouldn't be longer than this...
 var max_ip_length = config.max_ip_length || 100;
+if (max_ip_length > 255) {
+  // We need to store len(client_ip) in 1 unsigned byte, so we're limited to 255
+  console.log("Max supported value for 'max_ip_length' is 255 (you specified " +
+              max_ip_length + "). Using 255.");
+  max_ip_length = 255;
+}
 
 // NOTE: This is for logging actual telemetry submissions
 var log_path = config.log_path || "./";
