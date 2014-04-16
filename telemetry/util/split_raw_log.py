@@ -50,7 +50,7 @@ def main():
         path = unicode(path, errors="replace")
         data = unicode(data, errors="replace")
 
-        bytes_read += len_path + len_data + fileutil.RECORD_PREAMBLE_LENGTH
+        bytes_read += len_path + len_data + fileutil.RECORD_PREAMBLE_LENGTH["v1"]
         #print "Path for record", record_count, path, "length of data:", len_data, "data:", data[0:5] + "..."
 
         path_components = path.split("/")

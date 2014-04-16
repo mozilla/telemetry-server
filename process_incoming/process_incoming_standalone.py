@@ -270,9 +270,10 @@ class ReadRawStep(PipeStep):
             record_count = 0
             bytes_read = 0
             start = now()
+            # TODO: handle v1 and v2
             for len_path, len_data, timestamp, path, data, err in fileutil.unpack(raw_file):
                 record_count += 1
-                common_bytes = len_path + fileutil.RECORD_PREAMBLE_LENGTH
+                common_bytes = len_path + fileutil.RECORD_PREAMBLE_LENGTH["v1"]
                 current_bytes = common_bytes + len_data
                 current_bytes_uncompressed = common_bytes + len(data)
                 bytes_read += current_bytes

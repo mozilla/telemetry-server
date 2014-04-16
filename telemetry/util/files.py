@@ -12,7 +12,6 @@ import StringIO as StringIO
 import os
 import errno
 
-
 # might as well return the size too...
 def md5file(filename, chunksize=8192):
     md5 = hashlib.md5()
@@ -26,10 +25,30 @@ def md5file(filename, chunksize=8192):
             size += len(chunk)
     return md5.hexdigest(), size
 
-# 15 == 1 separator + 2 len_path + 4 len_data + 8 timestamp
-RECORD_PREAMBLE_LENGTH = 15
 
-def unpack(filename, raw=False, verbose=False):
+RECORD_PREAMBLE_LENGTH = {
+    "v1": 15, # 1 separator + 2 len_path + 4 len_data + 8 timestamp
+    "v2": 16  # 1 separator + 1 len_ip + 2 len_path + 4 len_data + 8 timestamp
+}
+
+def detect_file_version(filename):
+    for version in RECORD_PREAMBLE_LENGTH.keys():
+        print "checking .{}.".format(version)
+        if ".{}.".format(version) in filename:
+            return version
+    raise ValueError("Could not automatically detect file version in filename: {}".format(filename))
+
+def unpack_auto(filename, raw=False, verbose=False):
+    version = detect_file_version(filename)
+    if version == "v2":
+        for i, p, d, ts, ip, path, data, error in unpack(filename, raw, verbose, version):
+            yield i, p, d, ts, ip, path, data, error
+    else:
+        # try v1 by default
+        for p, d, ts, path, data, error in unpack(filename, raw, verbose, version):
+            yield p, d, ts, path, data, error
+
+def unpack(filename, raw=False, verbose=False, file_version="v1"):
     fin = open(filename, "rb")
 
     record_count = 0
@@ -51,15 +70,22 @@ def unpack(filename, raw=False, verbose=False):
             total_bytes_skipped += bytes_skipped
             bytes_skipped = 0
 
-        # Read 2 + 4 + 8 = 14 bytes
-        lengths = fin.read(14)
+        # Read the rest of the preamble (after the 1 we already read)
+        preamble_length = RECORD_PREAMBLE_LENGTH[file_version] - 1
+        lengths = fin.read(preamble_length)
         if lengths == '':
             break
         record_count += 1
         # The "<" is to force it to read as Little-endian to match the way it's
         # written. This is the "native" way in linux too, but might as well make
         # sure we read it back the same way.
-        len_path, len_data, timestamp = struct.unpack("<HIQ", lengths)
+        if file_version == "v1":
+            len_path, len_data, timestamp = struct.unpack("<HIQ", lengths)
+        elif file_version == "v2":
+            len_ip, len_path, len_data, timestamp = struct.unpack("<BHIQ", lengths)
+            client_ip = fin.read(len_ip)
+        else:
+            raise ValueError("Unrecognized file version: {}".format(file_version))
         path = fin.read(len_path)
         data = fin.read(len_data)
         error = None
@@ -76,7 +102,10 @@ def unpack(filename, raw=False, verbose=False):
                     # Probably wasn't gzipped, pass along the error.
                     bad_records += 1
                     error = e
-        yield len_path, len_data, timestamp, path, data, error
+        if file_version == "v1":
+            yield len_path, len_data, timestamp, path, data, error
+        elif file_version == "v2":
+            yield len_ip, len_path, len_data, timestamp, client_ip, path, data, error
 
     if bytes_skipped > 0:
         if verbose:

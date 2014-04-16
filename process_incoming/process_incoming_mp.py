@@ -184,7 +184,7 @@ class ReadRawStep(PipeStep):
                     # Raw JSON, make sure we treat it as unicode.
                     data = unicode(data, errors="replace")
 
-                current_bytes = len_path + len_data + fileutil.RECORD_PREAMBLE_LENGTH
+                current_bytes = len_path + len_data + fileutil.RECORD_PREAMBLE_LENGTH["v1"]
                 bytes_read += current_bytes
                 self.bytes_read += current_bytes
                 path_components = path.split("/")
