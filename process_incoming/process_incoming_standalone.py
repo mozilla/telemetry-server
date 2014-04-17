@@ -270,43 +270,43 @@ class ReadRawStep(PipeStep):
             record_count = 0
             bytes_read = 0
             start = now()
-            # TODO: handle v1 and v2
-            for len_path, len_data, timestamp, path, data, err in fileutil.unpack(raw_file):
+            file_version = fileutil.detect_file_version(raw_file)
+            for unpacked in fileutil.unpack(raw_file, file_version=file_version):
                 record_count += 1
-                common_bytes = len_path + fileutil.RECORD_PREAMBLE_LENGTH["v1"]
-                current_bytes = common_bytes + len_data
-                current_bytes_uncompressed = common_bytes + len(data)
+                common_bytes = unpacked.len_path + fileutil.RECORD_PREAMBLE_LENGTH[file_version]
+                current_bytes = common_bytes + unpacked.len_data
+                current_bytes_uncompressed = common_bytes + len(unpacked.data)
                 bytes_read += current_bytes
-                if err:
+                if unpacked.error:
                     self.log("ERROR: Found corrupted data for record {0} in " \
                              "{1} path: {2} Error: {3}".format(record_count,
-                                 raw_file, path, err))
+                                 raw_file, unpacked.path, unpacked.error))
                     self.stats.increment(records_read=1,
                             bytes_read=current_bytes,
                             bytes_uncompressed=current_bytes_uncompressed,
                             bad_records=1, bad_record_type="corrupted_data")
                     continue
-                if len(data) == 0:
+                if len(unpacked.data) == 0:
                     self.log("WARN: Found empty data for record {0} in " \
                              "{2} path: {2}".format(record_count, raw_file,
-                                 path))
+                                 unpacked.path))
                     self.stats.increment(records_read=1,
                             bytes_read=current_bytes,
                             bytes_uncompressed=current_bytes_uncompressed,
                             bad_records=1, bad_record_type="empty_data")
                     continue
 
-                submission_date = ts_to_yyyymmdd(timestamp)
-                path = unicode(path, errors="replace")
+                submission_date = ts_to_yyyymmdd(unpacked.timestamp)
+                path = unicode(unpacked.path, errors="replace")
 
-                if data[0] != "{":
+                if unpacked.data[0] != "{":
                     # Data looks weird, should be JSON.
                     self.log("Warning: Found unexpected data for record {0}" \
                              " in {1} path: {2} data:\n{3}".format(record_count,
-                                 raw_file, path, data))
+                                 raw_file, path, unpacked.data))
                 else:
                     # Raw JSON, make sure we treat it as unicode.
-                    data = unicode(data, errors="replace")
+                    unpacked.data = unicode(unpacked.data, errors="replace")
 
                 path_components = path.split("/")
                 if len(path_components) != self.expected_dim_count:
@@ -342,12 +342,12 @@ class ReadRawStep(PipeStep):
                 try:
                     # Convert data:
                     if self.converter is None:
-                        serialized_data = data
+                        serialized_data = unpacked..data
                         # TODO: Converter.VERSION_UNCONVERTED
                         data_version = 1
                     else:
                         parsed_data, parsed_dims = self.converter.convert_json(
-                                data, dims[-1])
+                                unpacked.data, dims[-1])
                         # TODO: take this out if it's too slow
                         for i in range(len(dims)):
                             if dims[i] != parsed_dims[i]:
@@ -373,7 +373,7 @@ class ReadRawStep(PipeStep):
                                 str(e), "ERROR Writing to output file:",
                                 "write_failed")
                 except BadPayloadError, e:
-                    self.write_bad_record(key, dims, data, e.msg,
+                    self.write_bad_record(key, dims, unpacked.data, e.msg,
                             "Bad Payload:", "bad_payload")
                 except Exception, e:
                     err_message = str(e)
@@ -385,16 +385,16 @@ class ReadRawStep(PipeStep):
                     elif err_message == "Invalid revision URL: /rev/":
                         # We do want to log these payloads, but we don't want
                         # the full stack trace.
-                        self.write_bad_record(key, dims, data, err_message,
+                        self.write_bad_record(key, dims, unpacked.data, err_message,
                                 "Conversion Error", "missing_revision_repo")
                     # Don't split this long string - we want to be able to find it in the code
                     elif err_message.startswith("JSONDecodeError: Invalid control character"):
-                        self.write_bad_record(key, dims, data, err_message,
+                        self.write_bad_record(key, dims, unpacked.data, err_message,
                                 "Conversion Error", "invalid_control_char")
                     else:
                         # TODO: Recognize other common failure modes and handle
                         #       them gracefully.
-                        self.write_bad_record(key, dims, data, err_message,
+                        self.write_bad_record(key, dims, unpacked.data, err_message,
                                 "Conversion Error", "conversion_error")
                         self.log(traceback.format_exc())
 

@@ -12,6 +12,20 @@ import StringIO as StringIO
 import os
 import errno
 
+
+class UnpackedRecord():
+    def __init__(self, len_ip=0, len_path=0, len_data=0, timestamp=0, ip=None,
+                 path=None, data=None, error=None):
+        self.len_ip = len_ip
+        self.len_path = len_path
+        self.len_data = len_data
+        self.timestamp = timestamp
+        self.ip = ip
+        self.path = path
+        self.data = data
+        self.error = error
+
+
 # might as well return the size too...
 def md5file(filename, chunksize=8192):
     md5 = hashlib.md5()
@@ -33,24 +47,14 @@ RECORD_PREAMBLE_LENGTH = {
 
 def detect_file_version(filename):
     for version in RECORD_PREAMBLE_LENGTH.keys():
-        print "checking .{}.".format(version)
         if ".{}.".format(version) in filename:
             return version
     raise ValueError("Could not automatically detect file version in filename: {}".format(filename))
 
-def unpack_auto(filename, raw=False, verbose=False):
-    version = detect_file_version(filename)
-    if version == "v2":
-        for i, p, d, ts, ip, path, data, error in unpack(filename, raw, verbose, version):
-            yield i, p, d, ts, ip, path, data, error
-    else:
-        # try v1 by default
-        for p, d, ts, path, data, error in unpack(filename, raw, verbose, version):
-            yield p, d, ts, path, data, error
-
-def unpack(filename, raw=False, verbose=False, file_version="v1"):
+def unpack(filename, raw=False, verbose=False, file_version=None):
     fin = open(filename, "rb")
-
+    if file_version is None:
+        file_version = detect_file_version(filename)
     record_count = 0
     bad_records = 0
     bytes_skipped = 0
@@ -81,6 +85,8 @@ def unpack(filename, raw=False, verbose=False, file_version="v1"):
         # sure we read it back the same way.
         if file_version == "v1":
             len_path, len_data, timestamp = struct.unpack("<HIQ", lengths)
+            len_ip = 0
+            client_ip = None
         elif file_version == "v2":
             len_ip, len_path, len_data, timestamp = struct.unpack("<BHIQ", lengths)
             client_ip = fin.read(len_ip)
@@ -102,10 +108,7 @@ def unpack(filename, raw=False, verbose=False, file_version="v1"):
                     # Probably wasn't gzipped, pass along the error.
                     bad_records += 1
                     error = e
-        if file_version == "v1":
-            yield len_path, len_data, timestamp, path, data, error
-        elif file_version == "v2":
-            yield len_ip, len_path, len_data, timestamp, client_ip, path, data, error
+        yield UnpackedRecord(len_ip, len_path, len_data, timestamp, client_ip, path, data, error)
 
     if bytes_skipped > 0:
         if verbose:
