@@ -342,7 +342,7 @@ class ReadRawStep(PipeStep):
                 try:
                     # Convert data:
                     if self.converter is None:
-                        serialized_data = unpacked..data
+                        serialized_data = unpacked.data
                         # TODO: Converter.VERSION_UNCONVERTED
                         data_version = 1
                     else:
