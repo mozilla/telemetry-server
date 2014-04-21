@@ -22,17 +22,12 @@ if (process.argv.length > 2) {
   config.motd = "Telemetry Server (default configuration)";
 }
 
-var max_data_length = config.max_data_length || 200 * 1024;
-var max_path_length = config.max_path_length || 10 * 1024;
+// Make sure we can store the maxiumum lengths in the expected number of bytes:
+var max_data_length = check_max(config.max_data_length || 200 * 1024, 4, "max_data_length");
+var max_path_length = check_max(config.max_path_length || 10 * 1024, 2, "max_path_length");
 
 // Even a full IPv6 address shouldn't be longer than this...
-var max_ip_length = config.max_ip_length || 100;
-if (max_ip_length > 255) {
-  // We need to store len(client_ip) in 1 unsigned byte, so we're limited to 255
-  console.log("Max supported value for 'max_ip_length' is 255 (you specified " +
-              max_ip_length + "). Using 255.");
-  max_ip_length = 255;
-}
+var max_ip_length = check_max(config.max_ip_length || 100, 1, "max_ip_length");
 
 // NOTE: This is for logging actual telemetry submissions
 var log_path = config.log_path || "./";
@@ -62,6 +57,17 @@ var timer = setInterval(function(){ rotate_time(); }, max_log_age_ms);
 
 // NOTE: This is for logging request metadata (for monitoring and stats)
 var request_log_file = config.stats_log_file || "/var/log/telemetry/telemetry-server.log";
+
+// Ensure that the given value can be stored in the given number of bytes.
+function check_max(value, num_bytes, label) {
+  var max = Math.pow(2, num_bytes * 8) - 1;
+  if (value > max) {
+    console.log("Max supported value for '" + label + "' is " + max +
+      " (you specified " + value + "). Using " + max + ".");
+    return max;
+  }
+  return value;
+}
 
 function finish(code, request, response, msg, start_time, bytes_stored) {
   var duration = process.hrtime(start_time);
