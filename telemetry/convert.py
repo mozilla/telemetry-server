@@ -20,6 +20,11 @@ import traceback
 import persist
 from datetime import date
 import time
+try:
+    import GeoIP
+    geo_available = True
+except ImportError:
+    geo_available = False
 
 
 class BadPayloadError(Exception):
@@ -36,9 +41,18 @@ class Converter:
         self._histocache = {}
         self._cache = cache
         self._schema = schema
+        if geo_available:
+            self._geoip = GeoIP.new(GeoIP.GEOIP_MEMORY_CACHE)
+        else:
+            self._geoip = None
 
     def map_key(self, histograms, key):
         return key
+
+    def get_geo_country(self, ip):
+        if self._geoip:
+            return self._geoip.country_code_by_addr(ip)
+        return None
 
     def map_value(self, histogram, val):
         rewritten = []
@@ -122,11 +136,11 @@ class Converter:
             rewritten[new_key] = new_value
         return rewritten
 
-    def convert_json(self, jsonstr, date):
+    def convert_json(self, jsonstr, date, ip=None):
         json_dict = json.loads(jsonstr)
-        return self.convert_obj(json_dict, date)
+        return self.convert_obj(json_dict, date, ip)
 
-    def convert_obj(self, json_dict, date):
+    def convert_obj(self, json_dict, date, ip=None):
         info = json_dict.get("info", None)
         # Check if the payload is already converted:
         if "ver" in json_dict:
@@ -174,6 +188,21 @@ class Converter:
 
         if info is None:
             raise ValueError("Missing in payload: info")
+
+        # Look up the country if needed:
+        if ip is not None and info["appName"] == "FirefoxOS":
+            print "Performing geoip lookup:", ip, info["appName"]
+            country = None
+            try:
+                country = self.get_geo_country(ip)
+            except Exception, e:
+                sys.stderr.write("WARN: GeoIP Country lookup failed for " \
+                    "IP '{0}': {1}\n".format(ip, e))
+            if country is None:
+                country = "??"
+            json_dict["info"]["geoCountry"] = country
+        else:
+            print "Skipping geoip lookup:", ip, info["appName"]
         # Get dimensions in order from schema (field_name)
         dimensions = self._schema.dimensions_from(info, date)
         return json_dict, dimensions
