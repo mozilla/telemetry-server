@@ -78,7 +78,7 @@ def detect_file_version(filename, simple_detection=False):
             pass
     if detected_certain:
         return detected_version
-    else:
+    elif detected_version is not None:
         # TODO: warn and/or fall back to simple detection.
         return detected_version
 

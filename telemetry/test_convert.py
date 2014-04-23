@@ -249,8 +249,8 @@ class ConvertTest(unittest.TestCase):
         for h in expected_converted_histograms.keys():
             self.assertEqual(rewritten[h], expected_converted_histograms[h])
 
-    def convert(self, raw, submission_date="20131114"):
-        return ConvertTest.converter.convert_json(json.dumps(raw), submission_date)
+    def convert(self, raw, submission_date="20131114", ip=None):
+        return ConvertTest.converter.convert_json(json.dumps(raw), submission_date, ip)
 
     def test_anr(self):
         raw = self.get_payload("anr")
@@ -260,6 +260,7 @@ class ConvertTest(unittest.TestCase):
         self.assertEqual(dimensions[0], "android-anr-report")
         self.assertEqual(raw["ver"], Converter.VERSION_UNCONVERTED)
         self.assertEqual(converted["ver"], Converter.VERSION_CONVERTED)
+        self.assertIs(converted["info"].get("geoCountry"), None)
 
     def test_fxos(self):
         raw = self.get_payload("fxos")
@@ -268,6 +269,7 @@ class ConvertTest(unittest.TestCase):
         self.assertEqual(raw["ver"], Converter.VERSION_FXOS_1_3)
         self.assertEqual(converted["ver"], Converter.VERSION_CONVERTED)
         self.assertEqual(converted["info"]["reason"], "ftu")
+        self.assertEqual(converted["info"]["appName"], "FirefoxOS")
         self.assertEqual(converted["info"]["appVersion"], raw["deviceinfo.platform_version"])
         # Make sure we removed the pingID:
         self.assertEqual(raw["pingID"], "e426da9f-2a29-4e09-895b-c883903956cb")
@@ -284,6 +286,55 @@ class ConvertTest(unittest.TestCase):
         expected_converted_histograms = self.get_converted_histograms()
         for h in expected_converted_histograms.keys():
             self.assertEqual(converted["histograms"][h], expected_converted_histograms[h])
+        self.assertIs(converted["info"].get("geoCountry"), None)
+
+    def test_plain_geo(self):
+        self.assertEqual(ConvertTest.converter.get_geo_country("8.8.8.8"), "US")
+        self.assertEqual(ConvertTest.converter.get_geo_country("2001:4860:4860::8888"), "US")
+        self.assertIs(ConvertTest.converter.get_geo_country("127.0.0.1"), None)
+        self.assertIs(ConvertTest.converter.get_geo_country("::1"), None)
+
+    def test_convert_geo(self):
+        # Google public DNS
+        google_ipv4 = "8.8.8.8"
+        google_ipv6 = "2001:4860:4860::8888"
+        local_ipv4 = "127.0.0.1"
+        local_ipv6 = "::1"
+
+        # First, test a normal Firefox payload
+        raw = self.get_payload("normal")
+        for ip in [google_ipv4, google_ipv6, local_ipv4, local_ipv6]:
+            converted, dimensions = self.convert(raw, ip=ip)
+            self.assertEqual(converted["ver"], Converter.VERSION_CONVERTED)
+            # Firefox payloads should not be geocoded
+            self.assertNotIn("geoCountry", converted["info"])
+
+        # Now, test a FirefoxOS payload
+        raw = self.get_payload("fxos")
+        for ip in [google_ipv4, google_ipv6]:
+            converted, dimensions = self.convert(raw, ip=ip)
+            self.assertEqual(converted["ver"], Converter.VERSION_CONVERTED)
+            self.assertEqual(converted["info"]["appName"], "FirefoxOS")
+            self.assertEqual(converted["info"].get("geoCountry"), "US")
+
+        for ip in [local_ipv4, local_ipv6]:
+            converted, dimensions = self.convert(raw, ip=ip)
+            self.assertEqual(converted["ver"], Converter.VERSION_CONVERTED)
+            self.assertEqual(converted["info"]["appName"], "FirefoxOS")
+            self.assertEqual(converted["info"].get("geoCountry"), "??")
+
+    def test_convert_bad_geo(self):
+        raw = self.get_payload("fxos")
+        for ip in ["0.0.0.0", "bogus", "", 100]:
+            converted, dimensions = self.convert(raw, ip=ip)
+            self.assertEqual(converted["ver"], Converter.VERSION_CONVERTED)
+            self.assertEqual(converted["info"].get("geoCountry"), "??")
+
+        # if ip is None, we skip the lookup altogether.
+        converted, dimensions = self.convert(raw, ip=None)
+        self.assertEqual(converted["ver"], Converter.VERSION_CONVERTED)
+        # Firefox payloads should not be geocoded
+        self.assertNotIn("geoCountry", converted["info"])
 
     def test_bad_payload_bogus_bucket_value(self):
         raw = self.get_payload("normal")
