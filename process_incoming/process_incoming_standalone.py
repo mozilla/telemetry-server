@@ -270,7 +270,9 @@ class ReadRawStep(PipeStep):
             record_count = 0
             bytes_read = 0
             start = now()
-            file_version = fileutil.detect_file_version(raw_file)
+            file_version = fileutil.detect_file_version(raw_file, simple_detection=True)
+            self.log("Detected version {0} for file {1}".format(file_version,
+                     raw_file))
             for unpacked in fileutil.unpack(raw_file, file_version=file_version):
                 record_count += 1
                 common_bytes = unpacked.len_path + fileutil.RECORD_PREAMBLE_LENGTH[file_version]
