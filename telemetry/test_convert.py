@@ -287,7 +287,13 @@ class ConvertTest(unittest.TestCase):
             self.assertEqual(converted["histograms"][h], expected_converted_histograms[h])
         self.assertIs(converted["info"].get("geoCountry"), None)
 
-    def test_geo(self):
+    def test_plain_geo(self):
+        self.assertEqual(ConvertTest.converter.get_geo_country("8.8.8.8"), "US")
+        self.assertEqual(ConvertTest.converter.get_geo_country("2001:4860:4860::8888"), "US")
+        self.assertIs(ConvertTest.converter.get_geo_country("127.0.0.1"), None)
+        self.assertIs(ConvertTest.converter.get_geo_country("::1"), None)
+
+    def test_convert_geo(self):
         # Google public DNS
         google_ipv4 = "8.8.8.8"
         google_ipv6 = "2001:4860:4860::8888"
@@ -316,7 +322,7 @@ class ConvertTest(unittest.TestCase):
             self.assertEqual(converted["info"]["appName"], "FirefoxOS")
             self.assertEqual(converted["info"].get("geoCountry"), "??")
 
-    def test_bad_geo(self):
+    def test_convert_bad_geo(self):
         raw = self.get_payload("fxos")
         for ip in ["0.0.0.0", "bogus", "", 100]:
             converted, dimensions = self.convert(raw, ip=ip)

@@ -21,7 +21,8 @@ import persist
 from datetime import date
 import time
 try:
-    import GeoIP
+    import geoip2.database
+    from geoip2.errors import AddressNotFoundError
     geo_available = True
 except ImportError:
     geo_available = False
@@ -36,13 +37,14 @@ class Converter:
     VERSION_UNCONVERTED = 1
     VERSION_CONVERTED = 2
     VERSION_FXOS_1_3 = 3
+    GEOIP_COUNTRY_PATH = "/usr/local/var/GeoIP/GeoLite2-Country.mmdb"
 
     def __init__(self, cache, schema):
         self._histocache = {}
         self._cache = cache
         self._schema = schema
         if geo_available:
-            self._geoip = GeoIP.new(GeoIP.GEOIP_MEMORY_CACHE)
+            self._geoip = geoip2.database.Reader(Converter.GEOIP_COUNTRY_PATH)
         else:
             self._geoip = None
 
@@ -50,9 +52,13 @@ class Converter:
         return key
 
     def get_geo_country(self, ip):
+        country = None
         if self._geoip:
-            return self._geoip.country_code_by_addr(ip)
-        return None
+            try:
+                country = self._geoip.country(ip).country.iso_code
+            except AddressNotFoundError, e:
+                pass
+        return country
 
     def map_value(self, histogram, val):
         rewritten = []
@@ -191,7 +197,6 @@ class Converter:
 
         # Look up the country if needed:
         if ip is not None and info["appName"] == "FirefoxOS":
-            print "Performing geoip lookup:", ip, info["appName"]
             country = None
             try:
                 country = self.get_geo_country(ip)
@@ -201,8 +206,6 @@ class Converter:
             if country is None:
                 country = "??"
             json_dict["info"]["geoCountry"] = country
-        else:
-            print "Skipping geoip lookup:", ip, info["appName"]
         # Get dimensions in order from schema (field_name)
         dimensions = self._schema.dimensions_from(info, date)
         return json_dict, dimensions
