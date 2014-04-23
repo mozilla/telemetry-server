@@ -6,5 +6,6 @@
   "log_path": "/mnt/telemetry/data",
   "max_log_age_ms": 300000,
   "max_log_size": 524288000,
+  "include_request_ip": true,
   "stats_log_file": "/var/log/telemetry/telemetry-server.log"
 }
