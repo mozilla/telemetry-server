@@ -45,16 +45,50 @@ RECORD_PREAMBLE_LENGTH = {
     "v2": 16  # 1 separator + 1 len_ip + 2 len_path + 4 len_data + 8 timestamp
 }
 
-def detect_file_version(filename):
+def detect_file_version(filename, simple_detection=False):
+    if simple_detection:
+        # Look at the filename to determine the version. Easier, but more
+        # likely to be wrong
+        for version in RECORD_PREAMBLE_LENGTH.keys():
+            if ".{}.".format(version) in filename:
+                return version
+    # Try reading a couple of records using each format to see which is
+    # more correct.
+    detected_version = None
+    detected_certain = False
     for version in RECORD_PREAMBLE_LENGTH.keys():
-        if ".{}.".format(version) in filename:
-            return version
-    raise ValueError("Could not automatically detect file version in filename: {}".format(filename))
+        record_count = 0
+        try:
+            for r in unpack(filename, raw=True, file_version=version, strict=True):
+                record_count += 1
+                if record_count == 1 and len(r.data) == r.len_data:
+                    # We read the expected amount of data, but we're not sure
+                    # yet.
+                    detected_version = version
+                    detected_certain = False
 
-def unpack(filename, raw=False, verbose=False, file_version=None):
-    fin = open(filename, "rb")
+                if record_count >= 2:
+                    # We got a separator character in exactly the right place,
+                    # otherwise we would have seen an exception. Now we're sure.
+                    detected_version = version
+                    detected_certain = True
+                    break
+        except ValueError, e:
+            # Data was corrupt using this file_version
+            pass
+    if detected_certain:
+        return detected_version
+    else:
+        # TODO: warn and/or fall back to simple detection.
+        return detected_version
+
+    # We could not determine the file version automatically :(
+    raise ValueError("Could not detect file version in: '{}'".format(filename))
+
+def unpack(filename, raw=False, verbose=False, file_version=None, strict=False):
     if file_version is None:
         file_version = detect_file_version(filename)
+    fin = open(filename, "rb")
     record_count = 0
     bad_records = 0
     bytes_skipped = 0
@@ -65,6 +99,9 @@ def unpack(filename, raw=False, verbose=False, file_version=None):
         if separator == '':
             break
         if ord(separator[0]) != 0x1e:
+            if strict:
+                raise ValueError("Unexpected character at the start " \
+                                 "of record #{}".format(record_count))
             bytes_skipped += 1
             continue
         # We got our record separator as expected.
