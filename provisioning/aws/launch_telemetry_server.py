@@ -10,8 +10,10 @@ import aws_util
 import simplejson as json
 from fabric.api import *
 import fabric.network
+import os
 import sys
 import traceback
+from telemetry.convert import Converter
 
 class TelemetryServerLauncher(Launcher):
     def nodejs_version(self):
@@ -50,6 +52,17 @@ class TelemetryServerLauncher(Launcher):
         sudo("mkdir /etc/heka.d")
         sudo("mkdir /var/cache/hekad")
 
+    def install_geoip2(self):
+        sudo('pip install --upgrade geoip2')
+        # Other available databases (such as City db) listed here:
+        #  http://dev.maxmind.com/geoip/geoip2/geolite2/
+        run('wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.mmdb.gz -O GeoLite2-Country.mmdb.gz')
+        run('gunzip GeoLite2-Country.mmdb.gz')
+        sudo('mkdir -p {}'.format(os.path.dirname(Converter.GEOIP_COUNTRY_PATH)))
+        sudo('mv GeoLite2-Country.mmdb {}'.format(Converter.GEOIP_COUNTRY_PATH))
+        # If we want to get the c speedups for geoip2, install libmaxminddb:
+        #  https://github.com/maxmind/libmaxminddb/blob/master/README.md
+
     def create_logrotate_config(self, lr_file, target_log, create=True):
         sudo("echo '%s {' > %s" % (target_log, lr_file))
         sudo("echo '    su {1} {1}' >> {0}".format(lr_file, self.ssl_user))
@@ -70,6 +83,7 @@ class TelemetryServerLauncher(Launcher):
         # Install some more:
         self.install_nodejs_bin()
         self.install_heka()
+        self.install_geoip2()
         self.install_histogram_tools(instance)
 
         # Create log dir (within base_dir, but symlinked to /var/log):
