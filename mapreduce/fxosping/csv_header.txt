@@ -1,0 +1,1 @@
+submission_date,os,software,time_to_ping,screen_width,screen_height,pixel_ratio,locale,hardware,model,firmware_revision,update_channel,icc_mnc,icc_mcc,icc_spn,network_mnc,network_mcc,network_operator,geo_country
