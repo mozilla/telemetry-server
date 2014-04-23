@@ -260,6 +260,7 @@ class ConvertTest(unittest.TestCase):
         self.assertEqual(dimensions[0], "android-anr-report")
         self.assertEqual(raw["ver"], Converter.VERSION_UNCONVERTED)
         self.assertEqual(converted["ver"], Converter.VERSION_CONVERTED)
+        self.assertIs(converted["info"].get("geoCountry"), None)
 
     def test_fxos(self):
         raw = self.get_payload("fxos")
