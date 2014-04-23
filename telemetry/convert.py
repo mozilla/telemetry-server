@@ -196,7 +196,7 @@ class Converter:
             raise ValueError("Missing in payload: info")
 
         # Look up the country if needed:
-        if ip is not None and info["appName"] == "FirefoxOS":
+        if ip is not None and info.get("appName") == "FirefoxOS":
             country = None
             try:
                 country = self.get_geo_country(ip)
