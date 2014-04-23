@@ -13,6 +13,19 @@ import os
 import errno
 
 
+class UnpackedRecord():
+    def __init__(self, len_ip=0, len_path=0, len_data=0, timestamp=0, ip=None,
+                 path=None, data=None, error=None):
+        self.len_ip = len_ip
+        self.len_path = len_path
+        self.len_data = len_data
+        self.timestamp = timestamp
+        self.ip = ip
+        self.path = path
+        self.data = data
+        self.error = error
+
+
 # might as well return the size too...
 def md5file(filename, chunksize=8192):
     md5 = hashlib.md5()
@@ -26,12 +39,56 @@ def md5file(filename, chunksize=8192):
             size += len(chunk)
     return md5.hexdigest(), size
 
-# 15 == 1 separator + 2 len_path + 4 len_data + 8 timestamp
-RECORD_PREAMBLE_LENGTH = 15
 
-def unpack(filename, raw=False, verbose=False):
+RECORD_PREAMBLE_LENGTH = {
+    "v1": 15, # 1 separator + 2 len_path + 4 len_data + 8 timestamp
+    "v2": 16  # 1 separator + 1 len_ip + 2 len_path + 4 len_data + 8 timestamp
+}
+
+def detect_file_version(filename, simple_detection=False):
+    if simple_detection:
+        # Look at the filename to determine the version. Easier, but more
+        # likely to be wrong
+        for version in RECORD_PREAMBLE_LENGTH.keys():
+            if ".{}.".format(version) in filename:
+                return version
+    # Try reading a couple of records using each format to see which is
+    # more correct.
+    detected_version = None
+    detected_certain = False
+    for version in RECORD_PREAMBLE_LENGTH.keys():
+        record_count = 0
+        try:
+            for r in unpack(filename, raw=True, file_version=version, strict=True):
+                record_count += 1
+                if record_count == 1 and len(r.data) == r.len_data:
+                    # We read the expected amount of data, but we're not sure
+                    # yet.
+                    detected_version = version
+                    detected_certain = False
+
+                if record_count >= 2:
+                    # We got a separator character in exactly the right place,
+                    # otherwise we would have seen an exception. Now we're sure.
+                    detected_version = version
+                    detected_certain = True
+                    break
+        except ValueError, e:
+            # Data was corrupt using this file_version
+            pass
+    if detected_certain:
+        return detected_version
+    else:
+        # TODO: warn and/or fall back to simple detection.
+        return detected_version
+
+    # We could not determine the file version automatically :(
+    raise ValueError("Could not detect file version in: '{}'".format(filename))
+
+def unpack(filename, raw=False, verbose=False, file_version=None, strict=False):
+    if file_version is None:
+        file_version = detect_file_version(filename)
     fin = open(filename, "rb")
-
     record_count = 0
     bad_records = 0
     bytes_skipped = 0
@@ -42,6 +99,9 @@ def unpack(filename, raw=False, verbose=False):
         if separator == '':
             break
         if ord(separator[0]) != 0x1e:
+            if strict:
+                raise ValueError("Unexpected character at the start " \
+                                 "of record #{}".format(record_count))
             bytes_skipped += 1
             continue
         # We got our record separator as expected.
@@ -51,15 +111,24 @@ def unpack(filename, raw=False, verbose=False):
             total_bytes_skipped += bytes_skipped
             bytes_skipped = 0
 
-        # Read 2 + 4 + 8 = 14 bytes
-        lengths = fin.read(14)
+        # Read the rest of the preamble (after the 1 we already read)
+        preamble_length = RECORD_PREAMBLE_LENGTH[file_version] - 1
+        lengths = fin.read(preamble_length)
         if lengths == '':
             break
         record_count += 1
         # The "<" is to force it to read as Little-endian to match the way it's
         # written. This is the "native" way in linux too, but might as well make
         # sure we read it back the same way.
-        len_path, len_data, timestamp = struct.unpack("<HIQ", lengths)
+        if file_version == "v1":
+            len_path, len_data, timestamp = struct.unpack("<HIQ", lengths)
+            len_ip = 0
+            client_ip = None
+        elif file_version == "v2":
+            len_ip, len_path, len_data, timestamp = struct.unpack("<BHIQ", lengths)
+            client_ip = fin.read(len_ip)
+        else:
+            raise ValueError("Unrecognized file version: {}".format(file_version))
         path = fin.read(len_path)
         data = fin.read(len_data)
         error = None
@@ -76,7 +145,7 @@ def unpack(filename, raw=False, verbose=False):
                     # Probably wasn't gzipped, pass along the error.
                     bad_records += 1
                     error = e
-        yield len_path, len_data, timestamp, path, data, error
+        yield UnpackedRecord(len_ip, len_path, len_data, timestamp, client_ip, path, data, error)
 
     if bytes_skipped > 0:
         if verbose:

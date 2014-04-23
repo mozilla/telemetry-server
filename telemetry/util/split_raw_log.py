@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import sys, struct, re, os, argparse, gzip, StringIO
+import sys, os, argparse
 import simplejson as json
 from telemetry.persist import StorageLayout
 from telemetry.telemetry_schema import TelemetrySchema
@@ -10,17 +10,13 @@ from datetime import date, datetime
 import telemetry.util.timer as timer
 import telemetry.util.files as fileutil
 
-filename_timestamp_pattern = re.compile("^telemetry.log.([0-9]+).([0-9]+)(.finished)?$")
-
 def main():
     parser = argparse.ArgumentParser(description='Split raw logs into partitioned files.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-m", "--max-output-size", metavar="N", help="Rotate output files after N bytes", type=int, default=500000000)
     parser.add_argument("-i", "--input-file", help="Filename to read from", required=True)
     parser.add_argument("-o", "--output-dir", help="Base directory to store split files", required=True)
     parser.add_argument("-t", "--telemetry-schema", help="Filename of telemetry schema spec", required=True)
-    parser.add_argument("-b", "--bucket", help="S3 Bucket name")
-    parser.add_argument("-k", "--aws-key", help="AWS Key")
-    parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key")
+    parser.add_argument("-f", "--file-version", help="Log file version (if omitted, we'll guess)")
     args = parser.parse_args()
 
     schema_data = open(args.telemetry_schema)
@@ -34,24 +30,27 @@ def main():
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    record_count = 0;
-    bad_record_count = 0;
+    record_count = 0
+    bad_record_count = 0
     bytes_read = 0
     start = datetime.now()
-    for len_path, len_data, timestamp, path, data, err in fileutil.unpack(args.input_file):
+    file_version = args.file_version
+    if not file_version:
+        file_version = fileutil.detect_file_version(args.input_file)
+    for r in fileutil.unpack(args.input_file, file_version=file_version):
         record_count += 1
-        if err:
+        if r.error:
             bad_record_count += 1
             continue
         # Incoming timestamps are in milliseconds, so convert to POSIX first
         # (ie. seconds)
-        submission_date = date.fromtimestamp(timestamp / 1000).strftime("%Y%m%d")
+        submission_date = date.fromtimestamp(r.timestamp / 1000).strftime("%Y%m%d")
         # Deal with unicode
-        path = unicode(path, errors="replace")
-        data = unicode(data, errors="replace")
+        path = unicode(r.path, errors="replace")
+        data = unicode(r.data, errors="replace")
 
-        bytes_read += len_path + len_data + fileutil.RECORD_PREAMBLE_LENGTH
-        #print "Path for record", record_count, path, "length of data:", len_data, "data:", data[0:5] + "..."
+        bytes_read += r.len_ip + r.len_path + r.len_data + fileutil.RECORD_PREAMBLE_LENGTH[file_version]
+        #print "Path for record", record_count, path, "length of data:", r.len_data, "data:", data[0:5] + "..."
 
         path_components = path.split("/")
         if len(path_components) != expected_dim_count:
@@ -78,6 +77,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-

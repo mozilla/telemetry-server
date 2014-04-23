@@ -14,16 +14,18 @@ if len(sys.argv) > 2 and sys.argv[2] == 'parse':
 
 record_count = 0
 bad_records = 0
-for len_path, len_data, timestamp, path, data, err in fu.unpack(filename, verbose=True):
+version = fu.detect_file_version(filename)
+print "It appears that this is a", version, "log file."
+for r in fu.unpack(filename, verbose=True, file_version=version):
     record_count += 1
-    if err:
-        print "Record", record_count, "was bad:", err
+    if r.error:
+        print "Record", record_count, "was bad:", r.error
         bad_records += 1
         continue
 
     if parse:
         try:
-            parsed_json = json.loads(data)
+            parsed_json = json.loads(r.data)
         except Exception, e:
             bad_records += 1
             print "Record", record_count, "failed to parse json:", e

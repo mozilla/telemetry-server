@@ -7,6 +7,7 @@ try:
 except ImportError:
     import json
 import sys
+import logging
 import os
 import re
 import urllib2
@@ -111,7 +112,7 @@ class RevisionCache:
         except:
             # TODO: better error handling
             # TODO: cache 404s so we don't keep trying them
-            sys.stderr.write("INFO: failed to load '%s' from server\n" % url)
+            logging.info("failed to load '%s' from server\n" % url)
         return histograms
 
     def save_to_cache(self, repo, revision, contents):
