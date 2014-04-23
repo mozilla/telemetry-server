@@ -11,5 +11,6 @@
 .idea/
 histogram_cache/
 node_modules/
+htmlcov/
 histogram_tools.py
 .DS_Store
