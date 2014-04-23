@@ -1,6 +1,11 @@
 #!/bin/bash
 
-sudo apt-get --yes install python-numpy
+cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
+sudo apt-get --yes install python-numpy git
+
+rm -rf telemetry-server
+git clone https://github.com/mozilla/telemetry-server.git
+cd telemetry-server/mapreduce/mainthreadio
 
 OUTPUT=output
 TODAY=$(date +%Y%m%d)
@@ -31,7 +36,8 @@ sed -r "s/__TARGET_DATE__/$TARGET/" filter_template.json > filter.json
 BASE=$(pwd)
 FINAL_DATA_FILE=$BASE/$OUTPUT/mainthreadio$TARGET.csv
 RAW_DATA_FILE=${FINAL_DATA_FILE}.tmp
-cd ~/telemetry-server
+
+cd ../../
 echo "Starting the mainthreadio export for $TARGET"
 python -u -m mapreduce.job $BASE/mainthreadio.py \
   --num-mappers 16 \
