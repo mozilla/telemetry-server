@@ -55,7 +55,6 @@ def detect_file_version(filename, simple_detection=False):
     # Try reading a couple of records using each format to see which is
     # more correct.
     detected_version = None
-    detected_certain = False
     for version in RECORD_PREAMBLE_LENGTH.keys():
         record_count = 0
         try:
@@ -65,20 +64,14 @@ def detect_file_version(filename, simple_detection=False):
                     # We read the expected amount of data, but we're not sure
                     # yet.
                     detected_version = version
-                    detected_certain = False
-
-                if record_count >= 2:
+                if record_count > 2:
                     # We got a separator character in exactly the right place,
                     # otherwise we would have seen an exception. Now we're sure.
-                    detected_version = version
-                    detected_certain = True
-                    break
+                    return version
         except ValueError, e:
             # Data was corrupt using this file_version
             pass
-    if detected_certain:
-        return detected_version
-    elif detected_version is not None:
+    if detected_version is not None:
         # TODO: warn and/or fall back to simple detection.
         return detected_version
 
@@ -101,7 +94,7 @@ def unpack(filename, raw=False, verbose=False, file_version=None, strict=False):
         if ord(separator[0]) != 0x1e:
             if strict:
                 raise ValueError("Unexpected character at the start " \
-                                 "of record #{}".format(record_count))
+                                 "of record #{}: {}".format(record_count, ord(separator[0])))
             bytes_skipped += 1
             continue
         # We got our record separator as expected.
