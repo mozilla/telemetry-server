@@ -3,7 +3,7 @@
   "dimensions": [
     {
       "field_name": "reason",
-      "allowed_values": ["idle-daily","saved-session","android-anr-report","ftu"]
+      "allowed_values": ["idle-daily","saved-session","android-anr-report","ftu","loop"]
     },
     {
       "field_name": "appName",
