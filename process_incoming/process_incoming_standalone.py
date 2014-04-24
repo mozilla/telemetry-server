@@ -588,6 +588,8 @@ def main():
             default=500000000, help="Rotate output files after N bytes")
     parser.add_argument("-D", "--dry-run", action="store_true",
             help="Don't modify remote files")
+    parser.add_argument("-n", "--no-clean", action="store_true",
+            help="Don't clean out the output-dir before beginning")
     parser.add_argument("-v", "--verbose", action="store_true",
             help="Print more detailed output")
     args = parser.parse_args()
@@ -618,6 +620,27 @@ def main():
     compressors = None
     exporters = None
     done = False
+
+    if args.no_clean:
+        logger.log("Not removing log files in {}".format(args.output_dir))
+    else:
+        # Remove existing log files from output_dir (to clean up after an
+        # incomplete previous run, for example).
+        logger.log("Removing log files in {}".format(args.output_dir))
+        for root, dirs, files in os.walk(args.output_dir):
+            for f in files:
+                if f.endswith(".log"):
+                    full = os.path.join(root, f)
+                    if args.dry_run:
+                        logger.log("Would be deleting {}, except it's a " \
+                                   "dry run".format(full))
+                    else:
+                        try:
+                            logger.log("Removing existing file: " + full)
+                            os.remove(full)
+                        except Exception, e:
+                            logger.log("Error removing existing " \
+                                       " file {}: {}".format(full, e))
 
     if not args.dry_run:
         # Set up AWS connections
