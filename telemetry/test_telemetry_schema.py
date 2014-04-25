@@ -132,6 +132,8 @@ class TelemetrySchemaTest(unittest.TestCase):
         test_inputs = []
         expected_ot = [] # <-- bad name, convenient indenting.
         other = TelemetrySchema.DISALLOWED_VALUE
+        # fields:            reason           appName        channel      appVersion      appBuildID     submission_date
+        #                    -------------    -----------    -------    --------------    -----------    ---------------
         # allowed:           saved-session        *          nightly          *               *          20130908
         test_inputs.append(["saved-session", "someAppName", "nightly", "someAppVersion", "someBuildID", "20130908"])
         expected_ot.append(["saved-session", "someAppName", "nightly", "someAppVersion", "someBuildID", "20130908"])
@@ -163,6 +165,125 @@ class TelemetrySchemaTest(unittest.TestCase):
         filename = self.schema.get_filename("foo", dims, 99)
         self.assertEqual(filename, "foo/saved_session/someAppName/nightly/someAppVersion/someBuildID.20130908.v99.log")
 
+    def test_dimensions_from(self):
+        test_inputs = []
+        expected_ot = []
+
+        test_inputs.append({"reason": "saved-session", "appName": "Firefox", "appUpdateChannel": "release", "appVersion": "28.0", "appBuildID": "20140401001122"})
+        expected_ot.append(["saved-session", "Firefox", "release", "28.0", "20140401001122", "20130908"])
+
+        test_inputs.append({"reason": "idle-daily", "appUpdateChannel": "release", "appVersion": "28.0", "appBuildID": "20140401001122"})
+        expected_ot.append(["idle-daily", "UNKNOWN", "release", "28.0", "20140401001122", "20130908"])
+
+        test_inputs.append({})
+        expected_ot.append(["UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "20130908"])
+        for i in range(len(test_inputs)):
+            actual = self.schema.dimensions_from(test_inputs[i], "20130908")
+            self.assertEqual(actual, expected_ot[i])
+
+    def test_get_field(self):
+        dims = ["saved-session", "Firefox", "release", "28.0", "20130908010101", "20130908"]
+        # Basic functionality
+        self.assertEqual(self.schema.get_field(dims, "reason"),           "saved-session")
+        self.assertEqual(self.schema.get_field(dims, "appName"),          "Firefox")
+        self.assertEqual(self.schema.get_field(dims, "appUpdateChannel"), "release")
+        self.assertEqual(self.schema.get_field(dims, "appVersion"),       "28.0")
+        self.assertEqual(self.schema.get_field(dims, "appBuildID"),       "20130908010101")
+        self.assertEqual(self.schema.get_field(dims, "submission_date"),  "20130908")
+
+        other = TelemetrySchema.DISALLOWED_VALUE
+        allowed = True
+        sanitize = True
+        # T, T
+        self.assertEqual(self.schema.get_field(dims, "reason", limit_to_allowed=allowed, sanitize=sanitize),           "saved_session")
+        self.assertEqual(self.schema.get_field(dims, "appName", limit_to_allowed=allowed, sanitize=sanitize),          "Firefox")
+        self.assertEqual(self.schema.get_field(dims, "appUpdateChannel", limit_to_allowed=allowed, sanitize=sanitize), other)
+        self.assertEqual(self.schema.get_field(dims, "appVersion", limit_to_allowed=allowed, sanitize=sanitize),       "28.0")
+        self.assertEqual(self.schema.get_field(dims, "appBuildID", limit_to_allowed=allowed, sanitize=sanitize),       "20130908010101")
+        self.assertEqual(self.schema.get_field(dims, "submission_date", limit_to_allowed=allowed, sanitize=sanitize),  "20130908")
+        sanitize = False
+        # T, F
+        self.assertEqual(self.schema.get_field(dims, "reason", limit_to_allowed=allowed, sanitize=sanitize),           "saved-session")
+        self.assertEqual(self.schema.get_field(dims, "appName", limit_to_allowed=allowed, sanitize=sanitize),          "Firefox")
+        self.assertEqual(self.schema.get_field(dims, "appUpdateChannel", limit_to_allowed=allowed, sanitize=sanitize), other)
+        self.assertEqual(self.schema.get_field(dims, "appVersion", limit_to_allowed=allowed, sanitize=sanitize),       "28.0")
+        self.assertEqual(self.schema.get_field(dims, "appBuildID", limit_to_allowed=allowed, sanitize=sanitize),       "20130908010101")
+        self.assertEqual(self.schema.get_field(dims, "submission_date", limit_to_allowed=allowed, sanitize=sanitize),  "20130908")
+        allowed = False
+        sanitize = True
+        # F, T
+        self.assertEqual(self.schema.get_field(dims, "reason", limit_to_allowed=allowed, sanitize=sanitize),           "saved_session")
+        self.assertEqual(self.schema.get_field(dims, "appName", limit_to_allowed=allowed, sanitize=sanitize),          "Firefox")
+        self.assertEqual(self.schema.get_field(dims, "appUpdateChannel", limit_to_allowed=allowed, sanitize=sanitize), "release")
+        self.assertEqual(self.schema.get_field(dims, "appVersion", limit_to_allowed=allowed, sanitize=sanitize),       "28.0")
+        self.assertEqual(self.schema.get_field(dims, "appBuildID", limit_to_allowed=allowed, sanitize=sanitize),       "20130908010101")
+        self.assertEqual(self.schema.get_field(dims, "submission_date", limit_to_allowed=allowed, sanitize=sanitize),  "20130908")
+        sanitize = False
+        # F, F
+        self.assertEqual(self.schema.get_field(dims, "reason", limit_to_allowed=allowed, sanitize=sanitize),           "saved-session")
+        self.assertEqual(self.schema.get_field(dims, "appName", limit_to_allowed=allowed, sanitize=sanitize),          "Firefox")
+        self.assertEqual(self.schema.get_field(dims, "appUpdateChannel", limit_to_allowed=allowed, sanitize=sanitize), "release")
+        self.assertEqual(self.schema.get_field(dims, "appVersion", limit_to_allowed=allowed, sanitize=sanitize),       "28.0")
+        self.assertEqual(self.schema.get_field(dims, "appBuildID", limit_to_allowed=allowed, sanitize=sanitize),       "20130908010101")
+        self.assertEqual(self.schema.get_field(dims, "submission_date", limit_to_allowed=allowed, sanitize=sanitize),  "20130908")
+
+        with self.assertRaises(ValueError):
+            v = self.schema.get_field(dims, "oranges")
+
+        # Remove the last dimension:
+        dims.pop()
+        with self.assertRaises(ValueError):
+            v = self.schema.get_field(dims, "submission_date")
+
+    def test_more_allowed(self):
+        spec = {
+            "version": 1,
+            "dimensions": [
+                {
+                    "field_name": "reason",
+                    "allowed_values": ["saved-session"]
+                },
+                {
+                    "field_name": "appName",
+                    "allowed_values": "*"
+                },
+                {
+                    "field_name": "appUpdateChannel",
+                    "allowed_values": ["nightly"]
+                },
+                {
+                    "field_name": "appVersion",
+                    "allowed_values": "*"
+                },
+                {
+                    "field_name": "appBuildID",
+                    "allowed_values": "one_specific_build"
+                },
+                {
+                    "field_name": "submission_date",
+                    "allowed_values": {
+                        "min": "20130908",
+                        "max": "20140401"
+                    }
+                }
+            ]
+        }
+        schema = TelemetrySchema(spec)
+        allowed = schema.sanitize_allowed_values()
+        self.assertTrue(schema.is_allowed("20130908", allowed[5]))
+        self.assertTrue(schema.is_allowed("20140401", allowed[5]))
+        self.assertTrue(schema.is_allowed("20130909", allowed[5]))
+        self.assertTrue(schema.is_allowed("20140101", allowed[5]))
+        self.assertFalse(schema.is_allowed("20130907", allowed[5]))
+        self.assertFalse(schema.is_allowed("20000000", allowed[5]))
+        self.assertFalse(schema.is_allowed("20140402", allowed[5]))
+        self.assertFalse(schema.is_allowed("99999999", allowed[5]))
+
+        self.assertTrue(schema.is_allowed("one_specific_build", allowed[4]))
+        self.assertFalse(schema.is_allowed("two_specific_build", allowed[4]))
+        self.assertFalse(schema.is_allowed("*", allowed[4]))
+        self.assertFalse(schema.is_allowed("one_specific_build ", allowed[4]))
+        self.assertFalse(schema.is_allowed("one-specific-build", allowed[4]))
 
 if __name__ == "__main__":
     unittest.main()
