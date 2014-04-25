@@ -58,14 +58,46 @@ class TestPersist(unittest.TestCase):
             ]
         }
 
-    def test_storage(self):
-        test_file_1 = os.path.join(self.get_test_dir(), "test.log")
-        self.storage.write_filename("foo", '{"bar": "baz"}', test_file_1)
-        test_file_1_md5, test_file_1_size = fileutil.md5file(test_file_1)
-        self.assertEqual(test_file_1_md5, "206dd2d33a04802c31d2c74f10cc472b")
+    def test_write_filename(self):
+        test_file = os.path.join(self.get_test_dir(), "test.log")
+        self.storage.write_filename("foo", '{"bar":"baz"}', test_file)
+        test_file_md5, test_file_size = fileutil.md5file(test_file)
+        self.assertEqual(test_file_md5, "0ea91df239ea79ed2ebab34b46d455fc")
+
+        test_file = os.path.join(self.get_test_dir(), "test2.log")
+        # Now test writing an object
+        self.storage.write_filename("foo", {"bar":"baz"}, test_file)
+        test_file_md5, test_file_size = fileutil.md5file(test_file)
+        self.assertEqual(test_file_md5, "0ea91df239ea79ed2ebab34b46d455fc")
+
+    def test_write(self):
+        dims = ["r1", "a1", "c1", "v1", "b1", "20130102"]
+        test_dir = self.get_test_dir()
+        test_file = self.schema.get_filename(test_dir, dims)
+        self.assertEquals(test_file, test_dir + "/r1/a1/c1/v1/b1.20130102.v1.log")
+
+        self.storage.write("foo", '{"bar":"baz"}', dims)
+        md5, size = fileutil.md5file(test_file)
+        self.assertEqual(md5, "0ea91df239ea79ed2ebab34b46d455fc")
 
     def test_clean_newlines(self):
         self.assertEqual(self.storage.clean_newlines("ab\n\ncd\r\n"), "ab  cd  ")
+
+    def test_rotate(self):
+        test_file = os.path.join(self.get_test_dir(), "test.log")
+        key = "01234567890123456789012345678901234567890123456789"
+        value = '{"some filler stuff here":"fffffffffffffffffff"}'
+        # each iteration should be 100 bytes.
+        for i in range(99):
+            result = self.storage.write_filename(key, value, test_file)
+            self.assertEquals(result, test_file)
+
+        # The 100th iteration should cause the file to rotate
+        rolled = self.storage.write_filename(key, value, test_file)
+        # rolled should be <test_dir>/test.log.<pid>.<timestamp><suffix>
+        self.assertNotEqual(rolled, test_file)
+        self.assertTrue(rolled.startswith(test_file))
+        self.assertTrue(rolled.endswith(StorageLayout.PENDING_COMPRESSION_SUFFIX))
 
 if __name__ == "__main__":
     unittest.main()
