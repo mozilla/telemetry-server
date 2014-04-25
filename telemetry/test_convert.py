@@ -10,7 +10,9 @@ import unittest
 from telemetry_schema import TelemetrySchema
 from convert import Converter, BadPayloadError
 
-# python -m unittest telemetry.test_convert_unittest
+# python -m unittest telemetry.test_convert
+#   - or -
+# coverage run -m telemetry.test_convert; coverage html
 
 class ConvertTest(unittest.TestCase):
     @classmethod
