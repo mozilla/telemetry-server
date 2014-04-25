@@ -6,6 +6,7 @@ import os
 import revision_cache
 import shutil
 import unittest
+import json
 
 class TestRevisionCache(unittest.TestCase):
     def setUp(self):
@@ -19,15 +20,21 @@ class TestRevisionCache(unittest.TestCase):
     def get_test_dir(self):
         return "/tmp/histogram_revision_cache"
 
-    def check_one_url(self, url):
+    def check_one_url(self, url, cache=None):
         #print "checking url", url
-        dummy = revision_cache.RevisionCache(self.get_test_dir(), 'hg.mozilla.org')
+        if cache is None:
+            dummy = revision_cache.RevisionCache(self.get_test_dir(), 'hg.mozilla.org')
+        else:
+            dummy = cache
         repo, rev = dummy.revision_url_to_parts(url)
-        return self.check_one(repo, rev)
+        return self.check_one(repo, rev, cache)
 
-    def check_one(self, repo, rev):
+    def check_one(self, repo, rev, cache=None):
         #print "checking repo:", repo, "rev:", rev
-        rcache = revision_cache.RevisionCache(self.get_test_dir(), 'hg.mozilla.org')
+        if cache is None:
+            rcache = revision_cache.RevisionCache(self.get_test_dir(), 'hg.mozilla.org')
+        else:
+            rcache = cache
         filename = "%s/%s/%s/Histograms.json" % (self.get_test_dir(), repo, rev)
         self.assertFalse(os.path.exists(filename))
         bad = rcache.fetch_disk(repo, rev)
@@ -37,6 +44,7 @@ class TestRevisionCache(unittest.TestCase):
         good = rcache.fetch_disk(repo, rev)
         self.assertIn("A11Y_INSTANTIATED_FLAG", good)
         self.assertTrue(os.path.exists(filename))
+        return good
 
     def test_repo_rev(self):
         self.check_one('mozilla-central', '26cb30a532a1')
@@ -60,6 +68,59 @@ class TestRevisionCache(unittest.TestCase):
         self.check_one_url('http://hg.mozilla.org/integration/mozilla-inbound/rev/85cad21c5d48')
         self.check_one_url('http://hg.mozilla.org/releases/mozilla-esr24/rev/bba10d0ca256')
         self.check_one_url('https://hg.mozilla.org/mozilla-central/rev/ecf20a2484b6')
+
+    def test_revision_url_to_parts(self):
+        rcache = revision_cache.RevisionCache(self.get_test_dir(), 'hg.mozilla.org')
+        repo, rev = rcache.revision_url_to_parts("http://hg.mozilla.org/releases/mozilla-release/rev/e55e45536133")
+        self.assertEquals(repo, "releases/mozilla-release")
+        self.assertEquals(rev, "e55e45536133")
+
+    def test_bad_revision_url_to_parts(self):
+        rcache = revision_cache.RevisionCache(self.get_test_dir(), 'hg.mozilla.org')
+        with self.assertRaises(ValueError):
+            repo, rev = rcache.revision_url_to_parts("arglebargle")
+
+    def test_get_revision(self):
+        rcache = revision_cache.RevisionCache(self.get_test_dir(), 'hg.mozilla.org')
+
+        # Check one that's pre-cached:
+        pc_repo = 'releases/mozilla-release'
+        pc_rev = '0488055e9f9f'
+        ref = self.check_one(pc_repo, pc_rev, rcache)
+        self.assertNotIn(pc_repo, rcache._repos)
+
+        revision = rcache.get_revision(pc_repo, pc_rev)
+        self.assertEqual(revision, ref)
+        self.assertIn(pc_repo, rcache._repos)
+        self.assertIn(pc_rev, rcache._repos[pc_repo])
+        # This time it should be cached:
+        revision = rcache.get_revision(pc_repo, pc_rev)
+        self.assertEqual(revision, ref)
+
+        # Fetch another one that's not cached
+        nc_repo = 'releases/mozilla-beta'
+        nc_rev = '53c447ff5fd3'
+        self.assertNotIn(nc_repo, rcache._repos)
+        revision = rcache.get_revision(nc_repo, nc_rev)
+        self.assertIn("A11Y_INSTANTIATED_FLAG", revision)
+        self.assertIn(nc_repo, rcache._repos)
+        self.assertIn(nc_rev, rcache._repos[nc_repo])
+
+    def test_get_revision_noparse(self):
+        rcache = revision_cache.RevisionCache(self.get_test_dir(), 'hg.mozilla.org')
+        # Fetch one that's not cached
+        repo = 'releases/mozilla-beta'
+        rev = '53c447ff5fd3'
+        self.assertNotIn(repo, rcache._repos)
+        revision = rcache.get_revision(repo, rev, parse=False)
+        self.assertIn("A11Y_INSTANTIATED_FLAG", revision)
+        self.assertIn(repo, rcache._repos)
+        self.assertIn(rev, rcache._repos[repo])
+
+        # parse=False should give us a raw string. Parse it as json and then
+        # make sure the same key is present.
+        parsed = json.loads(revision)
+        self.assertIn("A11Y_INSTANTIATED_FLAG", parsed)
 
 if __name__ == "__main__":
     unittest.main()
