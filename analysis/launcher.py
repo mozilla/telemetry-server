@@ -13,7 +13,16 @@ TASK_TIMEOUT = 60 * 60
 class AnalysisJob:
     def __init__(self, cfg):
         self.job_bundle = cfg.job_bundle
-        self.input_filter = TelemetrySchema(json.load(open(cfg.input_filter)))
+        if cfg.input_filter:
+            self.input_filter = TelemetrySchema(json.load(open(cfg.input_filter)))
+        else:
+            self.input_filter = None
+
+        if cfg.input_list_file:
+            self.input_list = cfg.input_list_file
+        else:
+            self.input_list = None
+
         self.job_id = str(uuid4())
         self.target_queue = cfg.target_queue
         self.aws_key = cfg.aws_key
@@ -40,13 +49,13 @@ class AnalysisJob:
         # date_limit is a hack that makes it easy to launch everything before
         # a given date... say to back process all we have in the bucket...
         if self.date_limit != None:
-          print "Launching limiting to before " + self.date_limit
-          for k,s in self.list_partitions(bucket):
-              if k.split('/')[-1].split('.')[1] < self.date_limit:
-                  yield (k, s)
+            print "Launching limiting to before " + self.date_limit
+            for k,s in self.list_partitions(bucket):
+                if k.split('/')[-1].split('.')[1] < self.date_limit:
+                    yield (k, s)
         else:
-          for k,s in self.list_partitions(bucket):
-              yield (k, s)
+            for k,s in self.list_partitions(bucket):
+                yield (k, s)
 
     def get_filtered_files_old(self):
         """ Get tuples of name and size for all input files """
@@ -79,27 +88,36 @@ class AnalysisJob:
         conn.close()
 
     def list_partitions(self, bucket, prefix='', level=0):
-        #print "Listing...", prefix, level
-        allowed_values = self.input_filter.sanitize_allowed_values()
-        delimiter = '/'
-        if level > 3:
-            delimiter = '.'
-        for k in bucket.list(prefix=prefix, delimiter=delimiter):
-            partitions = k.name.split("/")
+        if self.input_filter:
+            #print "Listing...", prefix, level
+            allowed_values = self.input_filter.sanitize_allowed_values()
+            delimiter = '/'
             if level > 3:
-                # split the last couple of partition components by "." instead of "/"
-                partitions.extend(partitions.pop().split(".", 2))
-            if self.input_filter.is_allowed(partitions[level], allowed_values[level]):
-                if level >= 5:
-                    for f in bucket.list(prefix=k.name):
-                        yield (f.key, f.size)
-                else:
-                    for k, s in self.list_partitions(bucket, k.name, level + 1):
-                        yield (k, s)
-
+                delimiter = '.'
+            for k in bucket.list(prefix=prefix, delimiter=delimiter):
+                partitions = k.name.split("/")
+                if level > 3:
+                    # split the last couple of partition components by "." instead of "/"
+                    partitions.extend(partitions.pop().split(".", 2))
+                if self.input_filter.is_allowed(partitions[level], allowed_values[level]):
+                    if level >= 5:
+                        for f in bucket.list(prefix=k.name):
+                            yield (f.key, f.size)
+                    else:
+                        for k, s in self.list_partitions(bucket, k.name, level + 1):
+                            yield (k, s)
+        elif self.input_list:
+            print "Using input list..."
+            for line in self.input_list:
+                key_name = line.strip()
+                k = bucket.get_key(key_name)
+                yield (k.key, k.size)
+        else:
+            print "Don't know how to list partitions without a filter or list :("
+            raise ValueError("Missing both input_filter and input_list")
 
     def generate_tasks(self):
-        """ Generates SQS tasks, we batch small files into a single task """        
+        """ Generates SQS tasks, we batch small files into a single task """
         taskid = 1
         taskfiles = []
         tasksize = 0
@@ -149,15 +167,16 @@ class AnalysisJob:
         print "Populate SQS input queue with tasks"
         # Connect to SQS is desired region
         conn = sqs.connect_to_region(
-            self.aws_region,
-            aws_access_key_id = self.aws_key,
-            aws_secret_access_key = self.aws_secret_key
+           self.aws_region,
+           aws_access_key_id = self.aws_key,
+           aws_secret_access_key = self.aws_secret_key
         )
         # Create queue
         queue = conn.get_queue(self.sqs_input_name)
         queue.set_message_class(JSONMessage)
         # Populate queue with tasks
         for task in self.generate_tasks():
+            #print "enqueueing", task["id"], "size:", task["size"]
             msg = queue.new_message(body = task)
             queue.write(msg)
         conn.close()
@@ -204,10 +223,15 @@ def main():
         help = "Job owner, should be an @mozilla.com email address",
         required = True
     )
-    p.add_argument(
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument(
         "-f", "--input-filter",
-        help = "File containing filter spec",
-        required = True
+        help = "File containing filter spec"
+    )
+    g.add_argument(
+        "-l", "--input-list-file",
+        help = "File containing a list of filenames (one file per line) to process",
+        type = file
     )
     p.add_argument(
         "-t", "--target-queue",
@@ -222,7 +246,7 @@ def main():
     p.add_argument(
         "-d", "--date_limit",
         help = "Launch only things submitted before this date, format YYYYMMDD",
-        default = None       
+        default = None
     )
     job = AnalysisJob(p.parse_args())
     job.setup()
