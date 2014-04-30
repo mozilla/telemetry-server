@@ -7,7 +7,7 @@
     },
     {
       "field_name": "appName",
-      "allowed_values": ["Firefox","Fennec","Thunderbird","FirefoxOS"]
+      "allowed_values": ["Firefox","Fennec","Thunderbird","FirefoxOS","B2G"]
     },
     {
       "field_name": "appUpdateChannel",
