@@ -781,7 +781,6 @@ def spawn_worker_instance():
 
     # Create EC2 instance
     reservation = ec2.run_instances(
-        key_name                                = 'mreid',
         image_id                                = 'ami-ace67f9c',
         security_groups                         = app.config['SECURITY_GROUPS'],
         user_data                               = boot_script,
