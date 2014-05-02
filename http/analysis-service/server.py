@@ -8,6 +8,8 @@ from user import User, AnonymousUser
 from boto.ec2 import connect_to_region as ec2_connect
 from boto.ses import connect_to_region as ses_connect
 from boto.s3 import connect_to_region as s3_connect
+from boto.ec2.blockdevicemapping import BlockDeviceType
+from boto.ec2.blockdevicemapping import BlockDeviceMapping
 from urlparse import urljoin
 from uuid import uuid4
 from sqlalchemy import create_engine, MetaData
@@ -762,18 +764,28 @@ def spawn_worker_instance():
     sshkey = bucket.new_key("keys/%s.pub" % request.form['token'])
     sshkey.set_contents_from_string(pubkey)
 
+    ephemeral = app.config.get("EPHEMERAL_MAP", None)
     # Create
     boot_script = render_template('boot-script.sh',
         aws_region          = app.config['AWS_REGION'],
         temporary_bucket    = app.config['TEMPORARY_BUCKET'],
-        ssh_key             = sshkey.key
+        ssh_key             = sshkey.key,
+        ephemeral_map       = ephemeral
     )
+
+    mapping = None
+    if ephemeral:
+        mapping = BlockDeviceMapping()
+        for device, eph_name in ephemeral.iteritems():
+            mapping[device] = BlockDeviceType(ephemeral_name=eph_name)
 
     # Create EC2 instance
     reservation = ec2.run_instances(
+        key_name                                = 'mreid',
         image_id                                = 'ami-ace67f9c',
         security_groups                         = app.config['SECURITY_GROUPS'],
         user_data                               = boot_script,
+        block_device_map                        = mapping,
         instance_type                           = app.config['INSTANCE_TYPE'],
         instance_initiated_shutdown_behavior    = 'terminate',
         client_token                            = request.form['token'],
