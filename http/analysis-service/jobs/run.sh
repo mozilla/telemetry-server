@@ -31,3 +31,4 @@ timeout ($JOB_TIMEOUT minutes).
 
 You can review the job's details at http://telemetry-dash.mozilla.org
 END
+fi

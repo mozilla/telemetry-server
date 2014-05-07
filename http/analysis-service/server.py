@@ -205,8 +205,8 @@ def update_configs(jobs=None):
             "base_dir": "/mnt/telemetry",
             # TODO: move this to config.py
             "instance_type": "c3.2xlarge",
-            "image": "ami-0e98fe3e",
-            # TODO: ssh-only securiry group
+            "image": "ami-37c4b307", # -> telemetry-worker-hvm-20140507
+            # TODO: ssh-only security group
             "security_groups": ["telemetry"],
             "iam_role": "telemetry-public-analysis-worker",
             "region": app.config['AWS_REGION'],

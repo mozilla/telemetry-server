@@ -15,9 +15,6 @@ k = b.get_key('{{ ssh_key }}')
 k.get_contents_to_filename('/home/ubuntu/user_key.pub')
 END
 
-# Setup users ssh_key
-cat /home/ubuntu/user_key.pub >> /home/ubuntu/.ssh/authorized_keys
-chmod 600 /home/ubuntu/.ssh/authorized_keys
 
 {% if ephemeral_map %}
 # RAID0 Configuration:
@@ -33,6 +30,10 @@ mdadm --detail --scan >> /etc/mdadm/mdadm.conf
 mkfs.ext3 -T largefile /dev/md0
 mount /dev/md0 /mnt
 {% endif %}
+
+# Setup users ssh_key
+cat /home/ubuntu/user_key.pub >> /home/ubuntu/.ssh/authorized_keys
+chmod 600 /home/ubuntu/.ssh/authorized_keys
 
 # Setup the motd
 sudo cat >/etc/motd <<END
