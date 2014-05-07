@@ -1,10 +1,8 @@
 # SlowSQL export, ported from:
 #   https://github.com/mozilla-metrics/telemetry-toolbox
-import csv
-import io
-import re
 import simplejson as json
 import traceback
+import sys
 
 # The telemetry payload doesn't currently list the current experiment ID. So
 # for now we're hardcoding the list of experiments by addon ID
@@ -23,18 +21,22 @@ def map(k, d, v, cx):
         for item in j.get("log", []):
             entrytype = item[0]
             if entrytype == "EXPERIMENT_ACTIVATION":
-                item.pop(1) # The time isn't relevant for now
-                cx.write(tuple(item), 1)
+                cx.write(("EXPERIMENT_ACTIVATION",
+                          appUpdateChannel,
+                          appVersion) + tuple(item[2:]), 1)
             elif entrytype == "EXPERIMENT_TERMINATION":
-                cx.write(tuple(item), 1)
+                cx.write(("EXPERIMENT_TERMINATION",
+                          appUpdateChannel,
+                          appVersion) + tuple(item[1:]), 1)
 
         addons = dict(map(lambda i: i.split(":"),
                           j.get("info", {}).get("addons", "").split(",")))
         for id in interesting:
             if id in addons:
-                cx.write(("INSTALLED", id), 1)
+                cx.write(("ACTIVE", appUpdateChannel, appVersion, id), 1)
 
     except Exception as e:
+        print >>sys.stderr, "Error during map: ", e
         cx.write(("Error",), str(e) + traceback.format_exc() + d)
 
 def reduce(k, v, cx):
