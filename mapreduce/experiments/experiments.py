@@ -3,6 +3,7 @@
 import simplejson as json
 import traceback
 import sys
+import urllib
 
 # The telemetry payload doesn't currently list the current experiment ID. So
 # for now we're hardcoding the list of experiments by addon ID
@@ -13,6 +14,7 @@ interesting = [
 def map(k, d, v, cx):
     [reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date] = d
     if appName != "Firefox":
+        print >>sys.stderr, "Got non-Firefox appName", appName
         return
 
     cx.write(("Totals", appUpdateChannel, appVersion), 1)
@@ -29,15 +31,15 @@ def map(k, d, v, cx):
                           appUpdateChannel,
                           appVersion) + tuple(item[1:]), 1)
 
-        addons = dict(map(lambda i: i.split(":"),
-                          j.get("info", {}).get("addons", "").split(",")))
+        addons = set([urllib.unquote(i.split(":")[0])
+                      for i in j.get("info", {}).get("addons", "").split(",")])
         for id in interesting:
             if id in addons:
                 cx.write(("ACTIVE", appUpdateChannel, appVersion, id), 1)
 
     except Exception as e:
         print >>sys.stderr, "Error during map: ", e
-        cx.write(("Error",), str(e) + traceback.format_exc() + d)
+        cx.write(("Error",), "%s: %s\n%s" % (e, d, traceback.format_exc()))
 
 def reduce(k, v, cx):
     if k[0] == "Error":
