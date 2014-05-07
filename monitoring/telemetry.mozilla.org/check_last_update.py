@@ -33,7 +33,7 @@ def get_args(argv):
     parser.add_argument("-b", "--bucket", required=True, help="S3 bucket name")
     parser.add_argument("-p", "--path", required=True, help="S3 object path")
     parser.add_argument("-m", "--max-age", help="Threshold for alerting (in hours, default is 24)", type=int, default=24)
-    parser.add_argument("-f", "--date-format", help="Override the deafult date format", default=default_date_format)
+    parser.add_argument("-f", "--date-format", help="Override the default date format", default=default_date_format)
     parser.add_argument("-v", "--verbose", action="store_true", help="Print more detailed output")
     args = parser.parse_args(argv)
     return args
