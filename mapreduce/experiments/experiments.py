@@ -6,12 +6,11 @@ import re
 import simplejson as json
 import traceback
 
-def safe_key(pieces):
-    output = io.BytesIO()
-    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
-    writer.writerow(pieces)
-    # remove the trailing EOL chars:
-    return unicode(output.getvalue().strip().translate(eol_trans_table))
+# The telemetry payload doesn't currently list the current experiment ID. So
+# for now we're hardcoding the list of experiments by addon ID
+interesting = [
+    "jid1-tile-switcher@jetpack",
+    ]
 
 def map(k, d, v, cx):
     [reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date] = d
@@ -28,6 +27,13 @@ def map(k, d, v, cx):
                 cx.write(tuple(item), 1)
             elif entrytype == "EXPERIMENT_TERMINATION":
                 cx.write(tuple(item), 1)
+
+        addons = dict(map(lambda i: i.split(":"),
+                          j.get("info", {}).get("addons", "").split(",")))
+        for id in interesting:
+            if id in addons:
+                cx.write(("INSTALLED", id), 1)
+
     except Exception as e:
         cx.write(("Error",), str(e) + traceback.format_exc() + d)
 
