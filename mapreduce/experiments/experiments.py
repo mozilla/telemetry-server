@@ -45,4 +45,4 @@ def reduce(k, v, cx):
     if k[0] == "Error":
         cx.writecsv(("Error", v))
     else:
-        cx.writecsv(list[k] + [sum(v)])
+        cx.writecsv(list(k) + [sum(v)])
