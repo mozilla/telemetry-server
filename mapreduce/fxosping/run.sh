@@ -47,6 +47,7 @@ sed -r "s/__TARGET_DATE__/$TARGET_DATE/" \
 cd "$TELEMETRY_SERVER_DIR"
 
 OUTPUT_FILE=$BASE/$OUTPUT/fxosping_$TARGET.csv
+TMP_OUTPUT_FILE=${OUTPUT_FILE}.tmp
 
 echo "Starting fxosping export for $TARGET"
 python -m mapreduce.job "$THIS_DIR/fxosping.py" \
@@ -55,13 +56,20 @@ python -m mapreduce.job "$THIS_DIR/fxosping.py" \
    --num-reducers 4 \
    --data-dir "$BASE/data" \
    --work-dir "$BASE/work" \
-   --output "$OUTPUT_FILE" \
+   --output "$TMP_OUTPUT_FILE" \
    --bucket "telemetry-published-v1"
 
 echo "Mapreduce job exited with code: $?"
 
+echo "Adding header line"
+cp "$THIS_DIR/csv_header.txt" "$OUTPUT_FILE"
+cat "$TMP_OUTPUT_FILE" >> "$OUTPUT_FILE"
+
+echo "Removing temp file"
+rm "$TMP_OUTPUT_FILE"
+
 cd "$BASE"
 echo "Compressing output"
-gzip "$OUTPUT/fxosping_$TARGET.csv"
+gzip -f "$OUTPUT_FILE"
 
 echo "Done!"
