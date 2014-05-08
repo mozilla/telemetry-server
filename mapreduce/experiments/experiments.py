@@ -29,7 +29,7 @@ def map(k, d, v, cx):
             elif entrytype == "EXPERIMENT_TERMINATION":
                 cx.write(("EXPERIMENT_TERMINATION",
                           appUpdateChannel,
-                          appVersion) + tuple(item[1:]), 1)
+                          appVersion) + tuple(item[2:]), 1)
 
         addons = set([urllib.unquote(i.split(":")[0])
                       for i in j.get("info", {}).get("addons", "").split(",")])
