@@ -29,7 +29,7 @@ sed -r "s/__TARGET_DATE__/$TARGET/" filter_template.json > filter.json
 
 BASE=$(pwd)
 RAW_DATA_FILE=$BASE/temp/map_output.txt
-FINAL_DATA_FILE=$BASE/$OUTPUT/chromehangs-$TARGET.txt
+FINAL_DATA_FILE=$BASE/$OUTPUT/chromehangs-$TARGET.txt.gz
 
 cd ~/telemetry-server
 echo "Starting the $NAME export for $TARGET"
@@ -58,7 +58,4 @@ else
     echo "Symbolication failed (exited with code $SYMBOLICATE_CODE). Log:"
     cat symbolicate.out
 fi
-
-echo "Compressing output"
-gzip $FINAL_DATA_FILE
 echo "Done!"
