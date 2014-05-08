@@ -18,6 +18,15 @@ def map(k, d, v, cx):
         return
 
     cx.write(("Totals", appUpdateChannel, appVersion), 1)
+    process = False
+    if v.find("EXPERIMENT") != -1:
+        process = True
+    elif v.find("jid1-tile-switcher") != -1:
+        process = True
+
+    if not process:
+        return
+
     try:
         j = json.loads(v)
         for item in j.get("log", []):
