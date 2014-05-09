@@ -72,6 +72,7 @@ def initialize_db(db):
         Column("commandline",           String,      nullable=False),
         Column("data_bucket",           String(200), nullable=False),
         Column("output_dir",            String(100), nullable=False),
+        Column("output_visibility",     String(10),  nullable=False),
         Column("schedule_minute",       String(20),  nullable=False),
         Column("schedule_hour",         String(20),  nullable=False),
         Column("schedule_day_of_month", String(20),  nullable=False),
@@ -91,6 +92,7 @@ def initialize_db(db):
     #     commandline           VARCHAR NOT NULL,
     #     data_bucket           VARCHAR(200) NOT NULL,
     #     output_dir            VARCHAR(100) NOT NULL,
+    #     output_visibility     VARCHAR(10) NOT NULL,
     #     schedule_minute       VARCHAR(20) NOT NULL,
     #     schedule_hour         VARCHAR(20) NOT NULL,
     #     schedule_day_of_month VARCHAR(20) NOT NULL,
@@ -145,6 +147,7 @@ def get_job_logs(job):
 
 def get_job_files(job, path_snippet):
     job_files = []
+    # TODO: detect private jobs and bail?
     try:
         # find the S3 bucket
         data_bucket = s3.get_bucket(job.data_bucket, validate = False)
@@ -180,7 +183,6 @@ def delete_job(job_id, owner):
     return result
 
 def job_exists(name=None, job_id=None):
-
     db = get_db()
     table = db['metadata'].tables['scheduled_jobs']
     if name is not None:
@@ -200,6 +202,10 @@ def update_configs(jobs=None):
         for j in get_jobs():
             jobs.append(j)
     for job in jobs:
+        # Should be either:
+        #   telemetry-public-analysis-worker or
+        #   telemetry-private-analysis-worker
+        iam_role = "telemetry-{}-analysis-worker".format(job.output_visibility)
         config = {
             "ssl_key_name": "mreid",
             "base_dir": "/mnt/telemetry",
@@ -208,7 +214,7 @@ def update_configs(jobs=None):
             "image": "ami-37c4b307", # -> telemetry-worker-hvm-20140507
             # TODO: ssh-only security group
             "security_groups": ["telemetry"],
-            "iam_role": "telemetry-public-analysis-worker",
+            "iam_role": iam_role,
             "region": app.config['AWS_REGION'],
             "shutdown_behavior": "terminate",
             "name": "telemetry-analysis-{0}".format(job['name']),
@@ -259,17 +265,20 @@ def upload_code(job_name, code_file):
         return e.message
     return None
 
-def get_required_int(request, field, label, min_value=0, max_value=100):
+def get_required_string(request, field, label):
     value = request.form[field]
     if value is None or value.strip() == '':
         raise ValueError(label + " is required")
-    else:
-        try:
-            value = int(value)
-            if value < min_value or value > max_value:
-                raise ValueError("{0} should be between {1} and {2}".format(label, min_value, max_value))
-        except ValueError:
-            raise ValueError("{0} should be an int between {1} and {2}".format(label, min_value, max_value))
+    return value
+
+def get_required_int(request, field, label, min_value=0, max_value=100):
+    value = get_required_string(request, field, label)
+    try:
+        value = int(value)
+        if value < min_value or value > max_value:
+            raise ValueError("{0} should be between {1} and {2}".format(label, min_value, max_value))
+    except ValueError:
+        raise ValueError("{0} should be an int between {1} and {2}".format(label, min_value, max_value))
     return value
 
 def hour_to_time(hour):
@@ -305,6 +314,7 @@ def job_to_form(job):
         "commandline": "commandline",
         "data-bucket": "data-bucket",
         "output_dir": "output-dir",
+        "output_visibility": "output-visibility",
         "schedule_hour": "schedule-time-of-day"
     }
 
@@ -443,6 +453,19 @@ def create_scheduled_job():
     if job_exists(name=request.form['job-name']):
         errors['job-name'] = "The name '{}' is already in use. Choose another name.".format(request.form['job-name'])
 
+    # Check if this is a public or private job:
+    try:
+        visibility = get_required_string(request, 'output-visibility',
+                "Output Visibility").lower().strip()
+        if visibility == 'public':
+            data_bucket = app.config['PUBLIC_DATA_BUCKET']
+        elif visibility == 'private':
+            data_bucket = app.config['PRIVATE_DATA_BUCKET']
+        else:
+            errors['output-visibility'] = "Invalid visibility value '{}'. Use 'public' or 'private'.".format(visibility)
+    except ValueError, e:
+        errors['output-visibility'] = e.message
+
     # If there were any errors, stop and re-display the form.
     # It's only polite to render the form with the previously-supplied
     # values filled in. Unfortunately doing so for files doesn't seem to be
@@ -458,7 +481,7 @@ def create_scheduled_job():
     # Now do it!
     code_s3path = "s3://{0}/jobs/{1}/{2}".format(app.config['CODE_BUCKET'],
         request.form["job-name"], request.files["code-tarball"].filename)
-    data_s3path = "s3://{0}/{1}/data/".format(app.config['PUBLIC_DATA_BUCKET'],
+    data_s3path = "s3://{0}/{1}/data/".format(data_bucket,
         request.form["job-name"])
 
     job = {
@@ -467,8 +490,9 @@ def create_scheduled_job():
         "timeout_minutes": timeout,
         "code_uri": code_s3path,
         "commandline": request.form['commandline'],
-        "data_bucket": app.config['PUBLIC_DATA_BUCKET'],
+        "data_bucket": data_bucket,
         "output_dir": request.form['output-dir'],
+        "output_visibility": visibility,
         "schedule_minute": cron_bits[CRON_IDX_MIN],
         "schedule_hour": cron_bits[CRON_IDX_HOUR],
         "schedule_day_of_month": cron_bits[CRON_IDX_DOM],
@@ -488,7 +512,7 @@ def create_scheduled_job():
     # Last bit is the command to execute.
     # This is just a placeholder - the real command is added when we update
     # the crontab.
-    cron_bits.append("jobs/run.sh '{0}'".format(result.inserted_primary_key))
+    cron_bits.append(request.form['commandline'])
 
     return render_template('schedule_create.html',
         result = result,
@@ -606,6 +630,19 @@ def edit_scheduled_job(job_id):
             "Should be '{}'. To change a job name, delete and " \
             "recreate it.".format(job['name'])
 
+    # Check if this is a public or private job:
+    try:
+        visibility = get_required_string(request, 'output-visibility',
+                "Output Visibility").lower().strip()
+        if visibility == 'public':
+            data_bucket = app.config['PUBLIC_DATA_BUCKET']
+        elif visibility == 'private':
+            data_bucket = app.config['PRIVATE_DATA_BUCKET']
+        else:
+            errors['output-visibility'] = "Invalid visibility value '{}'. Use 'public' or 'private'.".format(visibility)
+    except ValueError, e:
+        errors['output-visibility'] = e.message
+
     # If there were any errors, stop and re-display the form.
     if errors:
         return render_template("schedule.html", values=request.form, errors=errors)
@@ -620,7 +657,7 @@ def edit_scheduled_job(job_id):
     else:
         code_s3path = request.form['code-uri']
 
-    data_s3path = "s3://{0}/{1}/data/".format(app.config['PUBLIC_DATA_BUCKET'],
+    data_s3path = "s3://{0}/{1}/data/".format(data_bucket,
         request.form["job-name"])
 
     job = {
@@ -630,8 +667,9 @@ def edit_scheduled_job(job_id):
         "timeout_minutes": timeout,
         "code_uri": code_s3path,
         "commandline": request.form['commandline'],
-        "data_bucket": app.config['PUBLIC_DATA_BUCKET'],
+        "data_bucket": data_bucket,
         "output_dir": request.form['output-dir'],
+        "output_visibility": visibility,
         "schedule_minute": cron_bits[CRON_IDX_MIN],
         "schedule_hour": cron_bits[CRON_IDX_HOUR],
         "schedule_day_of_month": cron_bits[CRON_IDX_DOM],
@@ -652,7 +690,7 @@ def edit_scheduled_job(job_id):
     # Last bit is the command to execute.
     # This is just a placeholder - the real command is added when we update
     # the crontab.
-    cron_bits.append("jobs/run.sh '{0}'".format(job_id))
+    cron_bits.append(request.form['commandline'])
 
     return render_template('schedule_create.html',
         result = result,

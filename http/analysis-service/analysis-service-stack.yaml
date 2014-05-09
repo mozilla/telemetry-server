@@ -58,6 +58,11 @@ Parameters:
     Type:                     String
     Default:                   telemetry-public-analysis
 
+  privateDataBucket:
+    Description:              Bucket in which to publish private analysis results
+    Type:                     String
+    Default:                   telemetry-private-analysis
+
   databaseURL:
     Description:              Database Connection URL
     Type:                     String
@@ -215,6 +220,7 @@ Resources:
               "echo \"TEMPORARY_BUCKET = '", {Ref: temporaryBucket} , "'\" >> config.py\n",
               "echo \"CODE_BUCKET = '", {Ref: sourcesBucket} , "'\" >> config.py\n",
               "echo \"PUBLIC_DATA_BUCKET = '", {Ref: publicDataBucket} , "'\" >> config.py\n",
+              "echo \"PRIVATE_DATA_BUCKET = '", {Ref: privateDataBucket} , "'\" >> config.py\n",
               "echo \"DB_URL = '", {Ref: databaseURL} , "'\" >> config.py\n",
               "echo \"DEBUG = False\" >> config.py\n",
               "echo 'server {' > /etc/nginx/sites-enabled/default\n",
