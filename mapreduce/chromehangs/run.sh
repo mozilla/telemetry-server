@@ -28,7 +28,7 @@ echo "Today is $TODAY, and we're gathering $NAME data for $TARGET"
 sed -r "s/__TARGET_DATE__/$TARGET/" filter_template.json > filter.json
 
 BASE=$(pwd)
-RAW_DATA_FILE=$BASE/temp/map_output.txt
+RAW_DATA_FILE=$BASE/$OUTPUT/chromehangs-raw-$TARGET.txt
 FINAL_DATA_FILE=$BASE/$OUTPUT/chromehangs-$TARGET.txt.gz
 
 cd ~/telemetry-server
@@ -58,4 +58,8 @@ else
     echo "Symbolication failed (exited with code $SYMBOLICATE_CODE). Log:"
     cat symbolicate.out
 fi
+
+echo "Compressing raw output..."
+gzip $RAW_DATA_FILE
+
 echo "Done!"
