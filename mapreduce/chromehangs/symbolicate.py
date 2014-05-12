@@ -12,6 +12,8 @@ import sys
 import urllib2
 import re
 import gzip
+from multiprocessing import Pool
+import multiprocessing
 
 help_message = '''
     Takes chrome hangs list of memory addresses from JSON dumps and converts them to stack traces
@@ -37,6 +39,8 @@ def symbolicate(chromeHangsObj):
         numStacks = len(chromeHangsObj["stacks"])
         if numStacks == 0:
             return []
+        if len(chromeHangsObj["memoryMap"]) == 0:
+            return []
         if len(chromeHangsObj["memoryMap"][0]) == 2:
             version = 3
         else:
@@ -49,7 +53,7 @@ def symbolicate(chromeHangsObj):
         requestJson = json.dumps(requestObj)
         headers = { "Content-Type": "application/json" }
         requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
-        response = urllib2.urlopen(requestHandle, timeout=1)
+        response = urllib2.urlopen(requestHandle, timeout=10)
     except Exception as e:
         sys.stderr.write("Exception while forwarding request: " + str(e) + "\n")
         sys.stderr.write(requestJson)
@@ -84,6 +88,45 @@ def symbolicate(chromeHangsObj):
 
     return responseSymbols
 
+def load_pings(fin):
+    line_num = 0
+    while True:
+        uuid = fin.read(36)
+        if len(uuid) == 0:
+            break
+        assert len(uuid) == 36
+        line_num += 1
+        tab = fin.read(1)
+        assert tab == '\t'
+        jsonstr = fin.readline()
+        try:
+            json_dict = json.loads(jsonstr)
+        except Exception, e:
+            print >> sys.stderr, "Error parsing json on line", line_num, ":", e
+            continue
+        yield line_num, uuid, json_dict
+
+def handle_ping(args):
+    line_num, uuid, json_dict = args
+    hang_stacks = []
+    reqs = 0
+    errs = 0
+    symbolicated = {}
+    for kind in ["chromeHangs", "lateWrites"]:
+        hangs = json_dict.get(kind)
+        if hangs:
+            del json_dict[kind]
+            stacks = symbolicate(hangs)
+            reqs += 1
+            symbolicated[kind] = stacks
+            if stacks == []:
+                errs += 1
+
+    if "histograms" in json_dict:
+        del json_dict["histograms"]
+    print "Handling line", line_num, uuid, "got", len(symbolicated["chromeHangs"]), "hangs,", len(symbolicated["lateWrites"]), "late writes."
+    return line_num, uuid, json.dumps(json_dict), symbolicated["chromeHangs"], symbolicated["lateWrites"], reqs, errs
+
 def process(input_file, output_file, submission_date):
     if input_file == '-':
         fin = sys.stdin
@@ -91,63 +134,89 @@ def process(input_file, output_file, submission_date):
         fin = open(input_file, "rb")
 
     fout = gzip.open(output_file, "wb")
-
     symbolication_errors = 0
     symbolication_requests = 0
-    line_num = 0
-
+    pool = Pool(processes=10)
+    result = pool.imap_unordered(handle_ping, load_pings(fin))
+    pool.close()
     while True:
-        line_num += 1
-        uuid = fin.read(36)
-        if len(uuid) == 0:
-            break
-        assert len(uuid) == 36
-
-        tab = fin.read(1)
-        assert tab == '\t'
-
-        jsonstr = fin.readline()
         try:
-            json_dict = json.loads(jsonstr)
-        except Exception, e:
-            print >> sys.stderr, "Error parsing json on line", line_num, ":", e
-            continue
+            line_num, uuid, payload, hang_stacks, late_writes_stacks, reqs, errs = result.next(1)
+            symbolication_errors += errs
+            symbolication_requests += reqs
+            fout.write(submission_date)
+            fout.write("\t")
+            fout.write(uuid)
+            fout.write("\t")
+            fout.write(payload)
 
-        hang_stacks = []
-        hangs = json_dict.get("chromeHangs")
-        if hangs:
-          del json_dict["chromeHangs"]
-          hang_stacks = symbolicate(hangs)
-          symbolication_requests += 1
-          if hang_stacks == []:
-              symbolication_errors += 1
+            for stack in hang_stacks:
+                fout.write("\n----- BEGIN HANG STACK -----\n")
+                fout.write("\n".join(stack))
+                fout.write("\n----- END HANG STACK -----\n")
 
-        late_writes_stacks = []
-        writes = json_dict.get("lateWrites")
-        if writes:
-          del json_dict["lateWrites"]
-          late_writes_stacks = symbolicate(writes)
-          symbolication_requests += 1
-          if late_writes_stacks == []:
-              symbolication_errors += 1
+            for stack in late_writes_stacks:
+                fout.write("\n----- BEGIN LATE WRITE STACK -----\n")
+                fout.write("\n".join(stack))
+                fout.write("\n----- END LATE WRITE STACK -----\n")
+        except multiprocessing.TimeoutError:
+            print "no results yet.."
+        except StopIteration:
+            break
+    pool.join()
 
-        if "histograms" in json_dict:
-            del json_dict["histograms"]
-        fout.write(submission_date)
-        fout.write("\t")
-        fout.write(uuid)
-        fout.write("\t")
-        fout.write(json.dumps(json_dict))
+    # while True:
+    #     line_num += 1
+    #     uuid = fin.read(36)
+    #     if len(uuid) == 0:
+    #         break
+    #     assert len(uuid) == 36
 
-        for stack in hang_stacks:
-            fout.write("\n----- BEGIN HANG STACK -----\n")
-            fout.write("\n".join(stack))
-            fout.write("\n----- END HANG STACK -----\n")
+    #     tab = fin.read(1)
+    #     assert tab == '\t'
 
-        for stack in late_writes_stacks:
-            fout.write("\n----- BEGIN LATE WRITE STACK -----\n")
-            fout.write("\n".join(stack))
-            fout.write("\n----- END LATE WRITE STACK -----\n")
+    #     jsonstr = fin.readline()
+    #     try:
+    #         json_dict = json.loads(jsonstr)
+    #     except Exception, e:
+    #         print >> sys.stderr, "Error parsing json on line", line_num, ":", e
+    #         continue
+
+    #     hang_stacks = []
+    #     hangs = json_dict.get("chromeHangs")
+    #     if hangs:
+    #       del json_dict["chromeHangs"]
+    #       hang_stacks = symbolicate(hangs)
+    #       symbolication_requests += 1
+    #       if hang_stacks == []:
+    #           symbolication_errors += 1
+
+    #     late_writes_stacks = []
+    #     writes = json_dict.get("lateWrites")
+    #     if writes:
+    #       del json_dict["lateWrites"]
+    #       late_writes_stacks = symbolicate(writes)
+    #       symbolication_requests += 1
+    #       if late_writes_stacks == []:
+    #           symbolication_errors += 1
+
+    #     if "histograms" in json_dict:
+    #         del json_dict["histograms"]
+    #     fout.write(submission_date)
+    #     fout.write("\t")
+    #     fout.write(uuid)
+    #     fout.write("\t")
+    #     fout.write(json.dumps(json_dict))
+
+    #     for stack in hang_stacks:
+    #         fout.write("\n----- BEGIN HANG STACK -----\n")
+    #         fout.write("\n".join(stack))
+    #         fout.write("\n----- END HANG STACK -----\n")
+
+    #     for stack in late_writes_stacks:
+    #         fout.write("\n----- BEGIN LATE WRITE STACK -----\n")
+    #         fout.write("\n".join(stack))
+    #         fout.write("\n----- END LATE WRITE STACK -----\n")
 
     fin.close()
     fout.close()
