@@ -164,60 +164,6 @@ def process(input_file, output_file, submission_date):
         except StopIteration:
             break
     pool.join()
-
-    # while True:
-    #     line_num += 1
-    #     uuid = fin.read(36)
-    #     if len(uuid) == 0:
-    #         break
-    #     assert len(uuid) == 36
-
-    #     tab = fin.read(1)
-    #     assert tab == '\t'
-
-    #     jsonstr = fin.readline()
-    #     try:
-    #         json_dict = json.loads(jsonstr)
-    #     except Exception, e:
-    #         print >> sys.stderr, "Error parsing json on line", line_num, ":", e
-    #         continue
-
-    #     hang_stacks = []
-    #     hangs = json_dict.get("chromeHangs")
-    #     if hangs:
-    #       del json_dict["chromeHangs"]
-    #       hang_stacks = symbolicate(hangs)
-    #       symbolication_requests += 1
-    #       if hang_stacks == []:
-    #           symbolication_errors += 1
-
-    #     late_writes_stacks = []
-    #     writes = json_dict.get("lateWrites")
-    #     if writes:
-    #       del json_dict["lateWrites"]
-    #       late_writes_stacks = symbolicate(writes)
-    #       symbolication_requests += 1
-    #       if late_writes_stacks == []:
-    #           symbolication_errors += 1
-
-    #     if "histograms" in json_dict:
-    #         del json_dict["histograms"]
-    #     fout.write(submission_date)
-    #     fout.write("\t")
-    #     fout.write(uuid)
-    #     fout.write("\t")
-    #     fout.write(json.dumps(json_dict))
-
-    #     for stack in hang_stacks:
-    #         fout.write("\n----- BEGIN HANG STACK -----\n")
-    #         fout.write("\n".join(stack))
-    #         fout.write("\n----- END HANG STACK -----\n")
-
-    #     for stack in late_writes_stacks:
-    #         fout.write("\n----- BEGIN LATE WRITE STACK -----\n")
-    #         fout.write("\n".join(stack))
-    #         fout.write("\n----- END LATE WRITE STACK -----\n")
-
     fin.close()
     fout.close()
     sys.stderr.write("Requested %s symbolications. Got %s errors." % (symbolication_requests, symbolication_errors))
