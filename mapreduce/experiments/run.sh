@@ -48,11 +48,9 @@ grep -e "^Error," $RAW_DATA_FILE
 echo "End of error lines."
 
 echo "Adding header line and removing error lines..."
-python experiments-process.py $RAW_DATA_FILE $FINAL_DATA_FILE
+python postprocess.py $RAW_DATA_FILE $FINAL_DATA_FILE
 echo "Removing temp file"
 rm $RAW_DATA_FILE
-echo "Compressing output"
-gzip $FINAL_DATA_FILE
-echo "Done!"
-
+echo "Listing:"
 ls -l $BASE/$OUTPUT/
+echo "Done!"
