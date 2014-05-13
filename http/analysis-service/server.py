@@ -792,7 +792,7 @@ def spawn_worker_instance():
     # Bug 961200: Check that a proper OpenSSH public key was uploaded.
     # It should start with "ssh-rsa AAAAB3"
     pubkey = request.files['public-ssh-key'].read()
-    if not pubkey.startswith("ssh-rsa AAAAB3"):
+    if not pubkey.startswith("ssh-rsa AAAAB3") and not pubkey.startswith("ssh-dss AAAAB3"):
         errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
 
     if errors:
