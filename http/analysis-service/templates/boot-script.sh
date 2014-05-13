@@ -35,6 +35,20 @@ mount /dev/md0 /mnt
 cat /home/ubuntu/user_key.pub >> /home/ubuntu/.ssh/authorized_keys
 chmod 600 /home/ubuntu/.ssh/authorized_keys
 
+# Set the default AWS region
+if [ ! -d /home/ubuntu/.aws ]; then
+  sudo -u ubuntu mkdir /home/ubuntu/.aws
+fi
+if [ ! -f /home/ubuntu/.aws/config ]; then
+  sudo -u ubuntu echo -e "[default]\nregion = {{ aws_region }}" > /home/ubuntu/.aws/config
+fi
+
+# Make telemetry work dir
+if [ ! -d /mnt/telemetry ]; then
+  mkdir /mnt/telemetry
+fi
+chown ubuntu:ubuntu /mnt/telemetry
+
 # Setup the motd
 sudo cat >/etc/motd <<END
 Welcome to a Telemetry Analysis worker node.
