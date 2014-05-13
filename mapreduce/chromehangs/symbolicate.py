@@ -53,7 +53,7 @@ def symbolicate(chromeHangsObj):
         requestJson = json.dumps(requestObj)
         headers = { "Content-Type": "application/json" }
         requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
-        response = urllib2.urlopen(requestHandle, timeout=10)
+        response = urllib2.urlopen(requestHandle, timeout=20)
     except Exception as e:
         sys.stderr.write("Exception while forwarding request: " + str(e) + "\n")
         sys.stderr.write(requestJson)
@@ -136,7 +136,7 @@ def process(input_file, output_file, submission_date):
     fout = gzip.open(output_file, "wb")
     symbolication_errors = 0
     symbolication_requests = 0
-    pool = Pool(processes=10)
+    pool = Pool(processes=20)
     result = pool.imap_unordered(handle_ping, load_pings(fin))
     pool.close()
     while True:
