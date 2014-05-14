@@ -49,7 +49,7 @@ grep -e "^Error," $RAW_DATA_FILE
 echo "End of error lines."
 
 echo "Symbolicating outputs..."
-python symbolicate.py -i $RAW_DATA_FILE -o $FINAL_DATA_FILE -d $TARGET &> symbolicate.out
+time python symbolicate.py -i $RAW_DATA_FILE -o $FINAL_DATA_FILE -d $TARGET &> symbolicate.out
 SYMBOLICATE_CODE=$?
 
 if [ $SYMBOLICATE_CODE -eq 0 ]; then
