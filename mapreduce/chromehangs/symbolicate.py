@@ -26,6 +26,69 @@ help_message = '''
 '''
 
 SYMBOL_SERVER_URL = "http://symbolapi.mozilla.org:80/"
+MIN_FRAMES = 15
+irrelevantSignatureRegEx = re.compile('|'.join([
+  'mozilla::ipc::RPCChannel::Call',
+  '@-*0x[0-9a-fA-F]{2,}',
+  '@-*0x[1-9a-fA-F]',
+  'ashmem',
+  'app_process@0x.*',
+  'core\.odex@0x.*',
+  '_CxxThrowException',
+  'dalvik-heap',
+  'dalvik-jit-code-cache',
+  'dalvik-LinearAlloc',
+  'dalvik-mark-stack',
+  'data@app@org\.mozilla\.fennec-\d\.apk@classes\.dex@0x.*',
+  'framework\.odex@0x.*',
+  'google_breakpad::ExceptionHandler::HandleInvalidParameter.*',
+  'KiFastSystemCallRet',
+  'libandroid_runtime\.so@0x.*',
+  'libbinder\.so@0x.*',
+  'libc\.so@.*',
+  'libc-2\.5\.so@.*',
+  'libEGL\.so@.*',
+  'libdvm\.so\s*@\s*0x.*',
+  'libgui\.so@0x.*',
+  'libicudata.so@.*',
+  'libMali\.so@0x.*',
+  'libutils\.so@0x.*',
+  'libz\.so@0x.*',
+  'linux-gate\.so@0x.*',
+  'mnt@asec@org\.mozilla\.fennec-\d@pkg\.apk@classes\.dex@0x.*',
+  'MOZ_Assert',
+  'MOZ_Crash',
+  'mozcrt19.dll@0x.*',
+  'mozilla::ipc::RPCChannel::Call\(',
+  '_NSRaiseError',
+  '(Nt|Zw)?WaitForSingleObject(Ex)?',
+  '(Nt|Zw)?WaitForMultipleObjects(Ex)?',
+  'nvmap@0x.*',
+  'org\.mozilla\.fennec-\d\.apk@0x.*',
+  'RaiseException',
+  'RtlpAdjustHeapLookasideDepth',
+  'system@framework@*\.jar@classes\.dex@0x.*',
+  '___TERMINATING_DUE_TO_UNCAUGHT_EXCEPTION___',
+  'WaitForSingleObjectExImplementation',
+  'WaitForMultipleObjectsExImplementation',
+  'RealMsgWaitFor.*'
+  '_ZdlPv',
+  'zero'
+]))
+rawAddressRegEx = re.compile("-*0x[0-9a-fA-F]{1,}")
+jsFrameRegEx = re.compile("^js::")
+interestingLibs = ["xul.dll", "firefox.exe", "mozjs.dll"]
+boringEventHandlingFrames = set([
+  "NS_ProcessNextEvent_P(nsIThread *,bool) (in xul.pdb)",
+  "mozilla::ipc::MessagePump::Run(base::MessagePump::Delegate *) (in xul.pdb)",
+  "MessageLoop::RunHandler() (in xul.pdb)",
+  "MessageLoop::Run() (in xul.pdb)",
+  "nsBaseAppShell::Run() (in xul.pdb)",
+  "nsAppShell::Run() (in xul.pdb)",
+  "nsAppStartup::Run() (in xul.pdb)",
+  "XREMain::XRE_mainRun() (in xul.pdb)",
+  "XREMain::XRE_main(int,char * * const,nsXREAppData const *) (in xul.pdb)"
+])
 
 # Pulled this method from Vladan's code
 def symbolicate(chromeHangsObj):
@@ -87,6 +150,78 @@ def symbolicate(chromeHangsObj):
         return []
 
     return responseSymbols
+
+def is_interesting(frame):
+    if is_irrelevant(frame):
+        return False
+    if is_raw(frame):
+        return False
+    if is_js(frame):
+        return False
+    return True
+
+def is_irrelevant(frame):
+    m = irrelevantSignatureRegEx.match(frame)
+    if m:
+        return True
+
+def is_raw(frame):
+    m = rawAddressRegEx.match(frame)
+    if m:
+        return True
+
+def is_js(frame):
+    m = jsFrameRegEx.match(frame)
+    if m:
+        return True
+
+def is_boring(frame):
+    return frame in boringEventHandlingFrames
+
+def is_interesting_lib(frame):
+    for lib in interestingLibs:
+        if lib in frame:
+            return True
+    return False
+
+def get_signature(stack):
+    # From Vladan:
+    # 1. Remove uninteresting frames from the top of the stack
+    # 2. Keep removing raw addresses and JS frames from the top of the stack
+    #    until you hit a real frame
+    # 3. Get remaining top N frames (I used N = 15), or more if no
+    #    xul.dll/firefox.exe/mozjs.dll in the top N frames (up to first
+    #    xul.dll/etc frame plus one extra frame)
+    # 4. From this subset of frames, remove all XRE_Main or generic event-
+    #    handling frames from the bottom of stack (until you hit a real frame)
+    # 5. Remove any raw addresses and JS frames from the bottom of stack (same
+    #    as step 2 but done to the other end of the stack)
+
+    interesting = [ is_interesting(f) for f in stack ]
+    try:
+        first_interesting_frame = interesting.index(True)
+    except ValueError as e:
+        # No interesting frames in stack.
+        return []
+
+    signature = stack[first_interesting_frame:]
+    libby = [ is_interesting_lib(f) for f in signature ]
+    try:
+        last_interesting_frame = libby.index(True) + 1
+    except ValueError as e:
+        # No interesting library frames in stack, include them all
+        last_interesting_frame = len(libby) - 1
+
+    if last_interesting_frame < MIN_FRAMES:
+        last_interesting_frame = MIN_FRAMES
+
+    signature = signature[0:last_interesting_frame]
+    boring = [ is_raw(f) or is_js(f) or is_boring(f) for f in signature ]
+    # Pop raw addresses, JS frames, and boring stuff from the end
+    while boring and boring.pop():
+        signature.pop()
+
+    return signature
 
 def load_pings(fin):
     line_num = 0
@@ -151,6 +286,9 @@ def process(input_file, output_file, submission_date):
             fout.write(payload)
 
             for stack in hang_stacks:
+                #fout.write("\n----- BEGIN HANG SIGNATURE -----\n")
+                #fout.write("\n".join(get_signature(stack)))
+                #fout.write("\n----- END HANG SIGNATURE -----\n")
                 fout.write("\n----- BEGIN HANG STACK -----\n")
                 fout.write("\n".join(stack))
                 fout.write("\n----- END HANG STACK -----\n")
