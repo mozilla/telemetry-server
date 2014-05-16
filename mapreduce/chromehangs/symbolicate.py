@@ -95,6 +95,9 @@ boringEventHandlingFrames = set([
   "XREMain::XRE_main(int,char * * const,nsXREAppData const *) (in xul.pdb)"
 ])
 
+def new_request():
+    return {"stacks": [], "memoryMap": [], "version": 3}
+
 # Pulled this method from Vladan's code
 def symbolicate(combined_stacks):
     print "About to symbolicate", len(combined_stacks.keys()), "libs"
@@ -106,16 +109,37 @@ def symbolicate(combined_stacks):
     #    ...
     #  }
     longest = 0
+    current_request = new_request()
+    current_frame_count = 0
+    # TODO: Sort in descending order by number of stack items
     for k, v in combined_stacks.iteritems():
-        print "Request had", len(v), "items"
+        lib, debugid = k
+        if current_frame_count > 500:
+            # TODO: send request
+            requestJson = min_json(current_request)
+            print "should be sending request of", current_frame_count, "frames totaling", len(requestJson), "bytes"
+            print requestJson
+            current_request = new_request()
+            current_frame_count = 0
+
+        print "Combining current stack into previous stack"
+        current_frame_count += len(v)
+        stack_idx = len(current_request["memoryMap"])
+        current_request["memoryMap"].append([lib, debugid])
+        current_request["stacks"].append([ [stack_idx, offset] for offset in v ])
+        print "Stack had", len(v), "items"
         if len(v) > longest:
             longest = len(v)
-        lib, debugid = k
-        memoryMap = [[lib, debugid]]
-        stacks = [[ [0, offset] for offset in v ]]
-        requestObj = {"stacks": stacks, "memoryMap": memoryMap, "version": 3}
-        requestJson = min_json(requestObj)
+
+    if current_frame_count > 0:
+        # todo: send last request
+        requestJson = min_json(current_request)
+        print "should be sending final request of", current_frame_count, "frames totaling", len(requestJson), "bytes"
         print requestJson
+
+        #requestObj = {"stacks": stacks, "memoryMap": memoryMap, "version": 3}
+        #requestJson = min_json(requestObj)
+        #print requestJson
 
     print "longest set of offsets contained", longest, "items"
 
