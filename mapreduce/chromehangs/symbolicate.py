@@ -26,6 +26,11 @@ help_message = '''
 '''
 
 SYMBOL_SERVER_URL = "http://symbolapi.mozilla.org:80/"
+
+# We won't bother symbolicating file+offset pairs that occur less than
+# this many times.
+MIN_HITS = 0
+
 MIN_FRAMES = 15
 irrelevantSignatureRegEx = re.compile('|'.join([
   'mozilla::ipc::RPCChannel::Call',
@@ -91,7 +96,32 @@ boringEventHandlingFrames = set([
 ])
 
 # Pulled this method from Vladan's code
-def symbolicate(chromeHangsObj):
+def symbolicate(combined_stacks):
+    print "About to symbolicate", len(combined_stacks.keys()), "libs"
+    # TODO: batch small ones, split up large ones.
+    # combined_stacks is
+    #  {
+    #    (lib1, debugid1): [offset11, offset12, ...]
+    #    (lib2, debugid2): [offset21, offset22, ...]
+    #    ...
+    #  }
+    longest = 0
+    for k, v in combined_stacks.iteritems():
+        print "Request had", len(v), "items"
+        if len(v) > longest:
+            longest = len(v)
+        lib, debugid = k
+        memoryMap = [[lib, debugid]]
+        stacks = [[ [0, offset] for offset in v ]]
+        requestObj = {"stacks": stacks, "memoryMap": memoryMap, "version": 3}
+        requestJson = min_json(requestObj)
+        print requestJson
+
+    print "longest set of offsets contained", longest, "items"
+
+    return {}
+    # TODO
+
     if isinstance(chromeHangsObj, list):
         version = 1
         requestObj = chromeHangsObj
@@ -184,6 +214,9 @@ def is_interesting_lib(frame):
             return True
     return False
 
+def min_json(obj):
+    return json.dumps(obj, separators=(',', ':'))
+
 def get_signature(stack):
     # From Vladan:
     # 1. Remove uninteresting frames from the top of the stack
@@ -262,49 +295,147 @@ def handle_ping(args):
     print "Handling line", line_num, uuid, "got", len(symbolicated["chromeHangs"]), "hangs,", len(symbolicated["lateWrites"]), "late writes."
     return line_num, uuid, json.dumps(json_dict), symbolicated["chromeHangs"], symbolicated["lateWrites"], reqs, errs
 
-def process(input_file, output_file, submission_date):
+def get_stack_key(stack_entry, memoryMap):
+    mm_idx, offset = stack_entry
+    if mm_idx == -1:
+        return None
+
+    if mm_idx < len(memoryMap):
+        mm = memoryMap[mm_idx]
+        # cache on (dllname, debugid, offset)
+        return (mm[0], mm[1], offset)
+
+    return None
+
+def combine_stacks(stacks):
+    # Change from
+    #   (lib, debugid, offset) => count
+    # to
+    #   (lib, debugid) => [ offsets ]
+    combined = {}
+    for lib, debugid, offset in stacks.keys():
+        key = (lib, debugid)
+        if key not in combined:
+            combined[key] = []
+        combined[key].append(offset)
+    return combined
+
+def process(input_file, output_file, submission_date, include_latewrites=False):
+    # 1. First pass, extract (and count) all the unique stack elements
     if input_file == '-':
         fin = sys.stdin
     else:
-        fin = open(input_file, "rb")
+        fin = open(input_file, "r")
 
+    kinds = ["chromeHangs"]
+    if include_latewrites:
+        kinds.append("lateWrites")
+
+    stack_cache = {}
+    print "Extracting unique stack elements"
+    for line_num, uuid, json_dict in load_pings(fin):
+        cache_hits = 0
+        cache_misses = 0
+        for kind in kinds:
+            hangs = json_dict.get(kind)
+            if hangs:
+                for stack in hangs["stacks"]:
+                    for stack_entry in stack:
+                        key = get_stack_key(stack_entry, hangs["memoryMap"])
+                        if key is not None:
+                            if key in stack_cache:
+                                stack_cache[key] += 1
+                            else:
+                                stack_cache[key] = 1
+
+    # 2. Filter out stack entries with fewer than MIN_HITS occurrences
+    print "Filtering rare stack elements"
+    if MIN_HITS > 1:
+        to_be_symbolicated = { k: v for k, v in stack_cache.iteritems() if v > MIN_HITS }
+    else:
+        to_be_symbolicated = stack_cache
+
+    # 3. Change from
+    #      (lib, debugid, offset) => count
+    #    to
+    #      (lib, debugid) => [ offsets ]
+    print "Combining stacks"
+    combined_stacks = combine_stacks(to_be_symbolicated)
+
+    # 4. For each library, try to fetch symbols for the given offsets.
+    #      Use a local cache if available.
+    # TODO
+    # (lib, debugid, offset) => symbolicated string
+    print "Looking up stack symbols"
+    symbolicated_stacks = symbolicate(combined_stacks)
+
+    # 5. Use these symbolicated stacks to symbolicate the actual data
+    #    go back to the beginning the input file.
+    print "Symbolicating data"
+    fin.seek(0)
     fout = gzip.open(output_file, "wb")
-    symbolication_errors = 0
-    symbolication_requests = 0
-    pool = Pool(processes=20)
-    result = pool.imap_unordered(handle_ping, load_pings(fin))
-    pool.close()
-    while True:
-        try:
-            line_num, uuid, payload, hang_stacks, late_writes_stacks, reqs, errs = result.next(1)
-            symbolication_errors += errs
-            symbolication_requests += reqs
-            fout.write(submission_date)
-            fout.write("\t")
-            fout.write(uuid)
-            fout.write("\t")
-            fout.write(payload)
-
-            for stack in hang_stacks:
-                #fout.write("\n----- BEGIN HANG SIGNATURE -----\n")
-                #fout.write("\n".join(get_signature(stack)))
-                #fout.write("\n----- END HANG SIGNATURE -----\n")
-                fout.write("\n----- BEGIN HANG STACK -----\n")
-                fout.write("\n".join(stack))
-                fout.write("\n----- END HANG STACK -----\n")
-
-            for stack in late_writes_stacks:
-                fout.write("\n----- BEGIN LATE WRITE STACK -----\n")
-                fout.write("\n".join(stack))
-                fout.write("\n----- END LATE WRITE STACK -----\n")
-        except multiprocessing.TimeoutError:
-            print "no results yet.."
-        except StopIteration:
-            break
-    pool.join()
+    for line_num, uuid, json_dict in load_pings(fin):
+        for kind in kinds:
+            hangs = json_dict.get(kind)
+            if hangs:
+                hangs["stacksSymbolicated"] = []
+                for stack in hangs["stacks"]:
+                    sym = []
+                    for stack_entry in stack:
+                        key = get_stack_key(stack_entry, hangs["memoryMap"])
+                        if key is None:
+                            sym.append("-0x1")
+                        elif key not in symbolicated_stacks:
+                            #print "Missed key:", key
+                            sym.append(hex(stack_entry[1]))
+                        else:
+                            sym.append(symbolicated_stacks[key])
+                    hangs["stacksSymbolicated"].append(sym)
+        fout.write(submission_date)
+        fout.write("\t")
+        fout.write(uuid)
+        fout.write("\t")
+        fout.write(min_json(json_dict))
+        fout.write("\n")
     fin.close()
     fout.close()
-    sys.stderr.write("Requested %s symbolications. Got %s errors." % (symbolication_requests, symbolication_errors))
+
+    print "All done."
+
+    # symbolication_errors = 0
+    # symbolication_requests = 0
+    # pool = Pool(processes=20)
+    # result = pool.imap_unordered(handle_ping, load_pings(fin))
+    # pool.close()
+    # while True:
+    #     try:
+    #         line_num, uuid, payload, hang_stacks, late_writes_stacks, reqs, errs = result.next(1)
+    #         symbolication_errors += errs
+    #         symbolication_requests += reqs
+    #         fout.write(submission_date)
+    #         fout.write("\t")
+    #         fout.write(uuid)
+    #         fout.write("\t")
+    #         fout.write(payload)
+
+    #         for stack in hang_stacks:
+    #             #fout.write("\n----- BEGIN HANG SIGNATURE -----\n")
+    #             #fout.write("\n".join(get_signature(stack)))
+    #             #fout.write("\n----- END HANG SIGNATURE -----\n")
+    #             fout.write("\n----- BEGIN HANG STACK -----\n")
+    #             fout.write("\n".join(stack))
+    #             fout.write("\n----- END HANG STACK -----\n")
+
+    #         for stack in late_writes_stacks:
+    #             fout.write("\n----- BEGIN LATE WRITE STACK -----\n")
+    #             fout.write("\n".join(stack))
+    #             fout.write("\n----- END LATE WRITE STACK -----\n")
+    #     except multiprocessing.TimeoutError:
+    #         print "no results yet.."
+    #     except StopIteration:
+    #         break
+    # pool.join()
+    # sys.stderr.write("Requested %s symbolications. Got %s errors." % (symbolication_requests, symbolication_errors))
 
 class Usage(Exception):
     def __init__(self, msg):
