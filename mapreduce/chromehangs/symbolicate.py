@@ -7,13 +7,17 @@ Copyright (c) 2012 Mozilla Foundation. All rights reserved.
 
 import sys
 import getopt
-import json
+try:
+    import simplejson as json
+except ImportError:
+    import json
 import sys
 import urllib2
 import re
 import gzip
-from multiprocessing import Pool
-import multiprocessing
+import time
+import traceback
+from datetime import datetime
 
 help_message = '''
     Takes chrome hangs list of memory addresses from JSON dumps and converts them to stack traces
@@ -30,6 +34,9 @@ SYMBOL_SERVER_URL = "http://symbolapi.mozilla.org:80/"
 # We won't bother symbolicating file+offset pairs that occur less than
 # this many times.
 MIN_HITS = 0
+
+NUM_RETRIES = 3
+RETRY_DELAY = 5 # seconds
 
 MIN_FRAMES = 15
 irrelevantSignatureRegEx = re.compile('|'.join([
@@ -95,12 +102,86 @@ boringEventHandlingFrames = set([
   "XREMain::XRE_main(int,char * * const,nsXREAppData const *) (in xul.pdb)"
 ])
 
+def delta_sec(start, end=None):
+    if end is None:
+        end = datetime.now()
+    delta = end - start
+    sec = delta.seconds + float(delta.microseconds) / 1000.0 / 1000.0
+    return sec
+
 def new_request():
     return {"stacks": [], "memoryMap": [], "version": 3}
 
-# Pulled this method from Vladan's code
+def process_request(request_obj):
+    request_json = min_json(request_obj)
+    response_json = fetch_symbols(request_json)
+    if response_json is None:
+        # Symbolication failed.
+        sys.stderr.write("Server response was None for request:\n" + request_json + "\n")
+        return None
+    response_obj = json.loads(response_json)
+    return get_symbol_cache(request_obj, response_obj)
+
+def fetch_symbols(requestJson):
+    attempts = 0
+    last_exception = None
+    for r in range(NUM_RETRIES):
+        attempts += 1
+        try:
+            # send the request
+            headers = { "Content-Type": "application/json" }
+            requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
+            response = urllib2.urlopen(requestHandle, timeout=60)
+            responseJson = response.read()
+            #sys.stderr.write("Request Bytes: {}, Response Bytes: {}\n".format(len(requestJson), len(responseJson)))
+            print responseJson
+            return responseJson
+        except Exception as e:
+            last_exception = e
+            sys.stderr.write("Request attempt {} failed. Waiting {} seconds " \
+                "to retry. Error was: {}.\n".format(attempts, RETRY_DELAY, e))
+            time.sleep(RETRY_DELAY)
+
+    # We've retried the max number of times.
+    raise last_exception
+
+def get_symbol_cache(request, response):
+    numStacks = len(request["stacks"])
+    # Sanity check #1: same number of stacks as memoryMap entries
+    if numStacks != len(request["memoryMap"]):
+        sys.stderr.write("Bad request: len(stacks) was {}, len(memoryMap) " \
+                " was {} (they should be the same)\n".format(numStacks,
+                len(request["memoryMap"])))
+        return None
+    # Sanity check #2: same number of symbolicated stacks in response as
+    # stacks in request.
+    if numStacks != len(response):
+        sys.stderr.write("Bad response: len(stacks) was {}, " \
+                "len(responseStacks) was {} (they should be the same)\n".format(
+                numStacks, len(response)))
+        return None
+
+    cache = {}
+    for i in range(0, numStacks):
+        stack = request["stacks"][i]
+        symbolicatedStack = response[i]
+        numStackEntries = len(stack)
+        # Sanity check #3: stacks should be the same length.
+        if numStackEntries != len(symbolicatedStack):
+            sys.stderr.write("Bad stack: len(stacks[{0}]) was {1}, " \
+                    "len(responseStacks[{0}]) was {2} (they should be " \
+                    "the same)\n".format(i, numStackEntries,
+                    len(symbolicatedStack)))
+            continue
+
+        for s in range(0, numStackEntries):
+            key = get_stack_key(stack[s], request["memoryMap"])
+            symbol = symbolicatedStack[s]
+            cache[key] = symbol
+    return cache
+
 def symbolicate(combined_stacks):
-    print "About to symbolicate", len(combined_stacks.keys()), "libs"
+    sys.stderr.write("About to symbolicate {} libs\n".format(len(combined_stacks.keys())))
     # TODO: batch small ones, split up large ones.
     # combined_stacks is
     #  {
@@ -108,102 +189,43 @@ def symbolicate(combined_stacks):
     #    (lib2, debugid2): [offset21, offset22, ...]
     #    ...
     #  }
-    longest = 0
+    symbolicated = {}
     current_request = new_request()
     current_frame_count = 0
-    # TODO: Sort in descending order by number of stack items
-    for k, v in combined_stacks.iteritems():
+    # Sort in descending order by number of stack items
+    for k, v in sorted(combined_stacks.iteritems(),
+                       key=lambda a: len(a[1]), reverse=True):
         lib, debugid = k
-        if current_frame_count > 500:
-            # TODO: send request
-            requestJson = min_json(current_request)
-            print "should be sending request of", current_frame_count, "frames totaling", len(requestJson), "bytes"
-            print requestJson
+        if current_frame_count > 1000:
+            # Now send it.
+            try:
+                new_symbols = process_request(current_request)
+                if new_symbols is not None:
+                    symbolicated.update(new_symbols)
+                else:
+                    sys.stderr.write("Failed to get symbols for: " + json.dumps(current_request) + "\n")
+            except Exception as e:
+                sys.stderr.write("Exception while processing symbolication request: " + str(e) + "\n")
             current_request = new_request()
             current_frame_count = 0
 
-        print "Combining current stack into previous stack"
+        # Combine stack into current request
         current_frame_count += len(v)
         stack_idx = len(current_request["memoryMap"])
         current_request["memoryMap"].append([lib, debugid])
-        current_request["stacks"].append([ [stack_idx, offset] for offset in v ])
-        print "Stack had", len(v), "items"
-        if len(v) > longest:
-            longest = len(v)
+        current_request["stacks"].append([[stack_idx, offset] for offset in v])
 
     if current_frame_count > 0:
-        # todo: send last request
-        requestJson = min_json(current_request)
-        print "should be sending final request of", current_frame_count, "frames totaling", len(requestJson), "bytes"
-        print requestJson
-
-        #requestObj = {"stacks": stacks, "memoryMap": memoryMap, "version": 3}
-        #requestJson = min_json(requestObj)
-        #print requestJson
-
-    print "longest set of offsets contained", longest, "items"
-
-    return {}
-    # TODO
-
-    if isinstance(chromeHangsObj, list):
-        version = 1
-        requestObj = chromeHangsObj
-        numStacks = len(chromeHangsObj)
-        if numStacks == 0:
-            return []
-    else:
-        numStacks = len(chromeHangsObj["stacks"])
-        if numStacks == 0:
-            return []
-        if len(chromeHangsObj["memoryMap"]) == 0:
-            return []
-        if len(chromeHangsObj["memoryMap"][0]) == 2:
-            version = 3
-        else:
-            assert len(chromeHangsObj["memoryMap"][0]) == 4
-            version = 2
-        requestObj = {"stacks"    : chromeHangsObj["stacks"],
-                      "memoryMap" : chromeHangsObj["memoryMap"],
-                      "version"   : version}
-    try:
-        requestJson = json.dumps(requestObj)
-        headers = { "Content-Type": "application/json" }
-        requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
-        response = urllib2.urlopen(requestHandle, timeout=20)
-    except Exception as e:
-        sys.stderr.write("Exception while forwarding request: " + str(e) + "\n")
-        sys.stderr.write(requestJson)
-        return []
-    try:
-        responseJson = response.read()
-    except Exception as e:
-        sys.stderr.write("Exception while reading server response to symbolication request: " + str(e) + "\n")
-        return []
-
-    try:
-        responseSymbols = json.loads(responseJson)
-        # Sanity check
-        if numStacks != len(responseSymbols):
-            sys.stderr.write(str(len(responseSymbols)) + " hangs in response, " + str(numStacks) + " hangs in request!\n")
-            return []
-
-        # Sanity check
-        for hangIndex in range(0, numStacks):
-            if version == 1:
-                stack = chromeHangsObj[hangIndex]["stack"]
+        # Send final request (if there is one)
+        try:
+            new_symbols = process_request(current_request)
+            if new_symbols is not None:
+                symbolicated.update(new_symbols)
             else:
-                stack = chromeHangsObj["stacks"][hangIndex]
-            requestStackLen = len(stack)
-            responseStackLen = len(responseSymbols[hangIndex])
-            if requestStackLen != responseStackLen:
-                sys.stderr.write(str(responseStackLen) + " symbols in response, " + str(requestStackLen) + " PCs in request!\n")
-                return []
-    except Exception as e:
-        sys.stderr.write("Exception while parsing server response to forwarded request: " + str(e) + "\n")
-        return []
-
-    return responseSymbols
+                sys.stderr.write("Failed to get symbols for final request: " + json.dumps(current_request) + "\n")
+        except Exception as e:
+            sys.stderr.write("Exception while processing final symbolication request: " + str(e) + "\n")
+    return symbolicated
 
 def is_interesting(frame):
     if is_irrelevant(frame):
@@ -298,28 +320,8 @@ def load_pings(fin):
             continue
         yield line_num, uuid, json_dict
 
-def handle_ping(args):
-    line_num, uuid, json_dict = args
-    hang_stacks = []
-    reqs = 0
-    errs = 0
-    symbolicated = {}
-    for kind in ["chromeHangs", "lateWrites"]:
-        hangs = json_dict.get(kind)
-        if hangs:
-            del json_dict[kind]
-            stacks = symbolicate(hangs)
-            reqs += 1
-            symbolicated[kind] = stacks
-            if stacks == []:
-                errs += 1
-
-    if "histograms" in json_dict:
-        del json_dict["histograms"]
-    print "Handling line", line_num, uuid, "got", len(symbolicated["chromeHangs"]), "hangs,", len(symbolicated["lateWrites"]), "late writes."
-    return line_num, uuid, json.dumps(json_dict), symbolicated["chromeHangs"], symbolicated["lateWrites"], reqs, errs
-
 def get_stack_key(stack_entry, memoryMap):
+    print "getting stack key for:", stack_entry, memoryMap
     mm_idx, offset = stack_entry
     if mm_idx == -1:
         return None
@@ -355,8 +357,9 @@ def process(input_file, output_file, submission_date, include_latewrites=False):
     if include_latewrites:
         kinds.append("lateWrites")
 
+    start = datetime.now()
     stack_cache = {}
-    print "Extracting unique stack elements"
+    sys.stderr.write("Extracting unique stack elements...")
     for line_num, uuid, json_dict in load_pings(fin):
         cache_hits = 0
         cache_misses = 0
@@ -371,11 +374,14 @@ def process(input_file, output_file, submission_date, include_latewrites=False):
                                 stack_cache[key] += 1
                             else:
                                 stack_cache[key] = 1
+    sys.stderr.write("Done after %.2f sec\n" % delta_sec(start))
 
     # 2. Filter out stack entries with fewer than MIN_HITS occurrences
-    print "Filtering rare stack elements"
     if MIN_HITS > 1:
+        prev = datetime.now()
+        sys.stderr.write("Filtering rare stack elements...")
         to_be_symbolicated = { k: v for k, v in stack_cache.iteritems() if v > MIN_HITS }
+        sys.stderr.write("Done after %.2f sec\n" % delta_sec(prev))
     else:
         to_be_symbolicated = stack_cache
 
@@ -383,19 +389,32 @@ def process(input_file, output_file, submission_date, include_latewrites=False):
     #      (lib, debugid, offset) => count
     #    to
     #      (lib, debugid) => [ offsets ]
-    print "Combining stacks"
+    sys.stderr.write("Combining stacks...")
+    prev = datetime.now()
     combined_stacks = combine_stacks(to_be_symbolicated)
+    sys.stderr.write("Done after %.2f sec\n" % delta_sec(prev))
 
     # 4. For each library, try to fetch symbols for the given offsets.
-    #      Use a local cache if available.
-    # TODO
-    # (lib, debugid, offset) => symbolicated string
-    print "Looking up stack symbols"
-    symbolicated_stacks = symbolicate(combined_stacks)
+    #      (lib, debugid, offset) => symbolicated string
+    sys.stderr.write("Looking up stack symbols...")
+    prev = datetime.now()
+    symbol_cache = symbolicate(combined_stacks)
+    sys.stderr.write("Done after %.2f sec\n" % delta_sec(prev))
+
+    # Write out our symbol cache.
+    #sys.stderr.write("Writing symbol cache\n")
+    #fsym = open("symbol_cache.txt", "w")
+    #for k, v in symbol_cache.iteritems():
+    #    #a, b, c = k
+    #    #fsym.write("\t".join((a, b, c, v)))
+    #    fsym.write(json.dumps([k,v]))
+    #    fsym.write("\n")
+    #fsym.close()
 
     # 5. Use these symbolicated stacks to symbolicate the actual data
     #    go back to the beginning the input file.
-    print "Symbolicating data"
+    sys.stderr.write("Symbolicating data...")
+    prev = datetime.now()
     fin.seek(0)
     fout = gzip.open(output_file, "wb")
     for line_num, uuid, json_dict in load_pings(fin):
@@ -403,68 +422,36 @@ def process(input_file, output_file, submission_date, include_latewrites=False):
             hangs = json_dict.get(kind)
             if hangs:
                 hangs["stacksSymbolicated"] = []
+                hangs["stacksSignatures"] = []
                 for stack in hangs["stacks"]:
                     sym = []
                     for stack_entry in stack:
                         key = get_stack_key(stack_entry, hangs["memoryMap"])
                         if key is None:
                             sym.append("-0x1")
-                        elif key not in symbolicated_stacks:
-                            #print "Missed key:", key
-                            sym.append(hex(stack_entry[1]))
+                        elif key in symbol_cache:
+                            sym.append(symbol_cache[key])
                         else:
-                            sym.append(symbolicated_stacks[key])
+                            #print "Missed key:", key
+                            # This should only happen if some of our
+                            # symbolication requests failed
+                            sym.append(hex(stack_entry[1]))
                     hangs["stacksSymbolicated"].append(sym)
+                    hangs["stacksSignatures"].append(get_signature(sym))
         fout.write(submission_date)
         fout.write("\t")
         fout.write(uuid)
         fout.write("\t")
         fout.write(min_json(json_dict))
         fout.write("\n")
+    sys.stderr.write("Done after %.2f sec\n" % delta_sec(prev))
     fin.close()
     fout.close()
-
-    print "All done."
-
-    # symbolication_errors = 0
-    # symbolication_requests = 0
-    # pool = Pool(processes=20)
-    # result = pool.imap_unordered(handle_ping, load_pings(fin))
-    # pool.close()
-    # while True:
-    #     try:
-    #         line_num, uuid, payload, hang_stacks, late_writes_stacks, reqs, errs = result.next(1)
-    #         symbolication_errors += errs
-    #         symbolication_requests += reqs
-    #         fout.write(submission_date)
-    #         fout.write("\t")
-    #         fout.write(uuid)
-    #         fout.write("\t")
-    #         fout.write(payload)
-
-    #         for stack in hang_stacks:
-    #             #fout.write("\n----- BEGIN HANG SIGNATURE -----\n")
-    #             #fout.write("\n".join(get_signature(stack)))
-    #             #fout.write("\n----- END HANG SIGNATURE -----\n")
-    #             fout.write("\n----- BEGIN HANG STACK -----\n")
-    #             fout.write("\n".join(stack))
-    #             fout.write("\n----- END HANG STACK -----\n")
-
-    #         for stack in late_writes_stacks:
-    #             fout.write("\n----- BEGIN LATE WRITE STACK -----\n")
-    #             fout.write("\n".join(stack))
-    #             fout.write("\n----- END LATE WRITE STACK -----\n")
-    #     except multiprocessing.TimeoutError:
-    #         print "no results yet.."
-    #     except StopIteration:
-    #         break
-    # pool.join()
-    # sys.stderr.write("Requested %s symbolications. Got %s errors." % (symbolication_requests, symbolication_errors))
+    sys.stderr.write("All done in %.2f sec\n" % delta_sec(start))
 
 class Usage(Exception):
     def __init__(self, msg):
         self.msg = msg
-
 
 def main(argv=None):
     if argv is None:
@@ -490,7 +477,12 @@ def main(argv=None):
                 output_file = value
             if option in ("-d", "--date"):
                 submission_date = value
-        process(input_file, output_file, submission_date)
+        try:
+            process(input_file, output_file, submission_date)
+            return 0
+        except Exception as e:
+            traceback.print_exc()
+            return 1
     except Usage, err:
         print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
         print >> sys.stderr, " for help use --help"
