@@ -12,7 +12,7 @@ tar czvf "$TARBALL" \
         symbolicate.py \
         chromehangs.py
 
-S3PATH=s3://telemetry-analysis-code/$NAME/$TARBALL
+S3PATH=s3://telemetry-analysis-code/jobs/$NAME/$TARBALL
 
 echo "Packaged $NAME code as $TARBALL"
 if [ ! -z "$(which aws)" ]; then
