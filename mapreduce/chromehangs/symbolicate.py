@@ -133,7 +133,6 @@ def fetch_symbols(requestJson):
             requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
             response = urllib2.urlopen(requestHandle, timeout=60)
             responseJson = response.read()
-            #sys.stderr.write("Request Bytes: {}, Response Bytes: {}\n".format(len(requestJson), len(responseJson)))
             print responseJson
             return responseJson
         except Exception as e:
@@ -182,7 +181,7 @@ def get_symbol_cache(request, response):
 
 def symbolicate(combined_stacks):
     sys.stderr.write("About to symbolicate {} libs\n".format(len(combined_stacks.keys())))
-    # TODO: batch small ones, split up large ones.
+    # TODO: split up large requests if we overwhelm the server.
     # combined_stacks is
     #  {
     #    (lib1, debugid1): [offset11, offset12, ...]
@@ -347,6 +346,7 @@ def combine_stacks(stacks):
     return combined
 
 def process(input_file, output_file, submission_date, include_latewrites=False):
+    return_code = 0
     # 1. First pass, extract (and count) all the unique stack elements
     if input_file == '-':
         fin = sys.stdin
@@ -376,7 +376,9 @@ def process(input_file, output_file, submission_date, include_latewrites=False):
                                 stack_cache[key] = 1
     sys.stderr.write("Done after %.2f sec\n" % delta_sec(start))
 
-    # 2. Filter out stack entries with fewer than MIN_HITS occurrences
+    # 2. Filter out stack entries with fewer than MIN_HITS occurrences.
+    #    NOTE: This is not necessarily safe to do, since it might cause
+    #          us to miss a legit stack with one uncommon stack entry.
     if MIN_HITS > 1:
         prev = datetime.now()
         sys.stderr.write("Filtering rare stack elements...")
@@ -412,9 +414,9 @@ def process(input_file, output_file, submission_date, include_latewrites=False):
     #fsym.close()
 
     # 5. Use these symbolicated stacks to symbolicate the actual data
-    #    go back to the beginning the input file.
     sys.stderr.write("Symbolicating data...")
     prev = datetime.now()
+    # Go back to the beginning the input file.
     fin.seek(0)
     fout = gzip.open(output_file, "wb")
     for line_num, uuid, json_dict in load_pings(fin):
@@ -432,10 +434,14 @@ def process(input_file, output_file, submission_date, include_latewrites=False):
                         elif key in symbol_cache:
                             sym.append(symbol_cache[key])
                         else:
-                            #print "Missed key:", key
                             # This should only happen if some of our
                             # symbolication requests failed
+                            sys.stderr.write("Failed to get symbols for " \
+                                    "key {}".format(key))
+                            # Default to the hex offset.
                             sym.append(hex(stack_entry[1]))
+                            # Signal that something went wrong
+                            return_code = 3
                     hangs["stacksSymbolicated"].append(sym)
                     hangs["stacksSignatures"].append(get_signature(sym))
         fout.write(submission_date)
@@ -448,6 +454,7 @@ def process(input_file, output_file, submission_date, include_latewrites=False):
     fin.close()
     fout.close()
     sys.stderr.write("All done in %.2f sec\n" % delta_sec(start))
+    return return_code
 
 class Usage(Exception):
     def __init__(self, msg):
@@ -478,8 +485,7 @@ def main(argv=None):
             if option in ("-d", "--date"):
                 submission_date = value
         try:
-            process(input_file, output_file, submission_date)
-            return 0
+            return process(input_file, output_file, submission_date)
         except Exception as e:
             traceback.print_exc()
             return 1
