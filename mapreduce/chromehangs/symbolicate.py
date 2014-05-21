@@ -38,7 +38,7 @@ MIN_HITS = 0
 NUM_RETRIES = 3
 RETRY_DELAY = 5 # seconds
 
-MIN_FRAMES = 15
+MAX_FRAMES = 15
 irrelevantSignatureRegEx = re.compile('|'.join([
   'mozilla::ipc::RPCChannel::Call',
   '@-*0x[0-9a-fA-F]{2,}',
@@ -71,7 +71,7 @@ irrelevantSignatureRegEx = re.compile('|'.join([
   'MOZ_Assert',
   'MOZ_Crash',
   'mozcrt19.dll@0x.*',
-  'mozilla::ipc::RPCChannel::Call\(',
+  'mozilla::ipc::MessageChannel::Call\(',
   '_NSRaiseError',
   '(Nt|Zw)?WaitForSingleObject(Ex)?',
   '(Nt|Zw)?WaitForMultipleObjects(Ex)?',
@@ -83,7 +83,7 @@ irrelevantSignatureRegEx = re.compile('|'.join([
   '___TERMINATING_DUE_TO_UNCAUGHT_EXCEPTION___',
   'WaitForSingleObjectExImplementation',
   'WaitForMultipleObjectsExImplementation',
-  'RealMsgWaitFor.*'
+  'RealMsgWaitFor.*',
   '_ZdlPv',
   'zero'
 ]))
@@ -239,16 +239,19 @@ def is_irrelevant(frame):
     m = irrelevantSignatureRegEx.match(frame)
     if m:
         return True
+    return False
 
 def is_raw(frame):
     m = rawAddressRegEx.match(frame)
     if m:
         return True
+    return False
 
 def is_js(frame):
     m = jsFrameRegEx.match(frame)
     if m:
         return True
+    return False
 
 def is_boring(frame):
     return frame in boringEventHandlingFrames
@@ -290,8 +293,8 @@ def get_signature(stack):
         # No interesting library frames in stack, include them all
         last_interesting_frame = len(libby) - 1
 
-    if last_interesting_frame < MIN_FRAMES:
-        last_interesting_frame = MIN_FRAMES
+    if last_interesting_frame > MAX_FRAMES:
+        last_interesting_frame = MAX_FRAMES
 
     signature = signature[0:last_interesting_frame]
     boring = [ is_raw(f) or is_js(f) or is_boring(f) for f in signature ]
