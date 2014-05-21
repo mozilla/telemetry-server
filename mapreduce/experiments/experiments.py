@@ -1,5 +1,4 @@
-# SlowSQL export, ported from:
-#   https://github.com/mozilla-metrics/telemetry-toolbox
+# Experiments export
 import simplejson as json
 import traceback
 import sys
