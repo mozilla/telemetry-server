@@ -66,17 +66,12 @@ def main(argv=None):
     parser.add_argument("-o", "--output-file", required=True,
             type=argparse.FileType('w'),
             help="Write output to this file")
-    parser.add_argument("-m", "--map-file", required=True,
-            type=argparse.FileType('w'),
-            help="Stack->ID Map will be written to this file")
     parser.add_argument("-v", "--verbose", action="store_true",
             help="Print more detailed output")
     args = parser.parse_args(argv)
 
     stack_tracker = {}
-    stack_id_map = {}
     combined_stacks = {}
-    stack_id = 1
     for line, submission_date, uuid, payload in get_pings(args.input_file):
         if line % 5000 == 0:
             log("Processing line {}...".format(line), args.verbose)
@@ -98,14 +93,6 @@ def main(argv=None):
                 if len(sig) > 15:
                     print "Found a long signature:", sig
                 key = stack_to_string(sig)
-                if key in stack_id_map:
-                    key_id = stack_id_map[key]
-                else:
-                    key_id = str(stack_id)
-                    stack_id += 1
-                    stack_id_map[key] = key_id
-                    args.map_file.write(key)
-                    args.map_file.write("\n")
                 stack_tracker[key] = stack_tracker.get(key, 0) + 1
                 duration   = safe_arr_get(durations,   i, -1)
                 app_uptime = safe_arr_get(app_uptimes, i, -1)
