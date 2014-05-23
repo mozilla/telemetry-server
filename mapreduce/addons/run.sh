@@ -1,8 +1,7 @@
 #!/bin/bash
 
 cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
-sudo apt-get --yes install python-numpy git
-pip install unicodecsv
+sudo pip install unicodecsv
 
 # Replace the default telemetry-server install with our own
 rm -rf telemetry-server

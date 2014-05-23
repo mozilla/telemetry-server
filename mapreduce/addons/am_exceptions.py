@@ -46,41 +46,6 @@ def map(k, d, v, cx):
         # missing stamp but no exception logged!
         report(cx, appName, appUpdateChannel, appVersion, missing_stamp, "None")
 
-    XXX OLD
-    parsed = json.loads(v)
-
-    if not "fileIOReports" in parsed:
-        return
-
-    if not parsed["fileIOReports"]:
-        return
-
-    startup_sub = False
-    execution_sub = False
-    shutdown_sub = False
-
-    for f, arr in parsed["fileIOReports"].iteritems():
-        if len(arr) != 3: # Don't support the old format
-            continue
-
-        if arr[0] is not None:
-            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "startup", clean(f)]), arr[0])
-            if not startup_sub:
-                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "startup", "TOTAL"]), [0, 0, 0, 0, 0, 0])
-                startup_sub = True
-
-        if arr[1] is not None:
-            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "execution", clean(f)]), arr[1])
-            if not execution_sub:
-                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "execution", "TOTAL"]), [0, 0, 0, 0, 0, 0])
-                execution_sub = True
-
-        if arr[2] is not None:
-            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "shutdown", clean(f)]), arr[2])
-            if not shutdown_sub:
-                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "shutdown", "TOTAL"]), [0, 0, 0, 0, 0, 0])
-                shutdown_sub = True
-
 def setup_reduce(cx):
     cx.field_separator = ","
 
