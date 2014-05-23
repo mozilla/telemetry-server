@@ -39,6 +39,15 @@ NUM_RETRIES = 3
 RETRY_DELAY = 5 # seconds
 
 MAX_FRAMES = 15
+
+# A list of frame signatures that should always be considered top of the stack
+# if present in the stack.
+signatureSentinelsRegEx = re.compile('|'.join([
+  'mozilla::ipc::MessageChannel::Call\('
+]))
+
+# A regular expression matching frame signatures that should be ignored when
+# generating an overall signature.
 irrelevantSignatureRegEx = re.compile('|'.join([
   'mozilla::ipc::RPCChannel::Call',
   '@-*0x[0-9a-fA-F]{2,}',
@@ -89,7 +98,7 @@ irrelevantSignatureRegEx = re.compile('|'.join([
 ]))
 rawAddressRegEx = re.compile("-*0x[0-9a-fA-F]{1,}")
 jsFrameRegEx = re.compile("^js::")
-interestingLibs = ["xul.dll", "firefox.exe", "mozjs.dll"]
+interestingLibs = ["xul.pdb", "firefox.pdb", "mozjs.pdb"]
 boringEventHandlingFrames = set([
   "NS_ProcessNextEvent_P(nsIThread *,bool) (in xul.pdb)",
   "mozilla::ipc::MessagePump::Run(base::MessagePump::Delegate *) (in xul.pdb)",
@@ -254,7 +263,14 @@ def is_js(frame):
     return False
 
 def is_boring(frame):
-    return frame in boringEventHandlingFrames
+    if frame in boringEventHandlingFrames:
+        return True
+    return False
+
+def is_sentinel(frame):
+    if signatureSentinelsRegEx.match(frame):
+        return True
+    return False
 
 def is_interesting_lib(frame):
     for lib in interestingLibs:
@@ -262,12 +278,17 @@ def is_interesting_lib(frame):
             return True
     return False
 
+def clean_element(element):
+    if is_raw(element):
+        return "-0x1"
+    return element
+
 def min_json(obj):
     return json.dumps(obj, separators=(',', ':'))
 
 def get_signature(stack):
     # From Vladan:
-    # 1. Remove uninteresting frames from the top of the stack
+    # 1. Remove IPC and uninteresting frames from the top of the stack
     # 2. Keep removing raw addresses and JS frames from the top of the stack
     #    until you hit a real frame
     # 3. Get remaining top N frames (I used N = 15), or more if no
@@ -278,6 +299,14 @@ def get_signature(stack):
     # 5. Remove any raw addresses and JS frames from the bottom of stack (same
     #    as step 2 but done to the other end of the stack)
 
+    # Fast-forward to any sentinel frames
+    for i in range(len(stack)):
+        if is_sentinel(stack[i]):
+            #print "Skipping to sentinel stack frame", stack[i], "at", i
+            stack = stack[i:]
+            break
+
+    # Remove uninteresting frames from the top of the stack
     interesting = [ is_interesting(f) for f in stack ]
     try:
         first_interesting_frame = interesting.index(True)
@@ -286,21 +315,29 @@ def get_signature(stack):
         return []
 
     signature = stack[first_interesting_frame:]
+
+    # Make sure we keep at least one interesting lib
     libby = [ is_interesting_lib(f) for f in signature ]
     try:
         last_interesting_frame = libby.index(True) + 1
+        #print "last interesting frame found at ", last_interesting_frame, ":", signature[last_interesting_frame]
     except ValueError as e:
-        # No interesting library frames in stack, include them all
-        last_interesting_frame = len(libby) - 1
-
-    if last_interesting_frame > MAX_FRAMES:
+        # No interesting library frames in stack, include them all.
+        #print "no interesting libs"
         last_interesting_frame = MAX_FRAMES
 
-    signature = signature[0:last_interesting_frame]
+    # Grab MAX_FRAMES, but be sure to include an interesting frame if there's
+    # one after that
+    last_potential_frame = max(last_interesting_frame, MAX_FRAMES)
+
+    signature = signature[0:last_potential_frame]
     boring = [ is_raw(f) or is_js(f) or is_boring(f) for f in signature ]
-    # Pop raw addresses, JS frames, and boring stuff from the end
+    # Pop raw addresses, JS frames, and boring frames from the end
     while boring and boring.pop():
         signature.pop()
+
+    # Replace raw addresses with a placeholder:
+    signature = [ clean_element(e) for e in signature ]
 
     return signature
 
@@ -323,7 +360,6 @@ def load_pings(fin):
         yield line_num, uuid, json_dict
 
 def get_stack_key(stack_entry, memoryMap):
-    print "getting stack key for:", stack_entry, memoryMap
     mm_idx, offset = stack_entry
     if mm_idx == -1:
         return None
