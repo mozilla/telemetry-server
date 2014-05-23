@@ -10,6 +10,8 @@ tar czvf "$TARBALL" \
         filter_template.json \
         run.sh \
         symbolicate.py \
+        extract_common_stacks.py \
+        combine.py \
         chromehangs.py
 
 S3PATH=s3://telemetry-analysis-code/jobs/$NAME/$TARBALL

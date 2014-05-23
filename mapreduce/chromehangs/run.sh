@@ -30,6 +30,7 @@ sed -r "s/__TARGET_DATE__/$TARGET/" filter_template.json > filter.json
 BASE=$(pwd)
 RAW_DATA_FILE=$BASE/$OUTPUT/chromehangs-raw-$TARGET.txt
 FINAL_DATA_FILE=$BASE/$OUTPUT/chromehangs-$TARGET.txt.gz
+COMBINED_DATA_FILE=$BASE/$OUTPUT/chromehangs-common-$TARGET.txt
 
 cd ~/telemetry-server
 echo "Starting the $NAME export for $TARGET"
@@ -59,7 +60,13 @@ else
     cat symbolicate.out
 fi
 
+echo "Extracting common stacks..."
+time python extract_common_stacks.py -i $FINAL_DATA_FILE -o $COMBINED_DATA_FILE
+
 echo "Compressing raw output..."
 gzip $RAW_DATA_FILE
+
+echo "Compressing combined stacks..."
+gzip $COMBINED_DATA_FILE
 
 echo "Done!"
