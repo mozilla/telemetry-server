@@ -1,1 +1,1 @@
-submission_date,app_name,app_version,app_update_channel,filename,submission_count,median_time,median_count
+app_name,app_update_channel,app_version,missing,message,count
