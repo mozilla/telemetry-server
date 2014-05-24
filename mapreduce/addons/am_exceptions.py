@@ -15,7 +15,7 @@ def report(cx, app, channel, version, missing, text):
     f = StringIO()
     w = ucsv.writer(f, encoding='utf-8')
     w.writerow((app, channel, version, missing, text))
-    cx.write(f.getvalue(), 1)
+    cx.write(f.getvalue().strip(), 1)
     f.close()
 
 def map(k, d, v, cx):
