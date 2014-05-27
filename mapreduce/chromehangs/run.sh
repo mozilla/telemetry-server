@@ -29,7 +29,7 @@ sed -r "s/__TARGET_DATE__/$TARGET/" filter_template.json > filter.json
 
 BASE=$(pwd)
 RAW_DATA_FILE=$BASE/$OUTPUT/chromehangs-raw-$TARGET.txt
-FINAL_DATA_FILE=$BASE/$OUTPUT/chromehangs-$TARGET.txt.gz
+FINAL_DATA_FILE=$BASE/$OUTPUT/chromehangs-symbolicated-$TARGET.txt.gz
 COMBINED_DATA_FILE=$BASE/$OUTPUT/chromehangs-common-$TARGET.txt
 
 cd ~/telemetry-server
