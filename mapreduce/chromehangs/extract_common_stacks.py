@@ -4,6 +4,7 @@ except ImportError:
     import json
 import argparse
 import csv
+import gzip
 import sys
 import symbolicate
 
@@ -22,6 +23,12 @@ def log(message, verbose=True):
         print message
 
 def get_pings(some_file, parse=True):
+    if some_file.name.endswith(".gz"):
+        # Reopen as gzip
+        fname = some_file.name
+        some_file.close()
+        some_file = gzip.open(fname)
+
     line_num = 0
     for line in some_file:
         submission_date, uuid, payload = line.split("\t", 2)
@@ -90,8 +97,8 @@ def main(argv=None):
         for i in range(len(sigs)):
             sig = sigs[i]
             if sig:
-                if len(sig) > 15:
-                    print "Found a long signature:", sig
+                #if len(sig) > 15:
+                #    print "Found a long signature:", sig
                 key = stack_to_string(sig)
                 stack_tracker[key] = stack_tracker.get(key, 0) + 1
                 duration   = safe_arr_get(durations,   i, -1)
