@@ -216,15 +216,23 @@ class SymbolicateTest(unittest.TestCase):
             "0x1537f (in xul.pdb)",
             "Interesting thing (in version.pdb)",
             "nsAppShell::Run() (in xul.pdb)", # <-- boring
-            ""
+            "",
+            "js::Invoke(JSContext *,JS::CallArgs,js::MaybeConstruct) (in mozjs.pdb)",
+            "0x153be",
+            "0x153be with some extra jazz",
+            "js::Invoke(JSContext *,JS::CallArgs,js::MaybeConstruct)"
         ]
         expecteds = [
-            "-0x1",
-            "-0x1",
-            "-0x1",
+            "-0x1 (in wntdll.pdb)",
+            "-0x1 (in wkernelbase.pdb)",
+            "-0x1 (in xul.pdb)",
             "Interesting thing (in version.pdb)",
             "nsAppShell::Run() (in xul.pdb)", # <-- boring
-            ""
+            "",
+            "JS Frame (in mozjs.pdb)",
+            "-0x1",
+            "-0x1 with some extra jazz",
+            "JS Frame"
         ]
 
         for i in range(len(tests)):
@@ -252,7 +260,7 @@ class SymbolicateTest(unittest.TestCase):
                 ],
                 "expected": [
                     "Interesting thing (in version.pdb)",
-                    "-0x1",
+                    "-0x1 (in xul.pdb)",
                     "Another interesting thing (in version.pdb)"
                 ]
             },
@@ -288,23 +296,7 @@ class SymbolicateTest(unittest.TestCase):
                     "js::NativeSet<0>(JSContext *,JS::Handle<JSObject *>,JS::Handle<JSObject *>,JS::Handle<js::Shape *>,bool,JS::MutableHandle<JS::Value>) (in awesome.pdb)",
                     "js::baseops::SetPropertyHelper<0>(JSContext *,JS::Handle<JSObject *>,JS::Handle<JSObject *>,JS::Handle<jsid>,js::baseops::QualifiedBool,JS::MutableHandle<JS::Value>,bool) (in awesome.pdb)"
                 ],
-                "expected": [
-                    "nsPluginNativeWindow::CallSetWindow(nsRefPtr<nsNPAPIPluginInstance> &) (in exciting.pdb)",
-                    "nsPluginNativeWindowWin::CallSetWindow(nsRefPtr<nsNPAPIPluginInstance> &) (in exciting.pdb)",
-                    "nsObjectFrame::CallSetWindow(bool) (in exciting.pdb)",
-                    "nsPluginInstanceOwner::CallSetWindow() (in exciting.pdb)",
-                    "nsPluginInstanceOwner::UpdateWindowPositionAndClipRect(bool) (in exciting.pdb)",
-                    "nsObjectFrame::SetIsDocumentActive(bool) (in exciting.pdb)",
-                    "SetPluginIsActive (in exciting.pdb)",
-                    "EnumerateFreezables (in exciting.pdb)",
-                    "nsTHashtable<nsBaseHashtableET<nsStringHashKey,`anonymous namespace'::TelemetryIOInterposeObserver::FileStatsByStage> >::s_EnumStub(PLDHashTable *,PLDHashEntryHdr *,unsigned int,void *) (in exciting.pdb)",
-                    "PL_DHashTableEnumerate(PLDHashTable *,PLDHashOperator (*)(PLDHashTable *,PLDHashEntryHdr *,unsigned int,void *),void *) (in exciting.pdb)",
-                    "nsTHashtable<nsPtrHashKey<nsIContent> >::EnumerateEntries(PLDHashOperator (*)(nsPtrHashKey<nsIContent> *,void *),void *) (in exciting.pdb)",
-                    "PresShell::SetIsActive(bool) (in exciting.pdb)",
-                    "nsDocShell::SetIsActive(bool) (in exciting.pdb)",
-                    "NS_InvokeByIndex (in exciting.pdb)",
-                    "XPC_WN_GetterSetter(JSContext *,unsigned int,JS::Value *) (in exciting.pdb)"
-                ]
+                "expected": []
             },
             "long stack": {
                 "stack": [
@@ -553,6 +545,48 @@ class SymbolicateTest(unittest.TestCase):
                     'mozilla::plugins::PluginScriptableObjectParent::GetPropertyHelper(void *,bool *,bool *,_NPVariant *) (in xul.pdb)'
                 ]
             },
+            "old stack": {
+                "stack": [
+                    "KiFastSystemCallRet (in ntdll.pdb)",
+                    "WaitForMultipleObjectsExImplementation (in kernel32.pdb)",
+                    "RealMsgWaitForMultipleObjectsEx (in user32.pdb)",
+                    "MsgWaitForMultipleObjects (in user32.pdb)",
+                    "0x345f94 (in xul.pdb)",
+                    "0x34e42e (in xul.pdb)",
+                    "0x34ec03 (in xul.pdb)",
+                    "0x3ce6c5 (in xul.pdb)",
+                    "0x534f96 (in xul.pdb)",
+                    "0xc6ae55 (in xul.pdb)",
+                    "0xce0925 (in xul.pdb)",
+                    "0xce0a82 (in xul.pdb)",
+                    "0xe2c8e3 (in xul.pdb)",
+                    "0xe2c96c (in xul.pdb)",
+                    "0xede5f5 (in xul.pdb)",
+                    "0xf94a79 (in xul.pdb)",
+                    "0x104e80c (in xul.pdb)",
+                    "0x104ecff (in xul.pdb)",
+                    "0xb0f45a (in xul.pdb)",
+                    "0xb4720 (in xul.pdb)",
+                    "0xd1c4d (in xul.pdb)",
+                    "0x3495fb (in xul.pdb)",
+                    "0x33ce45 (in xul.pdb)",
+                    "0x33d36a (in xul.pdb)",
+                    "0x29d7f0 (in xul.pdb)",
+                    "0x2a4029 (in xul.pdb)",
+                    "0x8a5600 (in xul.pdb)",
+                    "0x22a93b (in xul.pdb)",
+                    "0x28b5f1 (in xul.pdb)",
+                    "0x2a790d (in xul.pdb)",
+                    "0x19c2 (in firefox.pdb)",
+                    "0x201c (in firefox.pdb)",
+                    "0x2126 (in firefox.pdb)",
+                    "0x2a76 (in firefox.pdb)",
+                    "BaseThreadInitThunk (in kernel32.pdb)",
+                    "__RtlUserThreadStart (in ntdll.pdb)",
+                    "_RtlUserThreadStart (in ntdll.pdb)"
+                ],
+                "expected": []
+            },
             "": {
                 "stack": [
                 ],
@@ -593,6 +627,9 @@ class SymbolicateTest(unittest.TestCase):
 
     def test_multiple_sentinels(self):
         self.run_one_test("multiple sentinels")
+
+    def test_old_stack(self):
+        self.run_one_test("old stack")
 
     def test_combine_stacks(self):
         test = {

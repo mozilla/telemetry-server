@@ -110,6 +110,7 @@ boringEventHandlingFrames = set([
   "XREMain::XRE_mainRun() (in xul.pdb)",
   "XREMain::XRE_main(int,char * * const,nsXREAppData const *) (in xul.pdb)"
 ])
+getLibraryRegEx = re.compile("^.* [(]in ([^)]+)[)]$")
 
 def delta_sec(start, end=None):
     if end is None:
@@ -279,8 +280,18 @@ def is_interesting_lib(frame):
     return False
 
 def clean_element(element):
-    if is_raw(element):
-        return "-0x1"
+    m = rawAddressRegEx.match(element)
+    if m:
+        # Replace address with "-0x1"
+        return "-0x1" + element[len(m.group(0)):]
+
+    if is_js(element):
+        m = getLibraryRegEx.match(element)
+        if m:
+            return "JS Frame (in {})".format(m.group(1))
+        else:
+            return "JS Frame"
+
     return element
 
 def min_json(obj):
@@ -322,9 +333,9 @@ def get_signature(stack):
         last_interesting_frame = libby.index(True) + 1
         #print "last interesting frame found at ", last_interesting_frame, ":", signature[last_interesting_frame]
     except ValueError as e:
-        # No interesting library frames in stack, include them all.
+        # No interesting library frames in stack, stop here.
         #print "no interesting libs"
-        last_interesting_frame = MAX_FRAMES
+        return []
 
     # Grab MAX_FRAMES, but be sure to include an interesting frame if there's
     # one after that
@@ -335,6 +346,16 @@ def get_signature(stack):
     # Pop raw addresses, JS frames, and boring frames from the end
     while boring and boring.pop():
         signature.pop()
+
+    # If we don't have any interesting libs left now, return an empty sig.
+    contains_interesting_lib = False
+    for frame in signature:
+        if is_interesting_lib(frame):
+            contains_interesting_lib = True
+            break
+
+    if not contains_interesting_lib:
+        return []
 
     # Replace raw addresses with a placeholder:
     signature = [ clean_element(e) for e in signature ]
