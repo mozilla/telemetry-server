@@ -9,6 +9,7 @@ fi
 tar czvf "$TARBALL" \
         filter_template.json \
         run.sh \
+        run_public.sh \
         symbolicate.py \
         extract_common_stacks.py \
         combine.py \
