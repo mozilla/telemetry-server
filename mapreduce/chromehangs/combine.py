@@ -75,7 +75,7 @@ week_start = sys.argv[2]
 week_end = sys.argv[3]
 inputs = []
 
-file_pattern = re.compile("^chromehangs-common-([0-9]{8}).txt.gz$")
+file_pattern = re.compile("^chromehangs-common-([0-9]{8}).csv.gz$")
 for root, dirs, files in os.walk("."):
     for f in files:
         m = file_pattern.match(f)
