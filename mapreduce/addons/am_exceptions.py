@@ -2,7 +2,6 @@ import simplejson as json
 import io
 import unicodecsv as ucsv
 from cStringIO import StringIO
-from string import maketrans
 
 stamps = ['AMI_startup_begin',
           'XPI_startup_begin',
@@ -11,20 +10,34 @@ stamps = ['AMI_startup_begin',
           'XPI_startup_end',
           'AMI_startup_end']
 
-def report(cx, app, channel, version, missing, text):
+version_regex = re.compile(r'^([0-9]+).*$')
+
+def clean_version(ver):
+    m = version_regex.match(ver);
+    if m:
+        return m.group(1);
+    return ver;
+
+def report(cx, app, platform, version, channel, text):
     f = StringIO()
     w = ucsv.writer(f, encoding='utf-8')
-    w.writerow((app, channel, version, missing, text))
+    w.writerow((app, platform, version, channel, text))
     cx.write(f.getvalue().strip(), 1)
     f.close()
 
 def map(k, d, v, cx):
-    reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date = d
-    report(cx, appName, appUpdateChannel, appVersion, "None", "Sessions")
+    reason, appName, appVersion, appUpdateChannel, appBuildID, submission_date = d
+    appVersion = clean_version(appVersion)
     j = json.loads(v)
+    if not 'info' in j:
+        return
+    i = j['info']
+    os = i['OS']
+
+    report(cx, appName, os, appVersion, appUpdateChannel, "Sessions")
 
     if not 'simpleMeasurements' in j:
-        report(cx, appName, appUpdateChannel, appVersion, "None", "No simpleMeasurements")
+        report(cx, appName, os, appVersion, appUpdateChannel, "No simpleMeasurements")
         return
     s = j['simpleMeasurements']
 
@@ -36,15 +49,15 @@ def map(k, d, v, cx):
             break
 
     if not 'addonManager' in s:
-        report(cx, appName, appUpdateChannel, appVersion, missing_stamp, "No addonManager")
+        report(cx, appName, os, appVersion, appUpdateChannel, missing_stamp + ": No addonManager")
         return
     a = s['addonManager']
 
     if 'exception' in a:
-        report(cx, appName, appUpdateChannel, appVersion, missing_stamp, json.dumps(a['exception']))
+        report(cx, appName, os, appVersion, appUpdateChannel, json.dumps(a['exception']))
     elif missing_stamp != "NONE":
         # missing stamp but no exception logged!
-        report(cx, appName, appUpdateChannel, appVersion, missing_stamp, "None")
+        report(cx, appName, os, appVersion, appUpdateChannel, missing_stamp + ": No exception")
 
 def setup_reduce(cx):
     cx.field_separator = ","

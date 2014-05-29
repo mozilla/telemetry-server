@@ -1,54 +1,22 @@
-import csv
+import unicodecsv as ucsv
 import gzip
 import os
 import re
 import sys
 import numpy
+from collections import Counter
 
-SUB_COLUMN=0
-APP_COLUMN=1
+APP_COLUMN=0
+OS_COLUMN=1
 VER_COLUMN=2
 CHAN_COLUMN=3
-INTERVAL_COLUMN=4
-FILE_COLUMN=5
-SUBMISSION_COUNT_COLUMN=6
-MEDIAN_TIME_COLUMN=7
-MEDIAN_COUNT_COLUMN=8
-version_regex = re.compile(r'^([0-9]+).*$')
+TEXT_COLUMN=4
+COUNT_COLUMN=5
 
-def clean_version(ver):
-    m = version_regex.match(ver);
-    if m:
-        return m.group(1);
-    return ver;
-
-def get_key(row):
-    return ",".join(row[APP_COLUMN:FILE_COLUMN]);
-
-def combine(f, rows):
-    seen_keys = {}
-    total_docs = 0
-    f_docs = 0
-    f_median_time = []
-    f_median_count = []
-
-    for r in rows:
-        k = get_key(r)
-
-        try:
-            if k not in seen_keys:
-                total_docs += totals[k]
-                seen_keys[k] = 1
-        except KeyError, e:
-            print "Key not found:", k, r
-
-        f_docs += int(r[SUBMISSION_COUNT_COLUMN])
-        f_median_time.append(float(r[MEDIAN_TIME_COLUMN]))
-        f_median_count.append(float(r[MEDIAN_COUNT_COLUMN]))
-
-    f_comb_median_time = numpy.median(f_median_time)
-    f_comb_median_count = numpy.median(f_median_count)
-    return [round(float(f_docs) / float(total_docs) * 100, 2), f_docs, f_comb_median_time, f_comb_median_count, f]
+# Accumulate the data into a big dict.
+# We use the tuple (app, os, version, channel) as our key
+# for each key, keep a Counter dict of text => total count
+accum = defaultdict(Counter)
 
 filenames = {}
 totals = {}
@@ -57,7 +25,7 @@ output_dir = sys.argv[1]
 week_start = sys.argv[2]
 week_end = sys.argv[3]
 inputs = []
-file_pattern = re.compile("^mainthreadio([0-9]{8}).csv.gz$")
+file_pattern = re.compile("^am_exceptions([0-9]{8}).csv.gz$")
 
 for f in os.listdir('.'):
     m = file_pattern.match(f)
@@ -71,44 +39,44 @@ for f in os.listdir('.'):
 for a in inputs:
     print "processing", a
     f = gzip.open(a, 'rb')
-    reader = csv.reader(f)
+    reader = ucsv.reader(f)
     headers = reader.next()
     rowcount = 0
 
-    for row in reader:
-        if row[FILE_COLUMN] == "TOTAL":
-            # sum up the submission_dates.
-            total_key = get_key(row)
-            if total_key not in totals:
-                totals[total_key] = 0
-            totals[total_key] += int(row[SUBMISSION_COUNT_COLUMN])
-        else:
-            fk = "\t".join([row[FILE_COLUMN], row[APP_COLUMN], row[CHAN_COLUMN],
-                 clean_version(row[VER_COLUMN]), row[INTERVAL_COLUMN]])
-            if fk not in filenames:
-                filenames[fk] = []
-            filenames[fk].append(row)
+# APP_COLUMN=0
+# OS_COLUMN=1
+# VER_COLUMN=2
+# CHAN_COLUMN=3
+# TEXT_COLUMN=4
+# COUNT_COLUMN=5
 
+    for row in reader:
+        key = (row[APP_COLUMN], row[OS_COLUMN], row[VER_COLUMN], row[CHAN_COLUMN])
+        accum[key][row[TEXT_COLUMN]] += int(row[COUNT_COLUMN])
         rowcount += 1
     total_rows += rowcount
     f.close()
 
 print "overall, found", total_rows, "rows, with", len(filenames.keys()), "unique filenames"
 
-combined = []
-for f, rows in filenames.iteritems():
-    combined.append(combine(f, rows))
+filename = "weekly_am_exceptions_{0}-{1}.csv.gz".format(week_start, week_end)
+outfile = gzip.open(os.path.join(output_dir, filename), "wb")
+writer = ucsv.writer(outfile)
+headers.append("sessions")
+writer.writerow(headers)
 
-for stub, column in [["frequency", 1], ["median_time", 2], ["median_count", 3]]:
-    filename = "weekly_{0}_{1}-{2}.csv.gz".format(stub, week_start, week_end)
-    counters = {}
-    outfile = gzip.open(os.path.join(output_dir, filename), "wb")
-    writer = csv.writer(outfile)
+print "Generating", filename
 
-    print "Generating", filename
+for key, texts in accum:
+    if 'Sessions' in texts:
+        sessions = texts['Sessions']
+    else:
+        print "No session count for " + str(key)
+        sessions = 0
 
-    for row in sorted(combined, key=lambda r: r[column], reverse=True):
-        f = row[-1]
-        filename, app, chan, ver, interval = f.split("\t")
-        writer.writerow(row[0:-1] + [filename, app, chan, ver, interval])
-    outfile.close()
+    for text, count in texts:
+        if text == 'Sessions':
+            continue
+        line = list(key).extend(count, sessions)
+        writer.writerow(line)
+outfile.close()
