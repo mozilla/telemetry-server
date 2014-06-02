@@ -1,7 +1,7 @@
 #!/bin/bash
 
 OUTPUT=output
-NAME=chromehangs
+NAME=chromehangs_weekly
 TODAY=$(date +%Y%m%d)
 if [ ! -d "$OUTPUT" ]; then
     mkdir -p "$OUTPUT"
@@ -84,7 +84,7 @@ for f in $(seq 0 6); do
         cp ${COMBINED_DATA_FILE}.gz ./
     else
         echo "Fetching $DAY"
-        aws s3 cp s3://telemetry-public-analysis/chromehangs/data/chromehangs-common-$DAY.csv.gz ./
+        aws s3 cp s3://telemetry-public-analysis/$NAME/data/chromehangs-common-$DAY.csv.gz ./
     fi
 done
 echo "Creating weekly data for $MONDAY to $SUNDAY"
