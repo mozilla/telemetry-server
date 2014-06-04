@@ -43,12 +43,12 @@ class SymbolicateTest(unittest.TestCase):
         #  not js
         tests = [
             'RealMsgWaitForMultipleObjectsEx (in wuser32.pdb)', # irrelevant
-            "0x156a6 (in wkernelbase.pdb)",                     # raw
+            "0x156a6 (in wkernelbase.pdb)", # raw
             "js::RunScript(JSContext *,js::RunState &) (in mozjs.pdb)", # js
             "Interesting thing (in version.pdb)",
-            "0xc2e708 (in xul.pdb)",                            # raw
+            "0xc2e708 (in xul.pdb)",  # raw
             "Another interesting thing (in version.pdb)",
-            "nsAppShell::Run() (in xul.pdb)", # <-- boring (but interesting)
+            "nsAppShell::Run() (in xul.pdb)", # boring (and yet interesting)
             "0x4c4502 (in xul.pdb)"
         ]
         expecteds = [
