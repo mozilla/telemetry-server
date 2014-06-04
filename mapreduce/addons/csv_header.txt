@@ -1,1 +1,1 @@
-app_name,platform,app_version,app_update_channel,missing,message,count
+app_name,platform,app_version,app_update_channel,message,count

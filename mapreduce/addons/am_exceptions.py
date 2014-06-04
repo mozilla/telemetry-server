@@ -2,6 +2,7 @@ import simplejson as json
 import io
 import unicodecsv as ucsv
 from cStringIO import StringIO
+import re
 
 stamps = ['AMI_startup_begin',
           'XPI_startup_begin',
@@ -13,10 +14,10 @@ stamps = ['AMI_startup_begin',
 version_regex = re.compile(r'^([0-9]+).*$')
 
 def clean_version(ver):
-    m = version_regex.match(ver);
+    m = version_regex.match(ver)
     if m:
-        return m.group(1);
-    return ver;
+        return m.group(1)
+    return ver
 
 def report(cx, app, platform, version, channel, text):
     f = StringIO()
@@ -26,7 +27,7 @@ def report(cx, app, platform, version, channel, text):
     f.close()
 
 def map(k, d, v, cx):
-    reason, appName, appVersion, appUpdateChannel, appBuildID, submission_date = d
+    reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date = d
     appVersion = clean_version(appVersion)
     j = json.loads(v)
     if not 'info' in j:
