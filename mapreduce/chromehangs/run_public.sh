@@ -1,7 +1,7 @@
 #!/bin/bash
 
 OUTPUT=output
-NAME=chromehangs
+NAME=chromehangs_weekly
 TODAY=$(date +%Y%m%d)
 if [ ! -d "$OUTPUT" ]; then
     mkdir -p "$OUTPUT"
@@ -28,9 +28,9 @@ echo "Today is $TODAY, and we're gathering $NAME data for $TARGET"
 sed -r "s/__TARGET_DATE__/$TARGET/" filter_template.json > filter.json
 
 BASE=$(pwd)
-RAW_DATA_FILE=$BASE/$OUTPUT/chromehangs-raw-$TARGET.txt
-FINAL_DATA_FILE=$BASE/$OUTPUT/chromehangs-symbolicated-$TARGET.txt.gz
-COMBINED_DATA_FILE=$BASE/$OUTPUT/chromehangs-common-$TARGET.txt
+RAW_DATA_FILE=$BASE/chromehangs-raw-$TARGET.txt
+FINAL_DATA_FILE=$BASE/chromehangs-symbolicated-$TARGET.txt.gz
+COMBINED_DATA_FILE=$BASE/$OUTPUT/chromehangs-common-$TARGET.csv
 
 cd ~/telemetry-server
 echo "Starting the $NAME export for $TARGET"
@@ -63,10 +63,30 @@ fi
 echo "Extracting common stacks..."
 time python extract_common_stacks.py -i $FINAL_DATA_FILE -o $COMBINED_DATA_FILE
 
-echo "Compressing raw output..."
-gzip $RAW_DATA_FILE
-
 echo "Compressing combined stacks..."
 gzip $COMBINED_DATA_FILE
 
+echo "Processing weekly data"
+cd $BASE
+if [ ! -d "weekly" ]; then
+    mkdir -p "weekly"
+fi
+cd weekly
+# Monday is day 1
+OFFSET=$(( $(date -d $TARGET +%u) - 1 ))
+MONDAY=$(date -d "$TARGET - $OFFSET days" +%Y%m%d)
+SUNDAY=$(date -d "$MONDAY + 6 days" +%Y%m%d)
+echo "For target '$TARGET', week is $MONDAY to $SUNDAY"
+for f in $(seq 0 6); do
+    DAY=$(date -d "$MONDAY + $f days" +%Y%m%d)
+    if [ "$DAY" -eq "$TARGET" ]; then
+        echo "Using local file for today ($DAY)"
+        cp ${COMBINED_DATA_FILE}.gz ./
+    else
+        echo "Fetching $DAY"
+        aws s3 cp s3://telemetry-public-analysis/$NAME/data/chromehangs-common-$DAY.csv.gz ./
+    fi
+done
+echo "Creating weekly data for $MONDAY to $SUNDAY"
+python $BASE/combine.py $BASE/$OUTPUT $MONDAY $SUNDAY
 echo "Done!"

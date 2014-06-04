@@ -1,17 +1,23 @@
 #!/usr/bin/env python
 # encoding: utf-8
-"""
-symbolicate.py
-Copyright (c) 2012 Mozilla Foundation. All rights reserved.
-"""
+
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import sys
 import getopt
-import json
+try:
+    import simplejson as json
+except ImportError:
+    import json
 import sys
 import urllib2
 import re
 import gzip
+import time
+import traceback
+from datetime import datetime
 
 help_message = '''
     Takes chrome hangs list of memory addresses from JSON dumps and converts them to stack traces
@@ -25,138 +31,494 @@ help_message = '''
 
 SYMBOL_SERVER_URL = "http://symbolapi.mozilla.org:80/"
 
-# Pulled this method from Vladan's code
-def symbolicate(chromeHangsObj):
-    if isinstance(chromeHangsObj, list):
-        version = 1
-        requestObj = chromeHangsObj
-        numStacks = len(chromeHangsObj)
-        if numStacks == 0:
-            return []
-    else:
-        numStacks = len(chromeHangsObj["stacks"])
-        if numStacks == 0:
-            return []
-        if len(chromeHangsObj["memoryMap"][0]) == 2:
-            version = 3
-        else:
-            assert len(chromeHangsObj["memoryMap"][0]) == 4
-            version = 2
-        requestObj = {"stacks"    : chromeHangsObj["stacks"],
-                      "memoryMap" : chromeHangsObj["memoryMap"],
-                      "version"   : version}
-    try:
-        requestJson = json.dumps(requestObj)
-        headers = { "Content-Type": "application/json" }
-        requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
-        response = urllib2.urlopen(requestHandle, timeout=1)
-    except Exception as e:
-        sys.stderr.write("Exception while forwarding request: " + str(e) + "\n")
-        sys.stderr.write(requestJson)
-        return []
-    try:
-        responseJson = response.read()
-    except Exception as e:
-        sys.stderr.write("Exception while reading server response to symbolication request: " + str(e) + "\n")
-        return []
+# We won't bother symbolicating file+offset pairs that occur less than
+# this many times.
+MIN_HITS = 0
 
-    try:
-        responseSymbols = json.loads(responseJson)
-        # Sanity check
-        if numStacks != len(responseSymbols):
-            sys.stderr.write(str(len(responseSymbols)) + " hangs in response, " + str(numStacks) + " hangs in request!\n")
-            return []
+NUM_RETRIES = 3
+RETRY_DELAY = 5 # seconds
 
-        # Sanity check
-        for hangIndex in range(0, numStacks):
-            if version == 1:
-                stack = chromeHangsObj[hangIndex]["stack"]
+MAX_FRAMES = 15
+
+# A list of frame signatures that should always be considered top of the stack
+# if present in the stack.
+signatureSentinelsRegEx = re.compile('|'.join([
+  'mozilla::ipc::MessageChannel::Call\('
+]))
+
+# A regular expression matching frame signatures that should be ignored when
+# generating an overall signature.
+irrelevantSignatureRegEx = re.compile('|'.join([
+  'mozilla::ipc::RPCChannel::Call',
+  '@-*0x[0-9a-fA-F]{2,}',
+  '@-*0x[1-9a-fA-F]',
+  'ashmem',
+  'app_process@0x.*',
+  'core\.odex@0x.*',
+  '_CxxThrowException',
+  'dalvik-heap',
+  'dalvik-jit-code-cache',
+  'dalvik-LinearAlloc',
+  'dalvik-mark-stack',
+  'data@app@org\.mozilla\.fennec-\d\.apk@classes\.dex@0x.*',
+  'framework\.odex@0x.*',
+  'google_breakpad::ExceptionHandler::HandleInvalidParameter.*',
+  'KiFastSystemCallRet',
+  'libandroid_runtime\.so@0x.*',
+  'libbinder\.so@0x.*',
+  'libc\.so@.*',
+  'libc-2\.5\.so@.*',
+  'libEGL\.so@.*',
+  'libdvm\.so\s*@\s*0x.*',
+  'libgui\.so@0x.*',
+  'libicudata.so@.*',
+  'libMali\.so@0x.*',
+  'libutils\.so@0x.*',
+  'libz\.so@0x.*',
+  'linux-gate\.so@0x.*',
+  'mnt@asec@org\.mozilla\.fennec-\d@pkg\.apk@classes\.dex@0x.*',
+  'MOZ_Assert',
+  'MOZ_Crash',
+  'mozcrt19.dll@0x.*',
+  'mozilla::ipc::MessageChannel::Call\(',
+  '_NSRaiseError',
+  '(Nt|Zw)?WaitForSingleObject(Ex)?',
+  '(Nt|Zw)?WaitForMultipleObjects(Ex)?',
+  'nvmap@0x.*',
+  'org\.mozilla\.fennec-\d\.apk@0x.*',
+  'RaiseException',
+  'RtlpAdjustHeapLookasideDepth',
+  'system@framework@*\.jar@classes\.dex@0x.*',
+  '___TERMINATING_DUE_TO_UNCAUGHT_EXCEPTION___',
+  'WaitForSingleObjectExImplementation',
+  'WaitForMultipleObjectsExImplementation',
+  'RealMsgWaitFor.*',
+  '_ZdlPv',
+  'zero'
+]))
+rawAddressRegEx = re.compile("-*0x[0-9a-fA-F]{1,}")
+jsFrameRegEx = re.compile("^js::")
+interestingLibs = ["xul.pdb", "firefox.pdb", "mozjs.pdb"]
+boringEventHandlingFrames = set([
+  "NS_ProcessNextEvent_P(nsIThread *,bool) (in xul.pdb)",
+  "mozilla::ipc::MessagePump::Run(base::MessagePump::Delegate *) (in xul.pdb)",
+  "MessageLoop::RunHandler() (in xul.pdb)",
+  "MessageLoop::Run() (in xul.pdb)",
+  "nsBaseAppShell::Run() (in xul.pdb)",
+  "nsAppShell::Run() (in xul.pdb)",
+  "nsAppStartup::Run() (in xul.pdb)",
+  "XREMain::XRE_mainRun() (in xul.pdb)",
+  "XREMain::XRE_main(int,char * * const,nsXREAppData const *) (in xul.pdb)"
+])
+getLibraryRegEx = re.compile("^.* [(]in ([^)]+)[)]$")
+
+def delta_sec(start, end=None):
+    if end is None:
+        end = datetime.now()
+    delta = end - start
+    sec = delta.seconds + float(delta.microseconds) / 1000.0 / 1000.0
+    return sec
+
+def new_request():
+    return {"stacks": [], "memoryMap": [], "version": 3}
+
+def process_request(request_obj):
+    request_json = min_json(request_obj)
+    response_json = fetch_symbols(request_json)
+    if response_json is None:
+        # Symbolication failed.
+        sys.stderr.write("Server response was None for request:\n" + request_json + "\n")
+        return None
+    response_obj = json.loads(response_json)
+    return get_symbol_cache(request_obj, response_obj)
+
+def fetch_symbols(requestJson):
+    attempts = 0
+    last_exception = None
+    for r in range(NUM_RETRIES):
+        attempts += 1
+        try:
+            # send the request
+            headers = { "Content-Type": "application/json" }
+            requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
+            response = urllib2.urlopen(requestHandle, timeout=60)
+            responseJson = response.read()
+            print responseJson
+            return responseJson
+        except Exception as e:
+            last_exception = e
+            sys.stderr.write("Request attempt {} failed. Waiting {} seconds " \
+                "to retry. Error was: {}.\n".format(attempts, RETRY_DELAY, e))
+            time.sleep(RETRY_DELAY)
+
+    # We've retried the max number of times.
+    raise last_exception
+
+def get_symbol_cache(request, response):
+    numStacks = len(request["stacks"])
+    # Sanity check #1: same number of stacks as memoryMap entries
+    if numStacks != len(request["memoryMap"]):
+        sys.stderr.write("Bad request: len(stacks) was {}, len(memoryMap) " \
+                " was {} (they should be the same)\n".format(numStacks,
+                len(request["memoryMap"])))
+        return None
+    # Sanity check #2: same number of symbolicated stacks in response as
+    # stacks in request.
+    if numStacks != len(response):
+        sys.stderr.write("Bad response: len(stacks) was {}, " \
+                "len(responseStacks) was {} (they should be the same)\n".format(
+                numStacks, len(response)))
+        return None
+
+    cache = {}
+    for i in range(0, numStacks):
+        stack = request["stacks"][i]
+        symbolicatedStack = response[i]
+        numStackEntries = len(stack)
+        # Sanity check #3: stacks should be the same length.
+        if numStackEntries != len(symbolicatedStack):
+            sys.stderr.write("Bad stack: len(stacks[{0}]) was {1}, " \
+                    "len(responseStacks[{0}]) was {2} (they should be " \
+                    "the same)\n".format(i, numStackEntries,
+                    len(symbolicatedStack)))
+            continue
+
+        for s in range(0, numStackEntries):
+            key = get_stack_key(stack[s], request["memoryMap"])
+            symbol = symbolicatedStack[s]
+            cache[key] = symbol
+    return cache
+
+def symbolicate(combined_stacks):
+    sys.stderr.write("About to symbolicate {} libs\n".format(len(combined_stacks.keys())))
+    # TODO: split up large requests if we overwhelm the server.
+    # combined_stacks is
+    #  {
+    #    (lib1, debugid1): [offset11, offset12, ...]
+    #    (lib2, debugid2): [offset21, offset22, ...]
+    #    ...
+    #  }
+    symbolicated = {}
+    current_request = new_request()
+    current_frame_count = 0
+    # Sort in descending order by number of stack items
+    for k, v in sorted(combined_stacks.iteritems(),
+                       key=lambda a: len(a[1]), reverse=True):
+        lib, debugid = k
+        if current_frame_count > 1000:
+            # Now send it.
+            try:
+                new_symbols = process_request(current_request)
+                if new_symbols is not None:
+                    symbolicated.update(new_symbols)
+                else:
+                    sys.stderr.write("Failed to get symbols for: " + json.dumps(current_request) + "\n")
+            except Exception as e:
+                sys.stderr.write("Exception while processing symbolication request: " + str(e) + "\n")
+            current_request = new_request()
+            current_frame_count = 0
+
+        # Combine stack into current request
+        current_frame_count += len(v)
+        stack_idx = len(current_request["memoryMap"])
+        current_request["memoryMap"].append([lib, debugid])
+        current_request["stacks"].append([[stack_idx, offset] for offset in v])
+
+    if current_frame_count > 0:
+        # Send final request (if there is one)
+        try:
+            new_symbols = process_request(current_request)
+            if new_symbols is not None:
+                symbolicated.update(new_symbols)
             else:
-                stack = chromeHangsObj["stacks"][hangIndex]
-            requestStackLen = len(stack)
-            responseStackLen = len(responseSymbols[hangIndex])
-            if requestStackLen != responseStackLen:
-                sys.stderr.write(str(responseStackLen) + " symbols in response, " + str(requestStackLen) + " PCs in request!\n")
-                return []
-    except Exception as e:
-        sys.stderr.write("Exception while parsing server response to forwarded request: " + str(e) + "\n")
+                sys.stderr.write("Failed to get symbols for final request: " + json.dumps(current_request) + "\n")
+        except Exception as e:
+            sys.stderr.write("Exception while processing final symbolication request: " + str(e) + "\n")
+    return symbolicated
+
+def is_interesting(frame):
+    if is_irrelevant(frame):
+        return False
+    if is_raw(frame):
+        return False
+    if is_js(frame):
+        return False
+    return True
+
+def is_irrelevant(frame):
+    m = irrelevantSignatureRegEx.match(frame)
+    if m:
+        return True
+    return False
+
+def is_raw(frame):
+    m = rawAddressRegEx.match(frame)
+    if m:
+        return True
+    return False
+
+def is_js(frame):
+    m = jsFrameRegEx.match(frame)
+    if m:
+        return True
+    return False
+
+def is_boring(frame):
+    if frame in boringEventHandlingFrames:
+        return True
+    return False
+
+def is_sentinel(frame):
+    if signatureSentinelsRegEx.match(frame):
+        return True
+    return False
+
+def is_interesting_lib(frame):
+    for lib in interestingLibs:
+        if lib in frame:
+            return True
+    return False
+
+def clean_element(element):
+    m = rawAddressRegEx.match(element)
+    if m:
+        # Replace address with "-0x1"
+        return "-0x1" + element[len(m.group(0)):]
+
+    if is_js(element):
+        m = getLibraryRegEx.match(element)
+        if m:
+            return "JS Frame (in {})".format(m.group(1))
+        else:
+            return "JS Frame"
+
+    return element
+
+def min_json(obj):
+    return json.dumps(obj, separators=(',', ':'))
+
+def get_signature(stack):
+    # From Vladan:
+    # 1. Remove IPC and uninteresting frames from the top of the stack
+    # 2. Keep removing raw addresses and JS frames from the top of the stack
+    #    until you hit a real frame
+    # 3. Get remaining top N frames (I used N = 15), or more if no
+    #    xul.dll/firefox.exe/mozjs.dll in the top N frames (up to first
+    #    xul.dll/etc frame plus one extra frame)
+    # 4. From this subset of frames, remove all XRE_Main or generic event-
+    #    handling frames from the bottom of stack (until you hit a real frame)
+    # 5. Remove any raw addresses and JS frames from the bottom of stack (same
+    #    as step 2 but done to the other end of the stack)
+
+    # Fast-forward to any sentinel frames
+    for i in range(len(stack)):
+        if is_sentinel(stack[i]):
+            #print "Skipping to sentinel stack frame", stack[i], "at", i
+            stack = stack[i:]
+            break
+
+    # Remove uninteresting frames from the top of the stack
+    interesting = [ is_interesting(f) for f in stack ]
+    try:
+        first_interesting_frame = interesting.index(True)
+    except ValueError as e:
+        # No interesting frames in stack.
         return []
 
-    return responseSymbols
+    signature = stack[first_interesting_frame:]
 
-def process(input_file, output_file, submission_date):
-    if input_file == '-':
-        fin = sys.stdin
-    else:
-        fin = open(input_file, "rb")
+    # Make sure we keep at least one interesting lib
+    libby = [ is_interesting_lib(f) for f in signature ]
+    try:
+        last_interesting_frame = libby.index(True) + 1
+        #print "last interesting frame found at ", last_interesting_frame, ":", signature[last_interesting_frame]
+    except ValueError as e:
+        # No interesting library frames in stack, stop here.
+        #print "no interesting libs"
+        return []
 
-    fout = gzip.open(output_file, "wb")
+    # Grab MAX_FRAMES, but be sure to include an interesting frame if there's
+    # one after that
+    last_potential_frame = max(last_interesting_frame, MAX_FRAMES)
 
-    symbolication_errors = 0
-    symbolication_requests = 0
+    signature = signature[0:last_potential_frame]
+    boring = [ is_raw(f) or is_js(f) or is_boring(f) for f in signature ]
+    # Pop raw addresses, JS frames, and boring frames from the end
+    while boring and boring.pop():
+        signature.pop()
+
+    # If we don't have any interesting libs left now, return an empty sig.
+    contains_interesting_lib = False
+    for frame in signature:
+        if is_interesting_lib(frame):
+            contains_interesting_lib = True
+            break
+
+    if not contains_interesting_lib:
+        return []
+
+    # Replace raw addresses with a placeholder:
+    signature = [ clean_element(e) for e in signature ]
+
+    return signature
+
+def load_pings(fin):
     line_num = 0
-
     while True:
-        line_num += 1
         uuid = fin.read(36)
         if len(uuid) == 0:
             break
         assert len(uuid) == 36
-
+        line_num += 1
         tab = fin.read(1)
         assert tab == '\t'
-
         jsonstr = fin.readline()
         try:
             json_dict = json.loads(jsonstr)
         except Exception, e:
             print >> sys.stderr, "Error parsing json on line", line_num, ":", e
             continue
+        yield line_num, uuid, json_dict
 
-        hang_stacks = []
-        hangs = json_dict.get("chromeHangs")
-        if hangs:
-          del json_dict["chromeHangs"]
-          hang_stacks = symbolicate(hangs)
-          symbolication_requests += 1
-          if hang_stacks == []:
-              symbolication_errors += 1
+def get_stack_key(stack_entry, memoryMap):
+    mm_idx, offset = stack_entry
+    if mm_idx == -1:
+        return None
 
-        late_writes_stacks = []
-        writes = json_dict.get("lateWrites")
-        if writes:
-          del json_dict["lateWrites"]
-          late_writes_stacks = symbolicate(writes)
-          symbolication_requests += 1
-          if late_writes_stacks == []:
-              symbolication_errors += 1
+    if mm_idx < len(memoryMap):
+        mm = memoryMap[mm_idx]
+        # cache on (dllname, debugid, offset)
+        return (mm[0], mm[1], offset)
 
-        if "histograms" in json_dict:
-            del json_dict["histograms"]
+    return None
+
+def combine_stacks(stacks):
+    # Change from
+    #   (lib, debugid, offset) => count
+    # to
+    #   (lib, debugid) => [ offsets ]
+    combined = {}
+    for lib, debugid, offset in stacks.keys():
+        key = (lib, debugid)
+        if key not in combined:
+            combined[key] = []
+        combined[key].append(offset)
+    return combined
+
+def process(input_file, output_file, submission_date, include_latewrites=False):
+    return_code = 0
+    # 1. First pass, extract (and count) all the unique stack elements
+    if input_file == '-':
+        fin = sys.stdin
+    else:
+        fin = open(input_file, "r")
+
+    kinds = ["chromeHangs"]
+    if include_latewrites:
+        kinds.append("lateWrites")
+
+    start = datetime.now()
+    stack_cache = {}
+    sys.stderr.write("Extracting unique stack elements...")
+    for line_num, uuid, json_dict in load_pings(fin):
+        cache_hits = 0
+        cache_misses = 0
+        for kind in kinds:
+            hangs = json_dict.get(kind)
+            if hangs:
+                for stack in hangs["stacks"]:
+                    for stack_entry in stack:
+                        key = get_stack_key(stack_entry, hangs["memoryMap"])
+                        if key is not None:
+                            if key in stack_cache:
+                                stack_cache[key] += 1
+                            else:
+                                stack_cache[key] = 1
+    sys.stderr.write("Done after %.2f sec\n" % delta_sec(start))
+
+    # 2. Filter out stack entries with fewer than MIN_HITS occurrences.
+    #    NOTE: This is not necessarily safe to do, since it might cause
+    #          us to miss a legit stack with one uncommon stack entry.
+    if MIN_HITS > 1:
+        prev = datetime.now()
+        sys.stderr.write("Filtering rare stack elements...")
+        to_be_symbolicated = { k: v for k, v in stack_cache.iteritems() if v > MIN_HITS }
+        sys.stderr.write("Done after %.2f sec\n" % delta_sec(prev))
+    else:
+        to_be_symbolicated = stack_cache
+
+    # 3. Change from
+    #      (lib, debugid, offset) => count
+    #    to
+    #      (lib, debugid) => [ offsets ]
+    sys.stderr.write("Combining stacks...")
+    prev = datetime.now()
+    combined_stacks = combine_stacks(to_be_symbolicated)
+    sys.stderr.write("Done after %.2f sec\n" % delta_sec(prev))
+
+    # 4. For each library, try to fetch symbols for the given offsets.
+    #      (lib, debugid, offset) => symbolicated string
+    sys.stderr.write("Looking up stack symbols...")
+    prev = datetime.now()
+    symbol_cache = symbolicate(combined_stacks)
+    sys.stderr.write("Done after %.2f sec\n" % delta_sec(prev))
+
+    # Write out our symbol cache.
+    #sys.stderr.write("Writing symbol cache\n")
+    #fsym = open("symbol_cache.txt", "w")
+    #for k, v in symbol_cache.iteritems():
+    #    #a, b, c = k
+    #    #fsym.write("\t".join((a, b, c, v)))
+    #    fsym.write(json.dumps([k,v]))
+    #    fsym.write("\n")
+    #fsym.close()
+
+    # 5. Use these symbolicated stacks to symbolicate the actual data
+    sys.stderr.write("Symbolicating data...")
+    prev = datetime.now()
+    # Go back to the beginning the input file.
+    fin.seek(0)
+    fout = gzip.open(output_file, "wb")
+    for line_num, uuid, json_dict in load_pings(fin):
+        for kind in kinds:
+            hangs = json_dict.get(kind)
+            if hangs:
+                hangs["stacksSymbolicated"] = []
+                hangs["stacksSignatures"] = []
+                for stack in hangs["stacks"]:
+                    sym = []
+                    for stack_entry in stack:
+                        key = get_stack_key(stack_entry, hangs["memoryMap"])
+                        if key is None:
+                            sym.append("-0x1")
+                        elif key in symbol_cache:
+                            sym.append(symbol_cache[key])
+                        else:
+                            # This should only happen if some of our
+                            # symbolication requests failed
+                            sys.stderr.write("Failed to get symbols for " \
+                                    "key {}".format(key))
+                            # Default to the hex offset.
+                            sym.append(hex(stack_entry[1]))
+                            # Signal that something went wrong
+                            return_code = 3
+                    hangs["stacksSymbolicated"].append(sym)
+                    hangs["stacksSignatures"].append(get_signature(sym))
         fout.write(submission_date)
         fout.write("\t")
         fout.write(uuid)
         fout.write("\t")
-        fout.write(json.dumps(json_dict))
-
-        for stack in hang_stacks:
-            fout.write("\n----- BEGIN HANG STACK -----\n")
-            fout.write("\n".join(stack))
-            fout.write("\n----- END HANG STACK -----\n")
-
-        for stack in late_writes_stacks:
-            fout.write("\n----- BEGIN LATE WRITE STACK -----\n")
-            fout.write("\n".join(stack))
-            fout.write("\n----- END LATE WRITE STACK -----\n")
-
+        fout.write(min_json(json_dict))
+        fout.write("\n")
+    sys.stderr.write("Done after %.2f sec\n" % delta_sec(prev))
     fin.close()
     fout.close()
-    sys.stderr.write("Requested %s symbolications. Got %s errors." % (symbolication_requests, symbolication_errors))
+    sys.stderr.write("All done in %.2f sec\n" % delta_sec(start))
+    return return_code
 
 class Usage(Exception):
     def __init__(self, msg):
         self.msg = msg
-
 
 def main(argv=None):
     if argv is None:
@@ -182,7 +544,11 @@ def main(argv=None):
                 output_file = value
             if option in ("-d", "--date"):
                 submission_date = value
-        process(input_file, output_file, submission_date)
+        try:
+            return process(input_file, output_file, submission_date)
+        except Exception as e:
+            traceback.print_exc()
+            return 1
     except Usage, err:
         print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
         print >> sys.stderr, " for help use --help"
