@@ -15,12 +15,13 @@ tar czvf "$TARBALL" \
         combine.py \
         chromehangs.py
 
-S3PATH=s3://telemetry-analysis-code/jobs/$NAME/$TARBALL
-
 echo "Packaged $NAME code as $TARBALL"
 if [ ! -z "$(which aws)" ]; then
-    aws s3 cp $TARBALL $S3PATH
+    # Private analysis:
+    aws s3 cp $TARBALL s3://telemetry-analysis-code/jobs/chromehangs/$TARBALL
+    # Public analysis:
+    aws s3 cp $TARBALL s3://telemetry-analysis-code/jobs/chromehangs_weekly/$TARBALL
     echo "Code successfully uploaded to S3"
 else
-    echo "AWS CLI not found - you should manually upload to $S3PATH"
+    echo "AWS CLI not found - you should manually upload to s3 via http://telemetry-dash.mozilla.org"
 fi
