@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import csv
 import gzip
 import os
@@ -45,7 +49,7 @@ def median(v, already_sorted=False):
     else:
         return (s[middle] + s[middle-1]) / 2.0
 
-def combine(q, rows):
+def combine(key, rows):
     num_docs = 0
     total_dur = 0
     median_dur = []
@@ -63,11 +67,11 @@ def combine(q, rows):
         median_app_uptime.extend([float(r[APP_UPTIME_COLUMN])] * current_count)
         median_sys_uptime.extend([float(r[SYS_UPTIME_COLUMN])] * current_count)
 
-    q_median = median(median_dur)
-    #print "median of", median_dur, "is", q_median
-    return [num_docs, q_median, total_dur, median(median_app_uptime), median(median_sys_uptime), q]
+    key_median = median(median_dur)
+    #print "median of", median_dur, "is", key_median
+    return [num_docs, key_median, total_dur, median(median_app_uptime), median(median_sys_uptime), key]
 
-queries = {}
+hang_stacks = {}
 totals = {}
 total_rows = 0
 output_dir = sys.argv[1]
@@ -98,22 +102,21 @@ for a in inputs:
     rowcount = 0
     for row in reader:
         if len(row) > SYS_UPTIME_COLUMN:
-            q = row[STACK_COLUMN].replace("\t", " ")
-            qk = "\t".join([q, row[APP_COLUMN], row[CHAN_COLUMN], clean_version(row[VER_COLUMN])])
-            #q = row[QUERY_COLUMN]
-            if qk not in queries:
-                queries[qk] = []
-            queries[qk].append(row)
+            stack = row[STACK_COLUMN].replace("\t", " ")
+            stack_key = "\t".join([stack, row[APP_COLUMN], row[CHAN_COLUMN], clean_version(row[VER_COLUMN])])
+            if stack_key not in hang_stacks:
+                hang_stacks[stack_key] = []
+            hang_stacks[stack_key].append(row)
         else:
             print "not enough columns:", row
         rowcount += 1
     total_rows += rowcount
     f.close()
 
-print "Overall, found", total_rows, "rows, with", len(queries.keys()), "unique stacks"
+print "Overall, found", total_rows, "rows, with", len(hang_stacks.keys()), "unique stacks"
 
 combined = []
-for key, rows in queries.iteritems():
+for key, rows in hang_stacks.iteritems():
     #print "Combining", len(rows), "items for", key
     combined.append(combine(key, rows))
 
