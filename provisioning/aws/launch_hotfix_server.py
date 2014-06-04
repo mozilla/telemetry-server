@@ -135,7 +135,7 @@ class HotfixServerLauncher(TelemetryServerLauncher):
         # Start up HTTP server
         sudo("start hotfix-server")
         print "Hotfix server started"
-        # Note: This also starts up telemetry-export and telemetry-heka due to dependencies.
+        # Note: This also starts up the data export due to dependencies.
 
         # Start up 'process incoming' too (do everything on one node)
         sudo("start hotfix-incoming")
