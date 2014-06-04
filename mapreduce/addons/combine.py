@@ -57,6 +57,5 @@ for key, texts in accum.iteritems():
             continue
         line = list(key)
         line.extend([text, count, sessions])
-        print line
         writer.writerow(line)
 outfile.close()

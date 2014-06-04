@@ -38,7 +38,7 @@ python -u -m mapreduce.job $JOB/am_exceptions.py \
   --num-reducers 4 \
   --input-filter $FILTER \
   --data-dir "$WORK/cache" \
-  --work-dir $WORK
+  --work-dir $WORK \
   --output $RAW_DATA_FILE \
   --bucket telemetry-published-v1
 
@@ -71,6 +71,6 @@ for f in $(seq 0 6); do
     fi
 done
 echo "Creating weekly data for $MONDAY to $SUNDAY"
-python $BASE/telemetry-server/$JOB/combine.py $BASE/$OUTPUT *
+python $BASE/telemetry-server/$JOB/combine.py $OUTPUT/weekly_am_exceptions_${MONDAY}.csv.gz *
 echo "Created weekly output file:"
-ls -l $BASE/$OUTPUT/
+ls -l $OUTPUT/
