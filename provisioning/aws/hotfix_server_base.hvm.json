@@ -1,0 +1,21 @@
+{
+  "ssl_user": "ubuntu",
+  "ssl_key_name": "mreid",
+  "ssl_key_path": "~/.ssh/aws/mreid.pem",
+  "ssl_retries": 10,
+  "base_dir": "/mnt/hotfix",
+  "log_dir_name": "hotfix",
+  "instance_type": "c3.xlarge",
+  "image": "ami-90e67fa0",
+  "security_groups": ["telemetry"],
+  "region": "us-west-2",
+  "placement": "us-west-2c",
+  "shutdown_behavior": "stop",
+  "name": "hotfix-server-base-hvm",
+  "default_tags": {
+    "Owner": "mreid",
+    "Application": "telemetry-server"
+  },
+  "add_aws_credentials": true,
+  "skip_termination": true
+}

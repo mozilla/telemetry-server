@@ -1,0 +1,6 @@
+{
+  "incoming_bucket": "mreid-test-hotfix-incoming",
+  "incoming_queue": "mreid-test-hotfix-incoming",
+  "publish_bucket": "mreid-test-hotfix-published",
+  "aws_region": "us-west-2"
+}
