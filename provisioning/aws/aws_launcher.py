@@ -73,8 +73,9 @@ class Launcher(object):
         # Create log dir (within base_dir, but symlinked to /var/log):
         base_dir = self.config.get("base_dir", "/mnt/telemetry")
         log_dir = base_dir + "/log"
+        log_dir_name = self.config.get("log_dir_name", "telemetry")
         run("mkdir {0}".format(log_dir))
-        sudo("ln -s {0} /var/log/telemetry".format(log_dir))
+        sudo("ln -s {0} /var/log/{1}".format(log_dir, log_dir_name))
 
     def start_suid_script(self, c_file, username):
         sudo("echo 'setuid {1}' > {0}".format(c_file, username))
