@@ -1,0 +1,13 @@
+{
+  "motd": " ==== Addon Hotfix Server. Saving data since 2014. ====",
+  "url_prefix": "/submit/hotfix/",
+  "max_data_length": 409600,
+  "max_path_length": 10240,
+  "port": 8080,
+  "log_path": "/mnt/hotfix/data",
+  "log_base": "hotfix.log",
+  "max_log_age_ms": 300000,
+  "max_log_size": 52000,
+  "include_request_ip": false,
+  "stats_log_file": "/var/log/hotfix/hotfix-server.log"
+}
