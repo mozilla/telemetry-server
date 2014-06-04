@@ -29,8 +29,7 @@ FILTER="$WORK/filter.json"
 echo "Today is $TODAY, and we're gathering am_exceptions data for $TARGET"
 sed -r "s/__TARGET_DATE__/$TARGET/" $JOB/filter_template.json > $FILTER
 
-FINAL_DATA_FILE="$OUTPUT/am_exceptions${TARGET}.csv"
-RAW_DATA_FILE=${FINAL_DATA_FILE}.tmp
+DATA_FILE="$OUTPUT/am_exceptions${TARGET}.csv"
 
 echo "Starting the am_exceptions export for $TARGET"
 python -u -m mapreduce.job $JOB/am_exceptions.py \
@@ -39,15 +38,13 @@ python -u -m mapreduce.job $JOB/am_exceptions.py \
   --input-filter $FILTER \
   --data-dir "$WORK/cache" \
   --work-dir $WORK \
-  --output $RAW_DATA_FILE \
+  --output $DATA_FILE \
   --bucket telemetry-published-v1
 
 echo "Mapreduce job exited with code: $?"
 
-echo "Adding header line and compressing"
-cat $JOB/csv_header.txt $RAW_DATA_FILE | gzip > ${FINAL_DATA_FILE}.gz
-echo "Removing temp file"
-rm $RAW_DATA_FILE
+echo "compressing"
+gzip $DATA_FILE
 echo "Done!"
 
 echo "Processing weekly data"
