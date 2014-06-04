@@ -5,13 +5,13 @@
   "ssl_retries": 10,
   "base_dir": "/mnt/hotfix",
   "log_dir_name": "hotfix",
-  "instance_type": "c3.xlarge",
+  "instance_type": "m3.large",
   "image": "ami-90e67fa0",
   "security_groups": ["telemetry"],
   "region": "us-west-2",
   "placement": "us-west-2c",
   "shutdown_behavior": "stop",
-  "name": "hotfix-server-base-hvm",
+  "name": "hotfix-server",
   "default_tags": {
     "Owner": "mreid",
     "Application": "telemetry-server"

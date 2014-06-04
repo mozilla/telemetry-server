@@ -17,6 +17,10 @@ import traceback
 from telemetry.convert import Converter
 
 class HotfixServerLauncher(TelemetryServerLauncher):
+    def choose_telemetry_branch(self, instance):
+        with cd(self.home + "/telemetry-server/telemetry"):
+            run("git checkout addon_hotfix_bug1019788")
+
     def post_install(self, instance):
         # Install some more:
         self.install_nodejs_bin()
@@ -89,7 +93,7 @@ class HotfixServerLauncher(TelemetryServerLauncher):
         # Use unbuffered output (-u) so we can see things in the log
         # immediately.
         sudo("echo \"    /usr/bin/python -u " \
-             "-m process_incoming.process_incoming_standalone " \
+             "-m process_incoming.process_incoming_hotfix " \
              "-c /etc/mozilla/telemetry_aws.json " \
              "-w {1}/work " \
              "-o {1}/processed " \
