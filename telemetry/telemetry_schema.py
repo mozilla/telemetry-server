@@ -14,6 +14,7 @@ class TelemetrySchema:
     def __init__(self, spec):
         self._spec = spec
         self._dimensions = self._spec["dimensions"]
+        self._num_dimensions = len(self._dimensions)
 
     def safe_filename(self, value):
         return re.sub(r'[^a-zA-Z0-9_/.]', "_", value)
@@ -28,13 +29,12 @@ class TelemetrySchema:
         return dims
 
     def apply_schema(self, dimensions):
-        num_dims = len(self._dimensions)
-        cleaned = [TelemetrySchema.DISALLOWED_VALUE] * num_dims
+        cleaned = [TelemetrySchema.DISALLOWED_VALUE] * self._num_dimensions
         if dimensions is not None:
             for i, v in enumerate(dimensions):
                 # Don't enumerate past the max number of 'allowed' dimensions
                 # ie. if someone passed in 100 dims.
-                if i >= num_dims:
+                if i >= self._num_dimensions:
                     break
                 cleaned[i] = self.get_allowed_value(v, self._dimensions[i]["allowed_values"])
         return cleaned
@@ -74,11 +74,15 @@ class TelemetrySchema:
         dimfile = canonical_file[len(canonical_base)+1:]
         dims = dimfile.split(os.path.sep)
         filename = dims.pop()
+        # Last two dimensions are in the filename, separated by dots:
         file_dims = filename.split(".")
 
-        # Last two dimensions are in the filename, separated by dots:
-        dims.append(file_dims.pop(0))
-        dims.append(file_dims.pop(0))
+        # If we have more dimensions, and if we haven't already seen enough,
+        # extract up to two more from the filename.
+        if len(file_dims) > 0 and len(dims) < self._num_dimensions:
+            dims.append(file_dims.pop(0))
+        if len(file_dims) > 0 and len(dims) < self._num_dimensions:
+            dims.append(file_dims.pop(0))
         return dims
 
     def get_filename(self, basedir, dimensions, version=1):
@@ -87,8 +91,11 @@ class TelemetrySchema:
         return self.get_current_file(basedir, clean_dims, submission_date, version)
 
     def get_current_file(self, basedir, dims, submission_date, version=1):
+        suffix = ".".join((submission_date, "v" + str(version), "log"))
+        if len(dims) == 0:
+            return os.path.join(basedir, suffix)
         dirname = os.path.join(*dims)
-        return ".".join((os.path.join(basedir, self.safe_filename(dirname)), submission_date, "v" + str(version), "log"))
+        return ".".join((os.path.join(basedir, self.safe_filename(dirname)), suffix))
 
     def dimensions_from(self, info, submission_date):
         dimensions = []
@@ -102,7 +109,7 @@ class TelemetrySchema:
     def get_field(self, dims, field_name, limit_to_allowed=False, sanitize=False):
         dim_idx = -1
         allowed_values = None
-        for i in range(len(self._dimensions)):
+        for i in range(self._num_dimensions):
             if self._dimensions[i]["field_name"] == field_name:
                 dim_idx = i
                 allowed_values = self._dimensions[i]["allowed_values"]

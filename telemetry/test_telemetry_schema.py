@@ -106,6 +106,52 @@ class TelemetrySchemaTest(unittest.TestCase):
         self.assertEqual(len(error_files), 2)
         self.assertEqual(len(all_files), (len(excluded_files) + len(included_files)))
 
+    def test_minimal_schema(self):
+        minimal_schema_spec = {
+            "version": 1,
+            "dimensions": [
+                {
+                    "field_name": "submission_date",
+                    "allowed_values": ["20140602", "20140604"]
+                }
+            ]
+        }
+        minimal_schema = TelemetrySchema(minimal_schema_spec)
+        allowed_values = minimal_schema.sanitize_allowed_values()
+        minimal_test_files = [
+            "prefix/20140601.v1.log.17ff07fda8994e23baf983550246a94b.lzma",
+            "prefix/20140602.v1.log.ec6f22acd37349b3b5ef03da1cc150da.lzma",
+            "prefix/20140603.v1.log.64478ac84a734677bc14cbcf6cc114b7.lzma",
+        ]
+        error_files = []
+        included_files = []
+        excluded_files = []
+        for f in minimal_test_files:
+            include = True
+            try:
+                dims = minimal_schema.get_dimensions("prefix", f)
+                print "dims for", f, "=", dims
+                for i in range(len(allowed_values)):
+                    if not minimal_schema.is_allowed(dims[i], allowed_values[i]):
+                        include = False
+                        break
+            except ValueError:
+                include = False
+                error_files.append(f)
+            if include:
+                included_files.append(f)
+            else:
+                excluded_files.append(f)
+
+        self.assertEqual(len(included_files), 1)
+        self.assertEqual(included_files[0], "prefix/20140602.v1.log.ec6f22acd37349b3b5ef03da1cc150da.lzma")
+        self.assertEqual(len(error_files), 0)
+        self.assertEqual(len(excluded_files), 2)
+        self.assertIn("prefix/20140601.v1.log.17ff07fda8994e23baf983550246a94b.lzma", excluded_files)
+        self.assertIn("prefix/20140603.v1.log.64478ac84a734677bc14cbcf6cc114b7.lzma", excluded_files)
+
+        self.assertEqual("prefix/20140602.v1.log", minimal_schema.get_filename("prefix", ["20140602"]))
+
     def test_safe_filename(self):
         tests = {
             "Hello World!": "Hello_World_",

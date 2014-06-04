@@ -83,6 +83,27 @@ class TestPersist(unittest.TestCase):
     def test_clean_newlines(self):
         self.assertEqual(self.storage.clean_newlines("ab\n\ncd\r\n"), "ab  cd  ")
 
+    def test_minimal_schema(self):
+        minimal_schema_spec = {
+            "version": 1,
+            "dimensions": [
+                {
+                    "field_name": "submission_date",
+                    "allowed_values": "*"
+                }
+            ]
+        }
+        test_dir = self.get_test_dir()
+        minimal_schema = TelemetrySchema(minimal_schema_spec)
+        storage = StorageLayout(minimal_schema, test_dir, 10000)
+        dims = ["20140604"]
+        test_file = minimal_schema.get_filename(test_dir, dims)
+        self.assertEquals(test_file, test_dir + "/" + dims[0] + ".v1.log")
+        storage.write("foo", '{"bar":"baz"}', dims)
+        md5, size = fileutil.md5file(test_file)
+        self.assertEqual(md5, "0ea91df239ea79ed2ebab34b46d455fc")
+        self.assertEqual(size, 18)
+
     def test_rotate(self):
         test_file = os.path.join(self.get_test_dir(), "test.log")
         key = "01234567890123456789012345678901234567890123456789"
