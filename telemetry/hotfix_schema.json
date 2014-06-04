@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "dimensions": [
+    {
+      "field_name": "submission_date",
+      "allowed_values": "*"
+    }
+  ]
+}
