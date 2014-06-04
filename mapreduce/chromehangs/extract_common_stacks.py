@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 try:
     import simplejson as json
 except ImportError:
@@ -6,7 +10,6 @@ import argparse
 import csv
 import gzip
 import sys
-import symbolicate
 
 def stack_to_string(stack):
     return "|".join(stack)
@@ -87,7 +90,12 @@ def main(argv=None):
         hangs = payload["chromeHangs"]
         if "stacksSignatures" not in hangs:
             continue
-        sigs = [ symbolicate.get_signature(s) for s in hangs["stacksSymbolicated"] ]
+
+        # Note: If we change the signature functionality, but don't want to go
+        #       back and re-generate the raw data files:
+        #sigs = [ symbolicate.get_signature(s) for s in hangs["stacksSymbolicated"] ]
+
+        sigs = hangs["stacksSignatures"]
         durations = hangs.get("durations")
         app_uptimes = hangs.get("firefoxUptime")
         sys_uptimes = hangs.get("systemUptime")
