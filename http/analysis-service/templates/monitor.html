@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 
 {% block head %}
-    {{ super() }}
-    <meta http-equiv="refresh" content="5" />
+ {{ super() }}
+ {% if not public_dns %}
+  <meta http-equiv="refresh" content="5" />
+ {% endif %}
 {% endblock %}
 
 {% block worker_active %} class="active" {% endblock %}
@@ -57,9 +59,12 @@
 <p>
 You may need to wait up to <strong>5 minutes</strong> before
 you SSH in, this page will report that the server is ready
-before it really is! If you get a &quot;connection refused&quot;
-message, please keep trying every couple of minutes.
-It will accept connections once all configuration has completed.
+before it really is!
+</p>
+<p>
+If you get a &quot;connection refused&quot; message, please
+keep trying every couple of minutes. It will accept
+connections once all configuration has completed.
 </p>
 
 <p class="lead">
