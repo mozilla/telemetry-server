@@ -7,7 +7,7 @@
   "log_path": "/mnt/hotfix/data",
   "log_base": "hotfix.log",
   "max_log_age_ms": 300000,
-  "max_log_size": 52000,
+  "max_log_size": 500000000,
   "include_request_ip": false,
   "stats_log_file": "/var/log/hotfix/hotfix-server.log"
 }
