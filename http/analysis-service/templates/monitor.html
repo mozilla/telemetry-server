@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 
+{% block head %}
+    {{ super() }}
+    <meta http-equiv="refresh" content="5" />
+{% endblock %}
+
 {% block worker_active %} class="active" {% endblock %}
 
 {% block title %}
