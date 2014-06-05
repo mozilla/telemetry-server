@@ -103,7 +103,7 @@ def map(k, d, v, cx):
 
 def reduce(k, v, cx):
     if k[0] == "E":
-        cx.write(k, sum(v))
+        cx.write(json.dumps(k), sum(v))
         return
 
     # else it's an addon performance record
@@ -112,4 +112,5 @@ def reduce(k, v, cx):
       for field, counts in val.iteritems():
           result[field].update(counts)
 
-    cx.write(k, {measure: dict(hist) for measure, hist in result.iteritems()})
+    cx.write(json.dumps(k).replace("\t", " "),
+             json.dumps({measure: dict(hist) for measure, hist in result.iteritems()}))

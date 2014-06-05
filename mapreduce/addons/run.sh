@@ -68,6 +68,6 @@ for f in $(seq 0 6); do
     fi
 done
 echo "Creating weekly data for $MONDAY to $SUNDAY"
-python $BASE/telemetry-server/$JOB/combine.py $OUTPUT/weekly_am_exceptions_${MONDAY}.csv.gz *
+python $BASE/telemetry-server/$JOB/combine.py "$OUTPUT" "$MONDAY" *
 echo "Created weekly output file:"
 ls -l $OUTPUT/
