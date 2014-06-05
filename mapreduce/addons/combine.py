@@ -1,6 +1,6 @@
 # Combine output from multiple daily runs of am_exceptions.py map/reduce
 # into a weekly summary
-# usage: combine.py output-filename input-filename [input-filename ...]
+# usage: combine.py output-path date input-filename [input-filename ...]
 
 import unicodecsv as ucsv
 import simplejson as json
