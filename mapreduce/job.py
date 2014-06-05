@@ -78,6 +78,7 @@ class Job:
         self._bucket_name = config.bucket
         self._aws_key = config.aws_key
         self._aws_secret_key = config.aws_secret_key
+        self._profile = config.profile
         modulefd = open(config.job_script)
         # let the job script import additional modules under its path
         sys.path.append(os.path.dirname(config.job_script))
@@ -172,7 +173,7 @@ class Job:
                 p = Process(
                         target=Mapper,
                         name=("Mapper-%d" % i),
-                        args=(i, config.profile, partitions[i], self._work_dir, self._job_module, self._num_reducers))
+                        args=(i, self._profile, partitions[i], self._work_dir, self._job_module, self._num_reducers))
                 mappers.append(p)
                 p.start()
             else:
@@ -363,7 +364,7 @@ class Mapper:
             pr = cProfile.Profile()
             pr.enable()
 
-        self.run_mapper(self, mapper_id, inputs, work_dir, module, partition_count)
+        self.run_mapper(mapper_id, inputs, work_dir, module, partition_count)
 
         if do_profile:
             pr.disable()
@@ -372,7 +373,7 @@ class Mapper:
     def run_mapper(self, mapper_id, inputs, work_dir, module, partition_count):
         self.work_dir = work_dir
 
-        print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
+        print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs"
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
