@@ -61,7 +61,7 @@ for f in $(seq 0 6); do
     DAY=$(date -d "$MONDAY + $f days" +%Y%m%d)
     if [ "$DAY" -eq "$TARGET" ]; then
         echo "Using local file for today ($DAY)"
-        cp ${FINAL_DATA_FILE}.gz .
+        cp ${DATA_FILE}.gz .
     else
         echo "Fetching $DAY"
 	aws s3 cp s3://telemetry-public-analysis/addons/data/am_exceptions$DAY.csv.gz ./am_exceptions$DAY.csv.gz

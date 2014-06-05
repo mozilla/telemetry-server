@@ -3,6 +3,7 @@
 # usage: combine.py output-filename input-filename [input-filename ...]
 
 import unicodecsv as ucsv
+import simplejson as json
 import gzip
 import sys
 from collections import defaultdict, Counter
@@ -40,22 +41,23 @@ for a in sys.argv[3:]:
 
             if key[0] == "E":
                 excKey = tuple(key[1:5])
-                exceptions[excKey][key[5]] += int(data)
+                exceptions[excKey][key[5]] += int(datablob)
                 continue
             # otherwise it's an add-on performance data point
             # For now, aggregate over app version and channel
-            aoKey = (key[1], key[2], key[6], key[7])
+            aoKey = (key[1], key[2], key[5], key[6])
             data = json.loads(datablob)
             for measure in measures:
                 if measure in data:
                     addonPerf[aoKey][measure].update(data[measure])
-        except:
-            print "Bad line: " + line
+        except Exception as e:
+            print "Bad line: " + str(e) + ": " + line
             continue
     f.close()
 
 # Write out gathered exceptions data
-outfile = gzip.open(outpath + "weekly_exceptions_" + outdate + ".csv.gz", "wb")
+outfilename = outpath + "/weekly_exceptions_" + outdate + ".csv.gz"
+outfile = gzip.open(outfilename, "wb")
 writer = ucsv.writer(outfile)
 writer.writerow(["app_name", "platform", "app_version", "app_update_channel",
                  "message", "count", "sessions"])
@@ -78,8 +80,8 @@ for key, texts in exceptions.iteritems():
 outfile.close()
 
 # Write out gathered add-on info
-aofile = gzip.open(outpath + "weekly_addons_" + outdate + ".csv.gz", "wb")
-aoWriter = ucsv.writer(outfile)
+aofile = gzip.open(outpath + "/weekly_addons_" + outdate + ".csv.gz", "wb")
+aoWriter = ucsv.writer(aofile)
 aoWriter.writerow(["app_name", "platform", "addon ID", "addon name",
                    "measure", "histogram"])
 for key, values in addonPerf.iteritems():
