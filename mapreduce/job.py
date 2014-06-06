@@ -188,7 +188,7 @@ class Job:
             p = Process(
                     target=Reducer,
                     name=("Reducer-%d" % i),
-                    args=(i, self._work_dir, self._job_module, self._num_mappers))
+                    args=(i, self._profile, self._work_dir, self._job_module, self._num_mappers))
             reducers.append(p)
             p.start()
         for r in reducers:
@@ -448,8 +448,20 @@ class Collector(dict):
 
 
 class Reducer:
+    def __init__(self, reducer_id, do_profile, work_dir, module, mapper_count):
+        if do_profile:
+            profile_out = os.path.join(work_dir, "profile_reducer_" + str(reducer_id))
+            pr = cProfile.Profile()
+            pr.enable()
+
+        self.run_reducer(reducer_id, work_dir, module, mapper_count)
+
+        if do_profile:
+            pr.disable()
+            pr.dump_stats(profile_out)
+
     COMBINE_SIZE = 50
-    def __init__(self, reducer_id, work_dir, module, mapper_count):
+    def run_reducer(self, reducer_id, work_dir, module, mapper_count):
         #print "I am reducer", reducer_id, ", and I'm reducing", mapper_count, "mapped files"
         output_file = os.path.join(work_dir, "reducer_" + str(reducer_id))
         context = TextContext(output_file)
