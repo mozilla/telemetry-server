@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 
+{% block head %}
+ {{ super() }}
+ {% if not public_dns %}
+  <meta http-equiv="refresh" content="5" />
+ {% endif %}
+{% endblock %}
+
 {% block worker_active %} class="active" {% endblock %}
 
 {% block title %}
@@ -22,10 +29,8 @@
  <div class="col-md-10">
   {% if public_dns %}
    {{ public_dns }}
-  {% elif instance_state != 'running' %}
-   Not available
   {% else %}
-   Not ready yet, please wait a minute and refresh this page.
+   Please wait, instance details will appear when the machine is ready.
   {% endif %}
  </div>
 </div>
@@ -39,14 +44,27 @@
 </div>
 <br>
 <p class="lead">Connecting:</p>
-<p>
-The default username is <code>ubuntu</code>, so you may SSH into the server
-using a command like:</p>
-<p><span class="no-select"><code>$</code></span><code> ssh -i my-private-key ubuntu@{{ public_dns }}</code></p>
+{% if public_dns %}
+ <p>
+ The default username is <code>ubuntu</code>, so you may SSH into the server
+ using a command like:</p>
+ <p><span class="no-select"><code>$</code></span><code> ssh -i my-private-key ubuntu@{{ public_dns }}</code></p>
+{% else %}
+ <p>
+ Your server is still launching. Please wait and the SSH connection
+ details will appear here when it is ready.
+ </p>
+{% endif %}
 
 <p>
- You may need to wait up to 5 minutes before SSH'ing in, the server will
- report ready before it really is!
+You may need to wait up to <strong>5 minutes</strong> before
+you SSH in, this page will report that the server is ready
+before it really is!
+</p>
+<p>
+If you get a &quot;connection refused&quot; message, please
+keep trying every couple of minutes. It will accept
+connections once all configuration has completed.
 </p>
 
 <p class="lead">
