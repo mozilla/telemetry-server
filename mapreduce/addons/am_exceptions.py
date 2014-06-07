@@ -16,6 +16,23 @@ stamps = ['AMI_startup_begin',
           'XPI_startup_end',
           'AMI_startup_end']
 
+section_regex = re.compile(r',"(?:info|addonDetails|slowSQL|ver|log|fileIOReports|histograms|lateWrites|addonHistograms|UIMeasurements|threadHangStats|simpleMeasurements|chromeHangs|slowSQLStartup)":')
+# Extract a top level section out of the telemetry JSON packet by guessing at string boundaries
+def jsonPart(j, section):
+  # Find the start of the requested section
+  startPattern = '"' + section + '":[[{]'
+  secmatch = re.search(startPattern, j)
+  if not secmatch:
+    return None
+  # Now find the first section start after that
+  endmatch = section_regex.search(j, secmatch.end())
+  if not endmatch:
+    print "Can't find an ending tag after", section, "in", j
+    return None
+  # print j[secmatch.end() - 1 : endmatch.start()]
+  return json.loads(j[secmatch.end() - 1 : endmatch.start()])
+
+
 # Crudely convert a value to a log-scaled bucket
 # Magic number 0.34 gives us a reasonable spread of buckets
 # for things measured in milliseconds
@@ -37,10 +54,10 @@ def writeExc(cx, app, platform, version, channel, text):
 
 # Map the add-on manager exception data
 def mapExc(cx, appName, os, appVersion, appUpdateChannel, j):
-    if not 'simpleMeasurements' in j:
+    s = jsonPart(j, 'simpleMeasurements')
+    if not s:
         writeExc(cx, appName, os, appVersion, appUpdateChannel, "No simpleMeasurements")
         return
-    s = j['simpleMeasurements']
 
     # Make sure we have all our phase timestamps
     missing_stamp = "NONE"
@@ -63,18 +80,20 @@ def mapExc(cx, appName, os, appVersion, appUpdateChannel, j):
 def map(k, d, v, cx):
     reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date = d
     appVersion = clean_version(appVersion)
-    j = json.loads(v)
-    if not 'info' in j:
+    i = jsonPart(v, 'info')
+    if not i:
         return
-    i = j['info']
     os = i['OS']
 
     writeExc(cx, appName, os, appVersion, appUpdateChannel, "Sessions")
-    mapExc(cx, appName, os, appVersion, appUpdateChannel, j)
+    mapExc(cx, appName, os, appVersion, appUpdateChannel, v)
 
     # Now report the per-add-on measurements
     try:
-      x = j['addonDetails']['XPI']
+      d = jsonPart(v, 'addonDetails')
+      if not d:
+          return
+      x = d['XPI']
     except KeyError:
       return
     for addonID, details in x.iteritems():
@@ -97,9 +116,22 @@ def map(k, d, v, cx):
         try:
           cx.write(("A", appName, os, appVersion, appUpdateChannel, addonID, addonName),
             {measure: dict(hist) for measure, hist in result.iteritems()})
-	except TypeError:
-	  print key, addonName, details
+        except TypeError:
+          print key, addonName, details
 
+
+def combine(k, v, cx):
+    if k[0] == "E":
+        cx.write(k, sum(v))
+        return
+
+    # else it's an addon performance record
+    result = defaultdict(Counter);
+    for val in v:
+      for field, counts in val.iteritems():
+          result[field].update(counts)
+
+    cx.write(k, result)
 
 def reduce(k, v, cx):
     if k[0] == "E":
