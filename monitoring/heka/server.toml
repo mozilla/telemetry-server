@@ -6,14 +6,12 @@ decoder = "TelemetryServerDecoder"
 
 [TelemetryServerDecoder]
 type = "SandboxDecoder"
-script_type = "lua"
 filename = "lua_decoders/telemetry_server.lua"
 
 [TelemetryServerMetrics]
 type = "SandboxFilter"
 message_matcher = "Type == 'telemetry.server'"
 ticker_interval = 60
-script_type = "lua"
 filename = "lua_filters/telemetry_server_metrics.lua"
 preserve_data = true
 
@@ -21,7 +19,6 @@ preserve_data = true
 type = "SandboxFilter"
 message_matcher = "Type == 'telemetry.server'"
 ticker_interval = 60
-script_type = "lua"
 filename = "lua_filters/telemetry_channel_metrics.lua"
 preserve_data = true
 
@@ -29,7 +26,6 @@ preserve_data = true
 type = "SandboxFilter"
 message_matcher = "Type == 'telemetry.server'"
 ticker_interval = 60
-script_type = "lua"
 filename = "lua_filters/telemetry_channel_metrics.lua"
 preserve_data = true
 

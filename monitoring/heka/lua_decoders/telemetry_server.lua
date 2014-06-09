@@ -44,8 +44,8 @@ local msg = {
 }
 
 function process_message()
-    json = cjson.decode(read_message("Payload"))
-    if not json then return -1 end
+    local ok, json = pcall(cjson.decode, read_message("Payload"))
+    if not ok then return -1 end
 
     local t = lpeg.match(dt.rfc3339, json.timestamp)
     if not t then return -1 end

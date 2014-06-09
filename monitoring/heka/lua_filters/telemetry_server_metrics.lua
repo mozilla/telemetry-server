@@ -32,6 +32,6 @@ end
 
 function timer_event(ns)
     local title = "Request Statistics"
-    inject_message(request:format("cbuf"), title)
-    inject_message(request:format("cbufd"), title)
+    inject_payload("cbuf", title, request:format("cbuf"))
+    inject_payload("cbufd", title, request:format("cbufd"))
 end

@@ -41,7 +41,7 @@ end
 
 function timer_event(ns)
     for k, v in pairs(errors) do
-        inject_message(v:format("cbuf"), k)
-        inject_message(v:format("cbufd"), k)
+        inject_payload("cbuf", k, v:format("cbuf"))
+        inject_payload("cbufd", k, v:format("cbufd"))
     end
 end

@@ -48,8 +48,8 @@ function timer_event(ns)
     for k, v in pairs(loggers) do
         for m, n in pairs(v) do
             local title = string.format("%s.%s", k, m)
-            inject_message(n:format("cbuf"), title)
-            inject_message(n:format("cbufd"), title)
+            inject_payload("cbuf", title, n:format("cbuf"))
+            inject_payload("cbufd", title, n:format("cbufd"))
         end
     end
 end

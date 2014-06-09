@@ -6,29 +6,25 @@ decoder = "TelemetryIncomingStatsDecoder"
 
 [TelemetryIncomingStatsDecoder]
 type = "SandboxDecoder"
-script_type = "lua"
 filename = "lua_decoders/telemetry_incoming_stats.lua"
 
 [TelemetryStatsRecords]
 type = "SandboxFilter"
 message_matcher = "Type == 'telemetry.incoming_stats'"
-ticker_interval = 10
-script_type = "lua"
+ticker_interval = 60
 filename = "lua_filters/telemetry_stats_records.lua"
 preserve_data = true
 
 [TelemetryStatsBytes]
 type = "SandboxFilter"
 message_matcher = "Type == 'telemetry.incoming_stats' && Fields[channel] == 'ALL'"
-ticker_interval = 10
-script_type = "lua"
+ticker_interval = 60
 filename = "lua_filters/telemetry_stats_bytes.lua"
 preserve_data = true
 
 [TelemetryStatsErrors]
 type = "SandboxFilter"
 message_matcher = "Type == 'telemetry.incoming_stats' && Fields[channel] == 'ALL' && Fields[bad_records] > 0"
-ticker_interval = 10
-script_type = "lua"
+ticker_interval = 60
 filename = "lua_filters/telemetry_stats_errors.lua"
 preserve_data = true

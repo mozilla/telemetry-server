@@ -30,6 +30,6 @@ function process_message ()
 end
 
 function timer_event(ns)
-    inject_message(bytes:format("cbuf"), title)
-    inject_message(bytes:format("cbufd"), title)
+    inject_payload("cbuf", title, bytes:format("cbuf"))
+    inject_payload("cbufd", title, bytes:format("cbufd"))
 end
