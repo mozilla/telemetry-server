@@ -61,7 +61,10 @@ cd $BASE
 mkdir -p $OUTPUT_DIR
 aws s3 cp $CODE_URI code.tar.gz
 tar xzvf code.tar.gz
+# Temporarily disable "exit on error" so we can capture error output:
+set +e
 $MAIN &> $LOG
+set -e
 echo "'$MAIN' exited with code $?" >> $LOG
 cd $OUTPUT_DIR
 for f in \$(find . -type f); do
