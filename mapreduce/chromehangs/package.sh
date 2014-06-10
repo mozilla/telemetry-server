@@ -13,6 +13,7 @@ tar czvf "$TARBALL" \
         symbolicate.py \
         extract_common_stacks.py \
         combine.py \
+        combine_week.sh \
         chromehangs.py
 
 echo "Packaged $NAME code as $TARBALL"
