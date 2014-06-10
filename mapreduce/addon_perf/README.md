@@ -3,7 +3,7 @@ Telemetry map/reduce to analyze bootstrap add-on performance probes
 
 Files:
 
-- am_exceptions.py: Telemetry map/reduce to crunch raw data into lines describing:
+- addon_perf.py: Telemetry map/reduce to crunch raw data into lines describing:
     - exceptions caught during add-on manager initialization
     - histogram of time taken by add-on file scans and bootstrap methods
 
@@ -14,7 +14,7 @@ Files:
 - run.sh: driver script for Telemetry scheduled daily job - downloads actual M/R code
   from Github and executes job
 
-- processExceptions.py: analysis script that runs the telemetry M/R job using am_exceptions.py
+- processAddonPerf.py: analysis script that runs the telemetry M/R job using addon_perf.py
   and then produces the output files by gathering the week's data from S3 and running combine.py
 
 - filter_template.json: template for M/R job filter; processExceptions.py creates a copy

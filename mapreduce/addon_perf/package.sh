@@ -1,6 +1,6 @@
 #!/bin/bash
-VERSION=0.1
-NAME=addons
+VERSION=0.2
+NAME=addon_perf
 TARBALL=${NAME}-$VERSION.tar.gz
 
 if [ -f "$TARBALL" ]; then
