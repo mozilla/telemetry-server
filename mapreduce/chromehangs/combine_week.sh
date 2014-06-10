@@ -19,7 +19,6 @@ fi
 BASE=$(pwd)
 DATA_FILE=$BASE/$OUTPUT/chromehangs-common-$TARGET.csv.gz
 
-echo "Processing weekly data"
 if [ ! -d "weekly" ]; then
     mkdir -p "weekly"
 fi

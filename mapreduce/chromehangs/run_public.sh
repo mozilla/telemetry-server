@@ -68,25 +68,5 @@ gzip $COMBINED_DATA_FILE
 
 echo "Processing weekly data"
 cd $BASE
-if [ ! -d "weekly" ]; then
-    mkdir -p "weekly"
-fi
-cd weekly
-# Monday is day 1
-OFFSET=$(( $(date -d $TARGET +%u) - 1 ))
-MONDAY=$(date -d "$TARGET - $OFFSET days" +%Y%m%d)
-SUNDAY=$(date -d "$MONDAY + 6 days" +%Y%m%d)
-echo "For target '$TARGET', week is $MONDAY to $SUNDAY"
-for f in $(seq 0 6); do
-    DAY=$(date -d "$MONDAY + $f days" +%Y%m%d)
-    if [ "$DAY" -eq "$TARGET" ]; then
-        echo "Using local file for today ($DAY)"
-        cp ${COMBINED_DATA_FILE}.gz ./
-    else
-        echo "Fetching $DAY"
-        aws s3 cp s3://telemetry-public-analysis/$NAME/data/chromehangs-common-$DAY.csv.gz ./
-    fi
-done
-echo "Creating weekly data for $MONDAY to $SUNDAY"
-python $BASE/combine.py $BASE/$OUTPUT $MONDAY $SUNDAY
+bash combine_week.sh "$TARGET" "$NAME" "$OUTPUT"
 echo "Done!"
