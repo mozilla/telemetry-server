@@ -91,7 +91,7 @@ class Launcher(object):
 
     def install_apt_dependencies(self, instance):
         print "Installing apt dependencies"
-        aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm")
+        aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm xfsprogs")
 
     def install_python_dependencies(self, instance):
         print "Installing python dependencies"

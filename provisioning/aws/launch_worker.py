@@ -31,6 +31,8 @@ class WorkerLauncher(SimpleLauncher):
             # by default one of the ephemeral devices gets mounted on /mnt
             raid_config = """
 # RAID0 Configuration:
+# TODO: install xfsprogs in the AMI instead.
+export DEBIAN_FRONTEND=noninteractive; apt-get --yes install xfsprogs
 umount /mnt
 yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices={0} {1}
 echo 'DEVICE {1}' >> /etc/mdadm/mdadm.conf
