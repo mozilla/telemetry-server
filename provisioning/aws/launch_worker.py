@@ -35,9 +35,7 @@ umount /mnt
 yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices={0} {1}
 echo 'DEVICE {1}' >> /etc/mdadm/mdadm.conf
 mdadm --detail --scan >> /etc/mdadm/mdadm.conf
-# The "-T largefile" is to speed up the inode table creation. We
-# will mostly be reading and writing files >1MB.
-mkfs.ext3 -T largefile /dev/md0
+mkfs.xfs /dev/md0
 mount /dev/md0 /mnt
 """.format(len(raid_devices), dev_list)
         template_params["RAID_CONFIGURATION"] = raid_config
