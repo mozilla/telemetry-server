@@ -65,7 +65,7 @@ def reduce(k, v, cx):
     counts = []
 
     if len(v) > 10000:
-        sup = min(len(v), 100000)
+        sup = min(len(v), 10000)
 
         for total, n_open, n_read, n_write, n_fsync, n_stat in v[:sup]:
             totals.append(total)
