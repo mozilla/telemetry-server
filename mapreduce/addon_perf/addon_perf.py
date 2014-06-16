@@ -101,20 +101,27 @@ def map(k, d, v, cx):
       send = False
       for measure, val in details.iteritems():
         if measure.endswith('_MS'):
-          result[measure] = {logBucket(val): 1}
+          # sanity check the measure; drop the whole entry if the duration seems crazy
+          # twenty minutes is a long time to wait for startup...
+          if val > (20 * 60 * 1000):
+            print "Unusual", measure, "value", val, "in entry", k, v
+            return
+          result[measure] = {'sum': val, logBucket(val): 1}
           send = True
         if measure == 'scan_items':
           # counting individual files, so use narrower buckets
-          result[measure] = {logBucket(val, 0.2): 1}
+          result[measure] = {'sum': val, logBucket(val, 0.2): 1}
           send = True
       addonName = None
       if 'name' in details:
         addonName = details['name']
       if addonName is None:
         addonName = "?"
+      # Make a pseudo-histogram of the number of times we see each name for an addon
+      result['name'] = {addonName: 1}
       if send:
         try:
-          cx.write(("A", appName, os, appVersion, appUpdateChannel, addonID, addonName),
+          cx.write(("A", appName, os, appVersion, appUpdateChannel, addonID),
             {measure: dict(hist) for measure, hist in result.iteritems()})
         except TypeError:
           print key, addonName, details
