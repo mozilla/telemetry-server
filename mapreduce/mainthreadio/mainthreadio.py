@@ -65,9 +65,9 @@ def reduce(k, v, cx):
     counts = []
 
     if len(v) > 10000:
-        half = len(v) / 2
+        sup = min(len(v), 1000)
 
-        for total, n_open, n_read, n_write, n_fsync, n_stat in v[:half]:
+        for total, n_open, n_read, n_write, n_fsync, n_stat in v[:sup]:
             totals.append(total)
             count = n_open + n_read + n_write + n_fsync + n_stat
             counts.append(count)
@@ -75,4 +75,4 @@ def reduce(k, v, cx):
         # Output fields:
         # submission_date, app_name, app_version, app_update_channel, interval, filename,
         # submission_count, median_time, median_count
-        cx.write(k, ",".join([str(half), str(numpy.median(totals)), str(numpy.median(counts))]))
+        cx.write(k, ",".join([str(len(v)), str(numpy.median(totals)), str(numpy.median(counts))]))
