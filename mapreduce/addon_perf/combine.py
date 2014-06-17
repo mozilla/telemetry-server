@@ -135,7 +135,7 @@ upfilename = outpath + "/weekly_unpacked_" + outdate + ".csv.gz"
 upfile = gzip.open(upfilename, "w")
 upWriter = ucsv.writer(upfile)
 upWriter.writerow(["app_name", "platform", "addon ID", "names",
-                   "sessions", "50% file count", "count", "total time", "50% time", "75% time", "95% time", "max time"])
+                   "Total sessions", "Sessions with this add-on", "Impact (popularity * median time)", "Median file count", "Median time (ms)", "75% time", "95% time", "max time"])
 
 for key, values in addonPerf.iteritems():
     # Total number of sessions for this app/platform combination
@@ -154,14 +154,16 @@ for key, values in addonPerf.iteritems():
             continue
         median_items = items[2]
         # Don't bother with packed add-ons
-        print "median items", median_items, int(median_items) >= 2
         if int(median_items) >= 2:
             times = getPercentiles(values['scan_MS'])
             upLine = list(key)
             upLine.append(names)
             upLine.append(sessions)
+            upLine.append(times[0])
+            upLine.append(float(points) / sessions * float(times[2]))
             upLine.append(median_items)
-            upLine.extend(times)
+            # Drop the sum of times for now
+            upLine.extend(times[2:])
             upWriter.writerow(upLine)
 
     for measure in ['startup_MS', 'shutdown_MS']:
