@@ -108,7 +108,7 @@ class Job:
         downloaded_bytes = 0
         for local, remote, err in loader.get_list(remote_names):
             if err is None:
-                print "Downloaded", remote
+                # print "Downloaded", remote
                 downloaded_bytes += os.path.getsize(local)
             else:
                 print "Failed to download", remote
