@@ -122,19 +122,58 @@ def getPercentiles(bucketList):
     return result
 
 # Write out gathered add-on info
-aofilename = outpath + "/weekly_addons_" + outdate + ".csv.gz"
-print "Generating", aofilename
+print "Generating add-on data"
 
+aofilename = outpath + "/weekly_addons_" + outdate + ".csv.gz"
 aofile = gzip.open(aofilename, "w")
 aoWriter = ucsv.writer(aofile)
 aoWriter.writerow(["app_name", "platform", "addon ID", "names",
                    "measure", "sessions", "count", "total", "50%", "75%", "95%", "max"])
+
+# unpacked add-ons
+upfilename = outpath + "/weekly_unpacked_" + outdate + ".csv.gz"
+upfile = gzip.open(upfilename, "w")
+upWriter = ucsv.writer(upfile)
+upWriter.writerow(["app_name", "platform", "addon ID", "names",
+                   "sessions", "50% file count", "count", "total time", "50% time", "75% time", "95% time", "max time"])
+
 for key, values in addonPerf.iteritems():
-    for measure, hist in values.iteritems():
+    # Total number of sessions for this app/platform combination
+    sessions = addonSessions.get((key[0], key[1]), 0)
+    nameSet = addonNames.get(key[2], {})
+    if "?" in nameSet:
+        del nameSet["?"]
+    names = json.dumps(nameSet)
+    if 'scan_items' in values:
+        items = getPercentiles(values['scan_items'])
+        # How many data points did we get for this add-on on this app/platform?
+        points = items[0]
+        # If this addon was seen in fewer than 1 in 100 thousand sessions, ignore
+        if (points * 100000) < sessions:
+            # print 'Skipping', sessions, points, key, values
+            continue
+        median_items = items[2]
+        # Don't bother with packed add-ons
+        print "median items", median_items, int(median_items) >= 2
+        if int(median_items) >= 2:
+            times = getPercentiles(values['scan_MS'])
+            upLine = list(key)
+            upLine.append(names)
+            upLine.append(sessions)
+            upLine.append(median_items)
+            upLine.extend(times)
+            upWriter.writerow(upLine)
+
+    for measure in ['startup_MS', 'shutdown_MS']:
+        if not measure in values:
+            continue
+        hist = values[measure]
         line = list(key)
-        line.append(json.dumps(addonNames.get(key[2])))
+        line.append(names)
         line.append(measure)
-        line.append(addonSessions.get((key[0], key[1]), 0))
+        line.append(sessions)
         line.extend(getPercentiles(hist))
         aoWriter.writerow(line)
+
 aofile.close()
+upfile.close()
