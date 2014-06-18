@@ -65,7 +65,7 @@ def reduce(k, v, cx):
     counts = []
 
     if len(v) > 10000:
-        sup = min(len(v), 10000)
+        sup = min(len(v), 1000)
 
         for total, count in v[:sup]:
             totals.append(total)
