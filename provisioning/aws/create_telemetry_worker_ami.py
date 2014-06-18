@@ -7,20 +7,19 @@
 
 # Example invocation:
 # $ cd /path/to/telemetry-server
-# $ python -m provisioning.aws.create_telemetry_base_ami -k "my_aws_key" -s "my_aws_secret" provisioning/aws/telemetry_server_base.pv.json
+# $ python -m provisioning.aws.create_telemetry_worker_ami -k "my_aws_key" -s "my_aws_secret" provisioning/aws/telemetry_worker.hvm.json
 
-from launch_telemetry_server import TelemetryServerLauncher
+from aws_launcher import Launcher
 from create_ami import AmiCreator
 import sys
 import traceback
 
 def main():
-    launcher = TelemetryServerLauncher()
+    launcher = Launcher()
     creator = AmiCreator(launcher)
     try:
-        result = creator.create('Pre-loaded image for telemetry nodes. Knows ' \
-                                'how to run all the core services, but does ' \
-                                'not auto-start them on boot.')
+        result = creator.create('Pre-loaded image for telemetry workers. Use ' \
+                                'it for scheduled or adhoc jobs.')
         return result
     except Exception, e:
         print "Error:", e
