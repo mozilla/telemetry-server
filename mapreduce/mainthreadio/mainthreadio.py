@@ -40,21 +40,21 @@ def map(k, d, v, cx):
             continue
 
         if arr[0] is not None:
-            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "startup", clean(f)]), arr[0])
+            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "startup", clean(f)]), [arr[0][0], sum(arr[0][1:])])
             if not startup_sub:
-                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "startup", "TOTAL"]), [0, 0, 0, 0, 0, 0])
+                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "startup", "TOTAL"]), [0, 0])
                 startup_sub = True
 
         if arr[1] is not None:
-            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "execution", clean(f)]), arr[1])
+            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "execution", clean(f)]), [arr[1][0], sum(arr[1][1:])])
             if not execution_sub:
-                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "execution", "TOTAL"]), [0, 0, 0, 0, 0, 0])
+                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "execution", "TOTAL"]), [0, 0])
                 execution_sub = True
 
         if arr[2] is not None:
-            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "shutdown", clean(f)]), arr[2])
+            cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "shutdown", clean(f)]), [arr[2][0], sum(arr[2][1:])])
             if not shutdown_sub:
-                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "shutdown", "TOTAL"]), [0, 0, 0, 0, 0, 0])
+                cx.write(safe_key([submission_date, appName, appVersion, appUpdateChannel, "shutdown", "TOTAL"]), [0, 0])
                 shutdown_sub = True
 
 def setup_reduce(cx):
@@ -67,9 +67,8 @@ def reduce(k, v, cx):
     if len(v) > 10000:
         sup = min(len(v), 10000)
 
-        for total, n_open, n_read, n_write, n_fsync, n_stat in v[:sup]:
+        for total, count in v[:sup]:
             totals.append(total)
-            count = n_open + n_read + n_write + n_fsync + n_stat
             counts.append(count)
 
         # Output fields:
