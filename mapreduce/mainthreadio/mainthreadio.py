@@ -62,29 +62,17 @@ def setup_reduce(cx):
 
 def reduce(k, v, cx):
     totals = []
-    avgs = []
     counts = []
-    n_opens = []
-    n_reads = []
-    n_writes = []
-    n_fsyncs = []
-    n_stats = []
-    n_pings = 0
 
-    for total, n_open, n_read, n_write, n_fsync, n_stat in v:
-        totals.append(total)
-        n_opens.append(n_open)
-        n_reads.append(n_read)
-        n_writes.append(n_write)
-        n_fsyncs.append(n_fsync)
-        n_stats.append(n_stat)
-        n_pings += 1
+    if len(v) > 10000:
+        sup = min(len(v), 100000)
 
-        count = n_open + n_read + n_write + n_fsync + n_stat
-        counts.append(count)
+        for total, n_open, n_read, n_write, n_fsync, n_stat in v[:sup]:
+            totals.append(total)
+            count = n_open + n_read + n_write + n_fsync + n_stat
+            counts.append(count)
 
-    if n_pings > 100:
         # Output fields:
         # submission_date, app_name, app_version, app_update_channel, interval, filename,
         # submission_count, median_time, median_count
-        cx.write(k, ",".join([str(n_pings), str(numpy.median(totals)), str(numpy.median(count))]))
+        cx.write(k, ",".join([str(len(v)), str(numpy.median(totals)), str(numpy.median(counts))]))
