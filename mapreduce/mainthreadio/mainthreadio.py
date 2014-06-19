@@ -22,14 +22,11 @@ def safe_key(pieces):
 def map(k, d, v, cx):
     global n_pings
 
+    if "fileIOReports" not in v or '"fileIOReports":null' in v:
+        return
+
     parsed = json.loads(v)
     reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date = d
-
-    if not "fileIOReports" in parsed:
-        return
-
-    if not parsed["fileIOReports"]:
-        return
 
     startup_sub = False
     execution_sub = False
