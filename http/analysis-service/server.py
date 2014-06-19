@@ -209,9 +209,8 @@ def update_configs(jobs=None):
         config = {
             "ssl_key_name": "mreid",
             "base_dir": "/mnt/telemetry",
-            # TODO: move this to config.py
-            "instance_type": "c3.2xlarge",
-            "image": "ami-37c4b307", # -> telemetry-worker-hvm-20140507
+            "instance_type": app.config['INSTANCE_TYPE'],
+            "image": "ami-4fc5b87f", # -> telemetry-worker-hvm-20140618
             # TODO: ssh-only security group
             "security_groups": ["telemetry"],
             "iam_role": iam_role,
