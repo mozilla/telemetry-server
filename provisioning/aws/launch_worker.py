@@ -72,7 +72,7 @@ cd $OUTPUT_DIR
 for f in \$(find . -type f); do
   # Remove the leading "./"
   f=\$(sed -e "s/^\.\///" <<< \$f)
-  UPLOAD_CMD="aws s3 cp ./\$f \"$S3_BASE/data/\$f\""
+  UPLOAD_CMD="aws s3 cp ./\$f '$S3_BASE/data/\$f'"
   if [[ "\$f" == *.gz ]]; then
     echo "adding 'Content-Type: gzip' for \$f" >> "$LOG"
     UPLOAD_CMD="\$UPLOAD_CMD --content-encoding gzip"
