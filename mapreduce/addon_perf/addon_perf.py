@@ -18,7 +18,7 @@ stamps = ['AMI_startup_begin',
 
 section_regex = re.compile(r',"(?:info|addonDetails|slowSQL|ver|log|fileIOReports|histograms|lateWrites|addonHistograms|UIMeasurements|threadHangStats|simpleMeasurements|chromeHangs|slowSQLStartup)":')
 # Extract a top level section out of the telemetry JSON packet by guessing at string boundaries
-def jsonPart(j, section):
+def stringPart(j, section):
   # Find the start of the requested section
   startPattern = '"' + section + '":[[{]'
   secmatch = re.search(startPattern, j)
@@ -29,8 +29,13 @@ def jsonPart(j, section):
   if not endmatch:
     print "Can't find an ending tag after", section, "in", j
     return None
-  # print j[secmatch.end() - 1 : endmatch.start()]
-  return json.loads(j[secmatch.end() - 1 : endmatch.start()])
+  return j[secmatch.end() - 1 : endmatch.start()]
+
+def jsonPart(j, section):
+  sect = stringPart(j, section)
+  if sect:
+      return json.loads(sect)
+  return None
 
 
 # Crudely convert a value to a log-scaled bucket
@@ -52,13 +57,24 @@ def clean_version(ver):
 def writeExc(cx, app, platform, version, channel, text):
     cx.write(("E", app, platform, version, channel, text), 1)
 
+# Match the time stamps out of the simpleMeasurements field
+
+# ts_regex = re.compile(r'"simpleMeasurements":{([^{]*?"(AMI_startup_begin|XPI_startup_begin|XPI_bootstrap_addons_begin|XPI_bootstrap_addons_end|XPI_startup_end|AMI_startup_end)":(\d*)){0,6}')
+ts_regex = re.compile(r'"(AMI_startup_begin|XPI_startup_begin|XPI_bootstrap_addons_begin|XPI_bootstrap_addons_end|XPI_startup_end|AMI_startup_end)":(\d*)')
+exc_regex = re.compile(r'"addonManager":{[^}]*"exception":({[^}]*})')
+
 # Map the add-on manager exception data
 def mapExc(cx, appName, os, appVersion, appUpdateChannel, j):
-    s = jsonPart(j, 'simpleMeasurements')
-    if not s:
+    simple = stringPart(j, 'simpleMeasurements')
+    if not simple:
+        writeExc(cx, appName, os, appVersion, appUpdateChannel, "No simpleMeasurements")
+        return
+    matches = ts_regex.findall(simple)
+    if (not matches) or (len(matches) == 0):
         writeExc(cx, appName, os, appVersion, appUpdateChannel, "No simpleMeasurements")
         return
 
+    s = dict(matches)
     # Make sure we have all our phase timestamps
     missing_stamp = "NONE"
     for stamp in stamps:
@@ -66,24 +82,25 @@ def mapExc(cx, appName, os, appVersion, appUpdateChannel, j):
             missing_stamp = stamp
             break
 
-    if not 'addonManager' in s:
-        writeExc(cx, appName, os, appVersion, appUpdateChannel, missing_stamp + ": No addonManager")
-        return
-    a = s['addonManager']
-
-    if 'exception' in a:
-        writeExc(cx, appName, os, appVersion, appUpdateChannel, json.dumps(a['exception']))
+    excmatch = exc_regex.search(simple);
+    if excmatch:
+        print excmatch.groups()
+        writeExc(cx, appName, os, appVersion, appUpdateChannel, excmatch.group(1))
     elif missing_stamp != "NONE":
         # missing stamp but no exception logged!
         writeExc(cx, appName, os, appVersion, appUpdateChannel, missing_stamp + ": No exception")
 
+# Assorted regexes to match fields we want from the telemetry data
+OS_regex = re.compile(r'"OS":"([^"]+)"')
+
 def map(k, d, v, cx):
     reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date = d
     appVersion = clean_version(appVersion)
-    i = jsonPart(v, 'info')
-    if not i:
+
+    osm = OS_regex.search(v)
+    if not osm:
         return
-    os = i['OS']
+    os = osm.group(1)
 
     writeExc(cx, appName, os, appVersion, appUpdateChannel, "Sessions")
     mapExc(cx, appName, os, appVersion, appUpdateChannel, v)
@@ -104,7 +121,7 @@ def map(k, d, v, cx):
           # sanity check the measure; drop the whole entry if the duration seems crazy
           # twenty minutes is a long time to wait for startup...
           if val > (20 * 60 * 1000):
-            print "Unusual", measure, "value", val, "in entry", k, v
+            print "Unusual", measure, "value", val, "in entry", k, addonID
             return
           result[measure] = {'sum': val, logBucket(val): 1}
           send = True
