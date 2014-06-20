@@ -28,6 +28,12 @@ def map(k, d, v, cx):
     parsed = json.loads(v)
     reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date = d
 
+    if not "fileIOReports" in parsed:
+        return
+
+    if not parsed["fileIOReports"]:
+        return
+
     startup_sub = False
     execution_sub = False
     shutdown_sub = False
