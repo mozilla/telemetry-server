@@ -80,7 +80,7 @@ for f in \$(find . -type f); do
     echo "Not adding 'Content-Type' header for \$f" >> "$LOG"
   fi
   echo "Running: \$UPLOAD_CMD" >> "$LOG"
-  \$UPLOAD_CMD &>> "$LOG"
+  eval \$UPLOAD_CMD &>> "$LOG"
 done
 cd -
 gzip "$LOG"
