@@ -1,6 +1,6 @@
 {
-  "incoming_bucket": "mreid-hotfix-incoming",
-  "incoming_queue": "mreid-hotfix-incoming",
-  "publish_bucket": "mreid-hotfix-published",
+  "incoming_bucket": "hotfix-incoming-v1",
+  "incoming_queue": "hotfix-incoming-v1",
+  "publish_bucket": "hotfix-published-v1",
   "aws_region": "us-west-2"
 }
