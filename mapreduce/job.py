@@ -78,6 +78,7 @@ class Job:
         self._bucket_name = config.get("bucket")
         self._aws_key = config.get("aws_key")
         self._aws_secret_key = config.get("aws_secret_key")
+        self._profile = config.get("profile")
         modulefd = open(config.get("job_script"))
         # let the job script import additional modules under its path
         sys.path.append(os.path.dirname(config.get("job_script")))
