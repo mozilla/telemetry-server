@@ -48,7 +48,11 @@
  <p>
  The default username is <code>ubuntu</code>, so you may SSH into the server
  using a command like:</p>
- <p><span class="no-select"><code>$</code></span><code> ssh -i my-private-key ubuntu@{{ public_dns }}</code></p>
+ <p><span class="no-select"><code>$ </code></span><code>ssh -i my-private-key ubuntu@{{ public_dns }}</code></p>
+ <p>You can save some typing by adding defaults to your <code>~/.ssh/config</code> file:</p>
+ <pre>Host *.compute.amazonaws.com
+  User ubuntu
+  Identityfile ~/.ssh/{my-private-key}</pre>
 {% else %}
  <p>
  Your server is still launching. Please wait and the SSH connection

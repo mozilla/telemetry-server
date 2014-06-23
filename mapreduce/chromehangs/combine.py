@@ -21,6 +21,9 @@ SYS_UPTIME_COLUMN=9
 
 MAX_ROWS=100
 
+# Stacks we see less than this many times will be skipped.
+MIN_FREQUENCY=50
+
 # Expected input columns:
 #   hang_stack,submission_date,app_name,app_version,app_update_channel,
 #   ping_count,total_duration,median_duration,app_uptime,system_uptime
@@ -129,6 +132,15 @@ for stub, column in [["frequency", 0],
     outfile = gzip.open(os.path.join(output_dir, filename), "wb")
     writer = csv.writer(outfile)
     for row in sorted(combined, key=lambda r: r[column], reverse=True):
+        # Skip rare and "outlier" stacks so that the median and total duration
+        # lists are not dominated by a few weird stacks.
+        # We do this for all output types since the frequency sort should
+        # automatically filter these by picking the most frequently occurring
+        # ones anyways.
+        # row[0] is ping count
+        if row[0] < MIN_FREQUENCY:
+            continue;
+
         stack, app, chan, ver = row[-1].split("\t")
         # We only need up to MAX_ROWS items for each set of dimensions, so
         # once we've seen that many, skip any more.

@@ -31,20 +31,20 @@ class WorkerLauncher(SimpleLauncher):
             # by default one of the ephemeral devices gets mounted on /mnt
             raid_config = """
 # RAID0 Configuration:
+# TODO: install xfsprogs in the AMI instead.
+export DEBIAN_FRONTEND=noninteractive; apt-get --yes install xfsprogs
 umount /mnt
 yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices={0} {1}
 echo 'DEVICE {1}' >> /etc/mdadm/mdadm.conf
 mdadm --detail --scan >> /etc/mdadm/mdadm.conf
-# The "-T largefile" is to speed up the inode table creation. We
-# will mostly be reading and writing files >1MB.
-mkfs.ext3 -T largefile /dev/md0
+mkfs.xfs /dev/md0
 mount /dev/md0 /mnt
 """.format(len(raid_devices), dev_list)
         template_params["RAID_CONFIGURATION"] = raid_config
 
         template_str = """#!/bin/bash
-LOG=$BASE/$JOB_NAME.$(date +%Y%m%d%H%M%S).log
-S3_BASE=s3://$DATA_BUCKET/$JOB_NAME
+LOG="$BASE/$JOB_NAME.$(date +%Y%m%d%H%M%S).log"
+S3_BASE="s3://$DATA_BUCKET/$JOB_NAME"
 $RAID_CONFIGURATION
 pip install --upgrade awscli
 mkdir -p $BASE
@@ -59,27 +59,32 @@ echo "[default]" > ~/.aws/config
 echo "region = $REGION" >> ~/.aws/config
 cd $BASE
 mkdir -p $OUTPUT_DIR
-aws s3 cp $CODE_URI code.tar.gz
+aws s3 cp "$CODE_URI" code.tar.gz
 tar xzvf code.tar.gz
-$MAIN &> $LOG
-echo "'$MAIN' exited with code $?" >> $LOG
+# Temporarily disable "exit on error" so we can capture error output:
+set +e
+echo "Beginning job $JOB_NAME ..." >> "$LOG"
+$MAIN &>> "$LOG"
+echo "Finished job $JOB_NAME" >> "$LOG"
+set -e
+echo "'$MAIN' exited with code $?" >> "$LOG"
 cd $OUTPUT_DIR
 for f in \$(find . -type f); do
   # Remove the leading "./"
   f=\$(sed -e "s/^\.\///" <<< \$f)
-  UPLOAD_CMD="aws s3 cp ./\$f $S3_BASE/data/\$f"
+  UPLOAD_CMD="aws s3 cp ./\$f '$S3_BASE/data/\$f'"
   if [[ "\$f" == *.gz ]]; then
-    echo "adding 'Content-Type: gzip' for \$f" >> $LOG
+    echo "adding 'Content-Type: gzip' for \$f" >> "$LOG"
     UPLOAD_CMD="\$UPLOAD_CMD --content-encoding gzip"
   else
-    echo "Not adding 'Content-Type' header for \$f" >> $LOG
+    echo "Not adding 'Content-Type' header for \$f" >> "$LOG"
   fi
-  echo "Running: \$UPLOAD_CMD" >> $LOG
-  \$UPLOAD_CMD &>> $LOG
+  echo "Running: \$UPLOAD_CMD" >> "$LOG"
+  eval \$UPLOAD_CMD &>> "$LOG"
 done
 cd -
-gzip $LOG
-aws s3 cp ${LOG}.gz $S3_BASE/logs/$(basename $LOG).gz --content-type "text/plain" --content-encoding gzip
+gzip "$LOG"
+aws s3 cp "${LOG}.gz" "$S3_BASE/logs/$(basename "$LOG").gz" --content-type "text/plain" --content-encoding gzip
 EOF
 halt
 """

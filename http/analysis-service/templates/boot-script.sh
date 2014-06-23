@@ -20,14 +20,12 @@ END
 # RAID0 Configuration:
 {% set raid_devices = ephemeral_map.keys()|sort %}
 {% set device_list = " ".join(raid_devices) %}
-export DEBIAN_FRONTEND=noninteractive; apt-get --yes install mdadm
+export DEBIAN_FRONTEND=noninteractive; apt-get --yes install mdadm xfsprogs
 umount /mnt
 yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices={{ raid_devices|length }} {{ device_list }}
 echo 'DEVICE {{ device_list }}' >> /etc/mdadm/mdadm.conf
 mdadm --detail --scan >> /etc/mdadm/mdadm.conf
-# The "-T largefile" is to speed up the inode table creation. We
-# will mostly be reading and writing files >1MB.
-mkfs.ext3 -T largefile /dev/md0
+mkfs.xfs /dev/md0
 mount /dev/md0 /mnt
 {% endif %}
 

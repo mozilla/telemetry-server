@@ -63,10 +63,7 @@ class Launcher(object):
             sudo("yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices={0} {1}".format(len(raid_devices), dev_list))
             sudo("echo 'DEVICE {0}' >> /etc/mdadm/mdadm.conf".format(dev_list))
             sudo("mdadm --detail --scan >> /etc/mdadm/mdadm.conf")
-
-            # The "-T largefile" is to speed up the inode table creation. We
-            # will mostly be reading and writing files >1MB.
-            sudo("mkfs.ext3 -T largefile /dev/md0")
+            sudo("mkfs.xfs /dev/md0")
             sudo("mount /dev/md0 /mnt")
 
     def create_log_dir(self):
@@ -94,7 +91,9 @@ class Launcher(object):
 
     def install_apt_dependencies(self, instance):
         print "Installing apt dependencies"
-        aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm")
+        aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm xfsprogs")
+        if self.config.get("upgrade_os", False):
+            sudo('export DEBIAN_FRONTEND=noninteractive; apt-get --yes dist-upgrade')
 
     def install_python_dependencies(self, instance):
         print "Installing python dependencies"

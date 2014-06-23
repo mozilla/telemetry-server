@@ -23,6 +23,7 @@ import subprocess
 import csv
 from subprocess import Popen, PIPE
 import signal
+import cProfile
 try:
     from boto.s3.connection import S3Connection
     BOTO_AVAILABLE=True
@@ -171,7 +172,7 @@ class Job:
                 p = Process(
                         target=Mapper,
                         name=("Mapper-%d" % i),
-                        args=(i, partitions[i], self._work_dir, self._job_module, self._num_reducers))
+                        args=(i, self._profile, partitions[i], self._work_dir, self._job_module, self._num_reducers))
                 mappers.append(p)
                 p.start()
             else:
@@ -186,7 +187,7 @@ class Job:
             p = Process(
                     target=Reducer,
                     name=("Reducer-%d" % i),
-                    args=(i, self._work_dir, self._job_module, self._num_mappers))
+                    args=(i, self._profile, self._work_dir, self._job_module, self._num_mappers))
             reducers.append(p)
             p.start()
         for r in reducers:
@@ -356,10 +357,22 @@ class TextContext(Context):
         self._sink.write(self.record_separator)
 
 class Mapper:
-    def __init__(self, mapper_id, inputs, work_dir, module, partition_count):
+    def __init__(self, mapper_id, do_profile, inputs, work_dir, module, partition_count):
+        if do_profile:
+            profile_out = os.path.join(work_dir, "profile_mapper_" + str(mapper_id))
+            pr = cProfile.Profile()
+            pr.enable()
+
+        self.run_mapper(mapper_id, inputs, work_dir, module, partition_count)
+
+        if do_profile:
+            pr.disable()
+            pr.dump_stats(profile_out)
+
+    def run_mapper(self, mapper_id, inputs, work_dir, module, partition_count):
         self.work_dir = work_dir
 
-        print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs:", inputs
+        print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs"
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
@@ -434,8 +447,20 @@ class Collector(dict):
 
 
 class Reducer:
+    def __init__(self, reducer_id, do_profile, work_dir, module, mapper_count):
+        if do_profile:
+            profile_out = os.path.join(work_dir, "profile_reducer_" + str(reducer_id))
+            pr = cProfile.Profile()
+            pr.enable()
+
+        self.run_reducer(reducer_id, work_dir, module, mapper_count)
+
+        if do_profile:
+            pr.disable()
+            pr.dump_stats(profile_out)
+
     COMBINE_SIZE = 50
-    def __init__(self, reducer_id, work_dir, module, mapper_count):
+    def run_reducer(self, reducer_id, work_dir, module, mapper_count):
         #print "I am reducer", reducer_id, ", and I'm reducing", mapper_count, "mapped files"
         output_file = os.path.join(work_dir, "reducer_" + str(reducer_id))
         context = TextContext(output_file)
@@ -487,6 +512,7 @@ def main():
     #TODO: make the input filter optional, default to "everything valid" and generate dims intelligently.
     parser.add_argument("-f", "--input-filter", help="File containing filter spec", required=True)
     parser.add_argument("-v", "--verbose", help="Print verbose output", action="store_true")
+    parser.add_argument("-p", "--profile", help="Profile mappers and reducers using cProfile", action="store_true")
     args = parser.parse_args()
 
     if not args.local_only:

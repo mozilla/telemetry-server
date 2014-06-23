@@ -3,7 +3,7 @@ SECRET_KEY         = 'Overwrite with a secret on deployment'
 
 # AWS EC2 configuration
 AWS_REGION         = 'us-west-2'
-INSTANCE_TYPE      = 'c3.2xlarge'
+INSTANCE_TYPE      = 'c3.4xlarge'
 # Make sure the ephemeral map matches the instance type above.
 EPHEMERAL_MAP      = { "/dev/xvdb": "ephemeral0", "/dev/xvdc": "ephemeral1" }
 SECURITY_GROUPS    = []
