@@ -26,7 +26,7 @@
     "PublishedBucketName": {
       "Description": "The name of the S3 bucket in which to store published data",
       "Type":        "String",
-      "Default":     "telemetry-published-v1"
+      "Default":     "telemetry-published-v2"
     },
     "WebServerInstanceType": {
       "Description": "Type of EC2 instance to launch for HTTP nodes",

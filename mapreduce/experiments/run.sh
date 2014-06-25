@@ -38,7 +38,7 @@ python -u -m mapreduce.job $BASE/experiments.py \
   --data-dir $BASE/data \
   --work-dir $BASE/work \
   --output $RAW_DATA_FILE \
-  --bucket telemetry-published-v1
+  --bucket telemetry-published-v2
 
 echo "Mapreduce job exited with code: $?"
 

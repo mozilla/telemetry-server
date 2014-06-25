@@ -27,7 +27,7 @@ class AnalysisJob:
         self.target_queue = cfg.target_queue
         self.aws_key = cfg.aws_key
         self.aws_secret_key = cfg.aws_secret_key
-        self.input_bucket = "telemetry-published-v1"
+        self.input_bucket = "telemetry-published-v2"
         self.job_name = cfg.name
         self.job_owner = cfg.owner
         self.date_limit = cfg.date_limit

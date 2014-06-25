@@ -86,7 +86,7 @@ def main():
         os.makedirs(test_dir)
         num_procs = 15
         print "Running with", num_procs, "processes."
-        d = s3util.Loader(test_dir, "telemetry-published-v1", poolsize=num_procs)
+        d = s3util.Loader(test_dir, "telemetry-published-v2", poolsize=num_procs)
         test_list(d)
         test_schema(d)
     finally:

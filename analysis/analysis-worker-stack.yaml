@@ -86,7 +86,7 @@ Resources:
               - 'sts:AssumeRole'
       Path:                   /telemetry/analysis/
       Policies:
-        # Grant read access to telemetry-published-v1
+        # Grant read access to telemetry-published-v2
         - PolicyName:         telemetryPublishedAccess
           PolicyDocument:
             Statement:
@@ -94,7 +94,7 @@ Resources:
                 Action:
                   - 's3:GetObject'
                 Resource:
-                  - 'arn:aws:s3:::telemetry-published-v1/*'
+                  - 'arn:aws:s3:::telemetry-published-v2/*'
         - PolicyName:         inputQueueAccess
           PolicyDocument:
             Statement:

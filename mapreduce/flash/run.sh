@@ -35,7 +35,7 @@ python -u -m mapreduce.job $BASE/flash_versions.py \
   --data-dir $BASE/data \
   --work-dir $BASE/work \
   --output $BASE/$OUTPUT/flash_versions$TARGET.csv.tmp \
-  --bucket telemetry-published-v1
+  --bucket telemetry-published-v2
 
 echo "Mapreduce job exited with code: $?"
 
