@@ -46,7 +46,8 @@ Parameters:
   imageId:
     Description:              Image id of AMI to use
     Type:                     String
-    Default:                  'ami-c2f194f2'
+                              # telemetry-analysis-image-20140626
+    Default:                  'ami-2fd8a41f'
 
 
 ################################################################################

@@ -210,7 +210,7 @@ def update_configs(jobs=None):
             "ssl_key_name": "mreid",
             "base_dir": "/mnt/telemetry",
             "instance_type": app.config['INSTANCE_TYPE'],
-            "image": "ami-4fc5b87f", # -> telemetry-worker-hvm-20140618
+            "image": "ami-9fdca0af", # -> telemetry-worker-hvm-20140626
             # TODO: ssh-only security group
             "security_groups": ["telemetry"],
             "iam_role": iam_role,
@@ -756,7 +756,7 @@ def spawn_worker_instance():
 
     # Create EC2 instance
     reservation = ec2.run_instances(
-        image_id                                = 'ami-ace67f9c',
+        image_id                                = 'ami-ace67f9c', # ubuntu/images/ebs/ubuntu-saucy-13.10-amd64-server-20131015
         security_groups                         = app.config['SECURITY_GROUPS'],
         user_data                               = boot_script,
         block_device_map                        = mapping,
