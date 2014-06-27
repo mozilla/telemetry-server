@@ -75,7 +75,7 @@ INSERT INTO published_files (
 # Update all files on or after submission date.
 def update_published_files(conn, submission_date=None, commit_batch_size=200, verbose=False):
     s3 = S3Connection()
-    bucket_name = "telemetry-published-v1"
+    bucket_name = "telemetry-published-v2"
     bucket = s3.get_bucket(bucket_name)
     schema_key = bucket.get_key("telemetry_schema.json")
     schema_string = schema_key.get_contents_as_string()
@@ -132,7 +132,7 @@ def update_published_files(conn, submission_date=None, commit_batch_size=200, ve
 
 # def populate_published_files(conn):
 #     s3 = S3Connection()
-#     bucket_name = "telemetry-published-v1"
+#     bucket_name = "telemetry-published-v2"
 #     bucket = s3.get_bucket(bucket_name)
 #     schema_key = bucket.get_key("telemetry_schema.json")
 #     schema_string = schema_key.get_contents_as_string()
