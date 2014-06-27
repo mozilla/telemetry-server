@@ -33,7 +33,7 @@ python -u -m mapreduce.job $JOB/addon_perf.py \
   --data-dir "$WORK/cache" \
   --work-dir $WORK \
   --output $DATA_FILE \
-  --bucket telemetry-published-v1
+  --bucket telemetry-published-v2
 
 echo "Mapreduce job exited with code: $?"
 

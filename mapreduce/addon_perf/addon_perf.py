@@ -7,6 +7,7 @@ from cStringIO import StringIO
 import re
 from collections import defaultdict, Counter
 import math
+import urllib
 
 
 stamps = ['AMI_startup_begin',
@@ -84,7 +85,6 @@ def mapExc(cx, appName, os, appVersion, appUpdateChannel, j):
 
     excmatch = exc_regex.search(simple);
     if excmatch:
-        print excmatch.groups()
         writeExc(cx, appName, os, appVersion, appUpdateChannel, excmatch.group(1))
     elif missing_stamp != "NONE":
         # missing stamp but no exception logged!
@@ -92,6 +92,7 @@ def mapExc(cx, appName, os, appVersion, appUpdateChannel, j):
 
 # Assorted regexes to match fields we want from the telemetry data
 OS_regex = re.compile(r'"OS":"([^"]+)"')
+info_addons_re = re.compile(r'"info":{.*?"addons":"([^"]*)"')
 
 def map(k, d, v, cx):
     reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date = d
@@ -105,6 +106,14 @@ def map(k, d, v, cx):
     writeExc(cx, appName, os, appVersion, appUpdateChannel, "Sessions")
     mapExc(cx, appName, os, appVersion, appUpdateChannel, v)
 
+    # Get info.addons to parse out addon versions
+    avm = info_addons_re.search(v)
+    if avm:
+        addon_versions = dict((urllib.unquote(k), v) for k, v in (item.split(':') for item in avm.group(1).split(',')))
+    else:
+        print "No info.addons", k, d, v
+        addon_versions = {}
+
     # Now report the per-add-on measurements
     try:
       d = jsonPart(v, 'addonDetails')
@@ -114,6 +123,8 @@ def map(k, d, v, cx):
     except KeyError:
       return
     for addonID, details in x.iteritems():
+      addonVersion = addon_versions.get(addonID, "?")
+      addonID = addonID + ":" + addonVersion
       result = {}
       send = False
       for measure, val in details.iteritems():
