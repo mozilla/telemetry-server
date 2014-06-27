@@ -13,7 +13,7 @@ class DownloaderProcess(Process):
         self.output_queue = output_queue
         self.work_folder = work_folder
         mkdirp(self.work_folder)
-        self.input_bucket = "telemetry-published-v1"
+        self.input_bucket = "telemetry-published-v2"
         self.aws_cred = aws_cred
         self.s3 = S3Connection(**self.aws_cred)
         self.bucket = self.s3.get_bucket(self.input_bucket, validate = False)

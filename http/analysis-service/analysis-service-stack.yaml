@@ -285,7 +285,7 @@ Resources:
               - 'sts:AssumeRole'
       Path:                   /telemetry/analysis/worker-instance/
       Policies:
-        # Grant read access to telemetry-published-v1
+        # Grant read access to telemetry-published-v2
         - PolicyName:         telemetryPublishedWorkerAccess
           PolicyDocument:
             Statement:
@@ -294,8 +294,8 @@ Resources:
                   - 's3:ListBucket'
                   - 's3:GetObject'
                 Resource:
-                  - 'arn:aws:s3:::telemetry-published-v1'
-                  - 'arn:aws:s3:::telemetry-published-v1/*'
+                  - 'arn:aws:s3:::telemetry-published-v2'
+                  - 'arn:aws:s3:::telemetry-published-v2/*'
         # Grant access to read from temporary bucket, we store SSH keys here
         - PolicyName:         getObjectTemporaryBucketPolicy
           PolicyDocument:

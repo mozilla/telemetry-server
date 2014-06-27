@@ -26,7 +26,7 @@
     "PublishedBucketName": {
       "Description": "The name of the S3 bucket in which to store published data",
       "Type":        "String",
-      "Default":     "telemetry-published-v1"
+      "Default":     "telemetry-published-v2"
     },
     "WebServerInstanceType": {
       "Description": "Type of EC2 instance to launch for HTTP nodes",
@@ -42,12 +42,12 @@
 
   "Mappings": {
     "Region2WebServerAMI": {
-      "us-west-2": { "AMIpv": "ami-f5daaec5" }
+      "us-west-2": { "AMIpv": "ami-e9dca0d9" }
     },
     "Region2ProcessIncomingAMI": {
       "us-west-2": {
-        "AMIpv":  "ami-f5daaec5",
-        "AMIhvm": "ami-65dbaf55"
+        "AMIpv":  "ami-e9dca0d9",
+        "AMIhvm": "ami-e5dca0d5"
       }
     }
   },

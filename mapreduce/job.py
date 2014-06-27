@@ -52,38 +52,38 @@ class Job:
 
     def __init__(self, config):
         # Sanity check args.
-        if config.num_mappers <= 0:
+        if config.get("num_mappers") <= 0:
             raise ValueError("Number of mappers must be greater than zero")
-        if config.num_reducers <= 0:
+        if config.get("num_reducers") <= 0:
             raise ValueError("Number of reducers must be greater than zero")
-        if not os.path.isdir(config.data_dir):
+        if not os.path.isdir(config.get("data_dir")):
             raise ValueError("Data dir must be a valid directory")
-        if not os.path.isdir(config.work_dir):
+        if not os.path.isdir(config.get("work_dir")):
             raise ValueError("Work dir must be a valid directory")
-        if not os.path.isfile(config.job_script):
+        if not os.path.isfile(config.get("job_script", "")):
             raise ValueError("Job script must be a valid python file")
-        if not os.path.isfile(config.input_filter):
+        if not os.path.isfile(config.get("input_filter")):
             raise ValueError("Input filter must be a valid json file")
 
-        self._input_dir = config.data_dir
+        self._input_dir = config.get("data_dir")
         if self._input_dir[-1] == os.path.sep:
             self._input_dir = self._input_dir[0:-1]
-        self._work_dir = config.work_dir
-        self._input_filter = TelemetrySchema(json.load(open(config.input_filter)))
+        self._work_dir = config.get("work_dir")
+        self._input_filter = TelemetrySchema(json.load(open(config.get("input_filter"))))
         self._allowed_values = self._input_filter.sanitize_allowed_values()
-        self._output_file = config.output
-        self._num_mappers = config.num_mappers
-        self._num_reducers = config.num_reducers
-        self._local_only = config.local_only
-        self._bucket_name = config.bucket
-        self._aws_key = config.aws_key
-        self._aws_secret_key = config.aws_secret_key
-        self._profile = config.profile
-        modulefd = open(config.job_script)
+        self._output_file = config.get("output")
+        self._num_mappers = config.get("num_mappers")
+        self._num_reducers = config.get("num_reducers")
+        self._local_only = config.get("local_only")
+        self._bucket_name = config.get("bucket")
+        self._aws_key = config.get("aws_key")
+        self._aws_secret_key = config.get("aws_secret_key")
+        self._profile = config.get("profile")
+        modulefd = open(config.get("job_script"))
         # let the job script import additional modules under its path
-        sys.path.append(os.path.dirname(config.job_script))
+        sys.path.append(os.path.dirname(config.get("job_script")))
         ## Lifted from FileDriver.py in jydoop.
-        self._job_module = imp.load_module("telemetry_job", modulefd, config.job_script, ('.py', 'U', 1))
+        self._job_module = imp.load_module("telemetry_job", modulefd, config.get("job_script"), ('.py', 'U', 1))
 
     def dump_stats(self, partitions):
         total = sum(partitions)
@@ -529,6 +529,7 @@ def main():
                 parser.print_help()
                 return -1
 
+    args = args.__dict__                
     job = Job(args)
     start = datetime.now()
     exit_code = 0

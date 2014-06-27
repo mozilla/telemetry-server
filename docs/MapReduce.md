@@ -128,7 +128,7 @@ $ python -m mapreduce.job mapreduce/examples/my_record_counter.py \
    --data-dir /mnt/telemetry/work/cache \
    --work-dir /mnt/telemetry/work \
    --output /mnt/telemetry/my_mapreduce_results.out \
-   --bucket "telemetry-published-v1"
+   --bucket "telemetry-published-v2"
 ```
 
 If you have AWS credentials, you can run this from your local machine. Otherwise you should run it using the [telemetry analysis service][7] as described in [this blog post][6].

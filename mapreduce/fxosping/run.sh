@@ -57,7 +57,7 @@ python -m mapreduce.job "$THIS_DIR/fxosping.py" \
    --data-dir "$BASE/data" \
    --work-dir "$BASE/work" \
    --output "$TMP_OUTPUT_FILE" \
-   --bucket "telemetry-published-v1"
+   --bucket "telemetry-published-v2"
 
 echo "Mapreduce job exited with code: $?"
 
