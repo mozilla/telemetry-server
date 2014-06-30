@@ -95,21 +95,18 @@ for key, texts in exceptions.iteritems():
 outfile.close()
 
 # take a dict of {bucket: count, ...} and return a list of percentiles
-# [count, total, 50th, 75th, 95th, max]
+# [count, 50th, 75th, 95th]
 def getPercentiles(bucketList):
     if bucketList == None:
-      return [0, 0, 0, 0, 0, 0]
+      return [0, 0, 0, 0 ]
+
+    # Ignore a legacy field in some data
     if 'sum' in bucketList:
-        total = bucketList['sum']
         del bucketList['sum']
-    else:
-        # Get rough total by adding up all the buckets
-        total = 0
-        for bucket, count in bucketList.iteritems():
-            total = total + (int(bucket) * count)
+
     points = sum(bucketList.values())
     buckets = sorted(bucketList.keys(), key = int)
-    result = [points, total]
+    result = [points]
     accum = 0
     b = iter(buckets)
     bucket = 0
@@ -118,7 +115,6 @@ def getPercentiles(bucketList):
         bucket = b.next()
         accum += bucketList[bucket]
       result.append(bucket)
-    result.append(buckets[-1])
     return result
 
 # Write out gathered add-on info
@@ -128,14 +124,14 @@ aofilename = outpath + "/weekly_addons_" + outdate + ".csv.gz"
 aofile = gzip.open(aofilename, "w")
 aoWriter = ucsv.writer(aofile)
 aoWriter.writerow(["app_name", "platform", "addon ID", "names",
-                   "measure", "sessions", "count", "total", "50%", "75%", "95%", "max"])
+                   "measure", "Total Sessions", "Sessions with this add-on", "Impact (popularity * median time)", "Median time (ms)", "75% time", "95% time"])
 
 # unpacked add-ons
 upfilename = outpath + "/weekly_unpacked_" + outdate + ".csv.gz"
 upfile = gzip.open(upfilename, "w")
 upWriter = ucsv.writer(upfile)
 upWriter.writerow(["app_name", "platform", "addon ID", "names",
-                   "Total sessions", "Sessions with this add-on", "Impact (popularity * median time)", "Median file count", "Median time (ms)", "75% time", "95% time", "max time"])
+                   "Total sessions", "Sessions with this add-on", "Impact (popularity * median time)", "Median file count", "Median time (ms)", "75% time", "95% time"])
 
 for key, values in addonPerf.iteritems():
     # Total number of sessions for this app/platform combination
@@ -152,7 +148,7 @@ for key, values in addonPerf.iteritems():
         if (points * 100000) < sessions:
             # print 'Skipping', sessions, points, key, values
             continue
-        median_items = items[2]
+        median_items = items[1]
         # Don't bother with packed add-ons
         if int(median_items) >= 2:
             times = getPercentiles(values['scan_MS'])
@@ -160,10 +156,9 @@ for key, values in addonPerf.iteritems():
             upLine.append(names)
             upLine.append(sessions)
             upLine.append(times[0])
-            upLine.append(float(points) / sessions * float(times[2]))
+            upLine.append(float(points) / sessions * float(times[1]))
             upLine.append(median_items)
-            # Drop the sum of times for now
-            upLine.extend(times[2:])
+            upLine.extend(times[1:])
             upWriter.writerow(upLine)
 
     for measure in ['startup_MS', 'shutdown_MS']:
@@ -174,7 +169,10 @@ for key, values in addonPerf.iteritems():
         line.append(names)
         line.append(measure)
         line.append(sessions)
-        line.extend(getPercentiles(hist))
+        times = getPercentiles(hist)
+        line.append(times[0])
+        line.append(float(points) / sessions * float(times[1]))
+        line.extend(times[1:])
         aoWriter.writerow(line)
 
 aofile.close()

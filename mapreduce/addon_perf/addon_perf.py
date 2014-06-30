@@ -110,9 +110,10 @@ def map(k, d, v, cx):
     avm = info_addons_re.search(v)
     if avm:
         addon_versions = dict((urllib.unquote(k), v) for k, v in (item.split(':') for item in avm.group(1).split(',')))
+        version_default = "?"
     else:
-        print "No info.addons", k, d, v
         addon_versions = {}
+        version_default = "*"
 
     # Now report the per-add-on measurements
     try:
@@ -123,7 +124,7 @@ def map(k, d, v, cx):
     except KeyError:
       return
     for addonID, details in x.iteritems():
-      addonVersion = addon_versions.get(addonID, "?")
+      addonVersion = addon_versions.get(addonID, version_default)
       addonID = addonID + ":" + addonVersion
       result = {}
       send = False
@@ -134,11 +135,11 @@ def map(k, d, v, cx):
           if val > (20 * 60 * 1000):
             print "Unusual", measure, "value", val, "in entry", k, addonID
             return
-          result[measure] = {'sum': val, logBucket(val): 1}
+          result[measure] = {logBucket(val): 1}
           send = True
         if measure == 'scan_items':
           # counting individual files, so use narrower buckets
-          result[measure] = {'sum': val, logBucket(val, 0.2): 1}
+          result[measure] = {logBucket(val, 0.2): 1}
           send = True
       addonName = None
       if 'name' in details:
