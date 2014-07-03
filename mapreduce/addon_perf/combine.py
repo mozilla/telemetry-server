@@ -117,7 +117,7 @@ def getPercentiles(bucketList):
       result.append(bucket)
     return result
 
-# Write out gathered add-on info
+
 print "Generating add-on data"
 
 aofilename = outpath + "/weekly_addons_" + outdate + ".csv.gz"
@@ -133,34 +133,21 @@ upWriter = ucsv.writer(upfile)
 upWriter.writerow(["app_name", "platform", "addon ID", "names",
                    "Total sessions", "Sessions with this add-on", "Impact (popularity * median time)", "Median file count", "Median time (ms)", "75% time", "95% time"])
 
-for key, values in addonPerf.iteritems():
-    # Total number of sessions for this app/platform combination
-    sessions = addonSessions.get((key[0], key[1]), 0)
-    nameSet = addonNames.get(key[2], {})
-    if "?" in nameSet:
-        del nameSet["?"]
-    names = json.dumps(nameSet)
-    if 'scan_items' in values:
-        items = getPercentiles(values['scan_items'])
-        # How many data points did we get for this add-on on this app/platform?
-        points = items[0]
-        # If this addon was seen in fewer than 1 in 100 thousand sessions, ignore
-        if (points * 100000) < sessions:
-            # print 'Skipping', sessions, points, key, values
-            continue
-        median_items = items[1]
-        # Don't bother with packed add-ons
-        if int(median_items) >= 2:
-            times = getPercentiles(values['scan_MS'])
-            upLine = list(key)
-            upLine.append(names)
-            upLine.append(sessions)
-            upLine.append(times[0])
-            upLine.append(float(points) / sessions * float(times[1]))
-            upLine.append(median_items)
-            upLine.extend(times[1:])
-            upWriter.writerow(upLine)
+# Lump together rare add-ons as 'OTHER' by app/platform
+otherPerf = defaultdict(dc)
 
+def writeFiles(key, values, names, sessions, points, median_items):
+    times = getPercentiles(values['scan_MS'])
+    upLine = list(key)
+    upLine.append(names)
+    upLine.append(sessions)
+    upLine.append(times[0])
+    upLine.append(float(points) / sessions * float(times[1]))
+    upLine.append(median_items)
+    upLine.extend(times[1:])
+    upWriter.writerow(upLine)
+
+def writeMeasures(key, values, names, sessions):
     for measure in ['startup_MS', 'shutdown_MS']:
         if not measure in values:
             continue
@@ -174,6 +161,52 @@ for key, values in addonPerf.iteritems():
         line.append(float(times[0]) / sessions * float(times[1]))
         line.extend(times[1:])
         aoWriter.writerow(line)
+
+for key, values in addonPerf.iteritems():
+    # Total number of sessions for this app/platform combination
+    sessions = addonSessions.get((key[0], key[1]), 0)
+    nameSet = addonNames.get(key[2], {})
+    if "?" in nameSet:
+        del nameSet["?"]
+    names = json.dumps(nameSet)
+    if 'scan_items' in values:
+        items = getPercentiles(values['scan_items'])
+        # How many data points did we get for this add-on on this app/platform?
+        points = items[0]
+        # If this addon was seen in fewer than 1 in 100 thousand sessions, ignore
+        if (points * 100000) < sessions:
+            # keep track of rare add-ons as 'Other'
+            for measure, hist in values.iteritems():
+                otherPerf[(key[0], key[1])][measure].update(hist)
+            continue
+        median_items = items[1]
+        # Don't bother with packed add-ons
+        if int(median_items) >= 2:
+            writeFiles(key, values, names, sessions, points, median_items)
+
+    writeMeasures(key, values, names, sessions)
+
+form = "{:>9}{:>9}{:>9}{:>9}"
+def dumpHist(hist):
+    points = sum(hist.values())
+    buckets = sorted(hist.keys(), key = int)
+    accum = 0
+    print form.format('bucket', 'val', 'accum', '%')
+    for bucket in buckets:
+        accum += hist[bucket]
+        print form.format(bucket, hist[bucket], accum, accum * 100 / points)
+
+# Now write out the accumulated 'OTHER' values
+for (app, platform), values in otherPerf.iteritems():
+    # for measure, hist in values.iteritems():
+    #     print
+    #     print app, platform, measure
+    #     dumpHist(hist)
+    sessions = addonSessions.get((app, platform), 0)
+    items = getPercentiles(values['scan_items'])
+    key = (app, platform, 'OTHER')
+    writeFiles(key, values, 'OTHER', sessions, items[0], items[1])
+    writeMeasures(key, values, 'OTHER', sessions)
 
 aofile.close()
 upfile.close()
