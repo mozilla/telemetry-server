@@ -7,7 +7,7 @@ infile, outpattern = sys.argv[1:]
 
 class Experiment(object):
     def __init__(self):
-        self.active = 0
+        self.activeBranches = {}
         self.activations = defaultdict(lambda: 0)
         self.terminations = defaultdict(lambda: 0)
 
@@ -19,8 +19,8 @@ class Channel(object):
     def addTotal(self, c):
         self.total += c
 
-    def addActive(self, id, c):
-        self.experiments[id].active += c
+    def addActive(self, id, branch, c):
+        self.experiments[id].activeBranches[branch] += c
 
     def addActivation(self, id, data, c):
         self.experiments[id].activations[tuple(data)] += c
@@ -54,9 +54,9 @@ for line in lines:
         count = int(line[-1])
         channels[channel].addTermination(id, [reason] + data, count)
     elif entrytype == "ACTIVE":
-        channel, version, id, count = line[1:]
+        channel, version, id, branch, count = line[1:]
         count = int(count)
-        channels[channel].addActive(id, count)
+        channels[channel].addActive(id, branch, count)
     else:
         raise ValueError("Unexpected data key, line %i: %s" % (lines.line_num, entrytype))
 
@@ -76,7 +76,7 @@ for cname, channel in channels:
     }
     for id, experiment in channel.experiments.items():
         d["experiments"][id] = {
-            "active": experiment.active,
+            "active": experiment.activeBranches,
             "activations": experiment.activations.items(),
             "terminations": experiment.terminations.items(),
         }

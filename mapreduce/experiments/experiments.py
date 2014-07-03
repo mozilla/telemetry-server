@@ -4,12 +4,6 @@ import traceback
 import sys
 import urllib
 
-# The telemetry payload doesn't currently list the current experiment ID. So
-# for now we're hardcoding the list of experiments by addon ID
-interesting = [
-    "jid1-tile-switcher@jetpack",
-    ]
-
 def map(k, d, v, cx):
     [reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date] = d
     if appName != "Firefox":
@@ -20,7 +14,7 @@ def map(k, d, v, cx):
     process = False
     if v.find("EXPERIMENT") != -1:
         process = True
-    elif v.find("jid1-tile-switcher") != -1:
+    elif v.find("activeExperiment") != -1:
         process = True
 
     if not process:
@@ -39,11 +33,11 @@ def map(k, d, v, cx):
                           appUpdateChannel,
                           appVersion) + tuple(item[2:]), 1)
 
-        addons = set([urllib.unquote(i.split(":")[0])
-                      for i in j.get("info", {}).get("addons", "").split(",")])
-        for id in interesting:
-            if id in addons:
-                cx.write(("ACTIVE", appUpdateChannel, appVersion, id), 1)
+        info = j.get("info", {})
+        active = info.get("activeExperiment", None)
+        if active is not None:
+            activeBranch = info.get("activeExperimentBranch", None)
+            cx.write(("ACTIVE", appUpdateChannel, appVersion, active, activeBranch), 1)
 
     except Exception as e:
         print >>sys.stderr, "Error during map: ", e
