@@ -171,7 +171,7 @@ for key, values in addonPerf.iteritems():
         line.append(sessions)
         times = getPercentiles(hist)
         line.append(times[0])
-        line.append(float(points) / sessions * float(times[1]))
+        line.append(float(times[0]) / sessions * float(times[1]))
         line.extend(times[1:])
         aoWriter.writerow(line)
 
