@@ -31,6 +31,7 @@ class CompressedFile():
             self.compression_type = compression_type
         self.handle = None
         self.raw_handle = None
+        self.line_num = 0
         # Don't automatically open the file right away - we may want to open it
         # just before we try to read from it. This lets us instantiate with
         # bogus filenames.

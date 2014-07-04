@@ -14,6 +14,13 @@ class TestCompressedFile(unittest.TestCase):
     def get_test_data(self):
         return ["line 1", "line 2", "line 3", "another \tline", "line 5"]
 
+    def test_open_now(self):
+        with self.assertRaises(IOError):
+            c = CompressedFile("dummy.gz", open_now=True)
+
+        c = CompressedFile("dummy.gz", open_now=False)
+        self.assertEqual(0, c.line_num)
+
     def test_detect_compression_type(self):
         c = CompressedFile("dummy.gz")
         for t in ["gz", "lzma", "xz"]:
