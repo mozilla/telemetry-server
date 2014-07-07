@@ -43,7 +43,7 @@ class TestCompressedFile(unittest.TestCase):
                 break
 
     def test_missing_executable(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError):
             c = CompressedFile("dummy.lzma", open_now=False)
             CompressedFile.SEARCH_PATH = []
             path = c.get_executable()

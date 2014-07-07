@@ -68,7 +68,8 @@ class CompressedFile():
                     decompress_cmd = [self.get_executable(), "--decompress", "--stdout"]
                     self.raw_handle = open(self.filename, "rb")
 
-                    # Popen the decompressing version of StorageLayout.COMPRESS_PATH
+                    # Popen the decompressing flavour of the given compression
+                    # type.
                     self.p_decompress = Popen(decompress_cmd, bufsize=65536,
                         stdin=self.raw_handle, stdout=PIPE, stderr=sys.stderr)
                     self.handle = self.p_decompress.stdout
@@ -77,9 +78,10 @@ class CompressedFile():
                     # open it!
                     self.raw_handle = open(self.filename, "wb")
 
-                    # Now set up our processing pipe:
-                    self.p_compress = Popen(compress_cmd, bufsize=65536, stdin=PIPE,
-                            stdout=self.raw_handle, stderr=sys.stderr)
+                    # Popen the compressing flavour of the given compression
+                    # type.
+                    self.p_compress = Popen(compress_cmd, bufsize=65536,
+                        stdin=PIPE, stdout=self.raw_handle, stderr=sys.stderr)
 
                     self.handle = self.p_compress.stdin
                 else:
@@ -102,7 +104,7 @@ class CompressedFile():
                 executable = os.path.join(p, self.compression_type)
                 if os.path.isfile(executable):
                     return executable
-            raise ValueError("Could not find '{}' executable".format(self.compression_type))
+            raise RuntimeError("Could not find '{}' executable".format(self.compression_type))
 
     def __iter__(self):
         return self
