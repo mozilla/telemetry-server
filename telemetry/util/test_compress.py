@@ -26,6 +26,28 @@ class TestCompressedFile(unittest.TestCase):
             c = CompressedFile("dummy.lzma", mode="bogus",
                 open_now=True, force_popen=True)
 
+    def test_write_to_ro_file(self):
+        write_test_file = "dummy.lzma"
+        assert not os.path.exists(write_test_file)
+        with self.assertRaises(IOError):
+            c = CompressedFile(write_test_file, mode="r")
+            c.write("testing...")
+        assert not os.path.exists(write_test_file)
+
+    def test_read_from_wo_file(self):
+        with self.assertRaises(IOError):
+            c = CompressedFile("dummy.lzma", mode="w")
+            last_line = None
+            for line in c:
+                last_line = line
+                break
+
+    def test_missing_executable(self):
+        with self.assertRaises(ValueError):
+            c = CompressedFile("dummy.lzma", open_now=False)
+            CompressedFile.SEARCH_PATH = []
+            path = c.get_executable()
+
     def test_no_extension(self):
         # we can't auto-detect with no file extension
         with self.assertRaises(ValueError):
@@ -68,31 +90,44 @@ class TestCompressedFile(unittest.TestCase):
         for i in range(c.line_num):
             self.assertEqual(expected[i], lines[i])
 
-    def test_decompress_lzma_popen(self):
+    def test_decompress_popen(self):
         base_dir = self.get_test_dir()
         for t in ["lzma", "xz"]:
             self.decompress_one_file(t, force_popen=True)
 
-    def test_compress_lzma(self):
-        self.assertEqual(1, 1)
-        # TODO: write data to file.lzma
-        #       compress it
-        #       read it back
-        #       make sure it looks ok
+    def compress_one_file(self, filetype, force_popen):
+        base_dir = self.get_test_dir()
+        write_test_file = os.path.join(base_dir, "write_test." + filetype)
+        assert not os.path.exists(write_test_file)
+        c = CompressedFile(write_test_file, mode="w", force_popen=force_popen)
 
-    def test_compress_xz(self):
-        self.assertEqual(1, 1)
-        # TODO: write data to file.xz
-        #       compress it
-        #       read it back
-        #       make sure it looks ok
+        # Write data to file.lzma
+        lines = self.get_test_data()
+        for line in lines:
+            c.write(line + "\n")
+        c.close()
 
-    def test_compress_gz(self):
-        self.assertEqual(1, 1)
-        # TODO: write data to file.gz
-        #       compress it
-        #       read it back
-        #       make sure it looks ok
+        # Read it back
+        after = []
+        c = CompressedFile(write_test_file, mode="r", force_popen=force_popen)
+        for line in c:
+            after.append(line.strip())
+
+        # make sure it looks ok
+        self.assertEqual(len(lines), len(after))
+        for i in range(len(lines)):
+            self.assertEqual(lines[i], after[i])
+
+        # all is well, remove the file.
+        os.remove(write_test_file)
+
+    def test_compress_popen(self):
+        for t in ["lzma", "xz"]:
+            self.compress_one_file(t, force_popen=True)
+
+    def test_compress_types(self):
+        for t in ["lzma", "xz", "gz"]:
+            self.compress_one_file(t, force_popen=False)
 
 if __name__ == "__main__":
     unittest.main()

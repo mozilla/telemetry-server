@@ -38,6 +38,18 @@ class CompressedFile():
         if open_now:
             self.open()
 
+        # Handle read- or write-only files.  Mixed mode is not supported due to
+        # complexity with Popen stuff.
+        if self.mode.startswith("r"):
+            self.can_read = True
+        else:
+            self.can_read = False
+
+        if self.mode.startswith("w"):
+            self.can_write = True
+        else:
+            self.can_write = False
+
     def close(self):
         if self.raw_handle:
             self.raw_handle.close()
@@ -61,13 +73,28 @@ class CompressedFile():
                         stdin=self.raw_handle, stdout=PIPE, stderr=sys.stderr)
                     self.handle = self.p_decompress.stdout
                 elif self.mode == 'w':
-                    # TODO
-                    pass
+                    compress_cmd = [self.get_executable(), "-0"]
+                    # open it!
+                    self.raw_handle = open(self.filename, "wb")
+
+                    # Now set up our processing pipe:
+                    self.p_compress = Popen(compress_cmd, bufsize=65536, stdin=PIPE,
+                            stdout=self.raw_handle, stderr=sys.stderr)
+
+                    self.handle = self.p_compress.stdin
                 else:
                     raise ValueError("Unknown mode '{}' for type {}".format(
                             self.mode, self.compression_type))
         elif self.compression_type == 'gz':
             self.handle = gzip.GzipFile(self.filename, mode=self.mode)
+
+    def write(self, content):
+        if not self.can_write:
+            raise IOError("Cannot write to file with mode '{}'".format(self.mode))
+        if not self.handle:
+            self.open()
+
+        self.handle.write(content)
 
     def get_executable(self):
         if self.compression_type == 'lzma' or self.compression_type == 'xz':
@@ -81,8 +108,11 @@ class CompressedFile():
         return self
 
     def next(self):
+        if not self.can_read:
+            raise IOError("Cannot read from file with mode '{}'".format(self.mode))
         if not self.handle:
             self.open()
+
         line = self.handle.readline()
         if line == '':
             raise StopIteration
