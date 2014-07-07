@@ -21,6 +21,7 @@ except ImportError:
 
 class CompressedFile():
     SEARCH_PATH = ['/usr/bin', '/usr/local/bin']
+    CHUNK_SIZE = 1024 * 1024
     def __init__(self, filename, mode="r", compression_type="auto", open_now=False, force_popen=False):
         self.filename = filename
         self.mode = mode
@@ -96,7 +97,20 @@ class CompressedFile():
         if not self.handle:
             self.open()
 
-        self.handle.write(content)
+        return self.handle.write(content)
+
+    # Helper function to compress an existing uncompressed file.
+    def compress_from(self, raw_filename, remove_original=False):
+        with open(raw_filename, 'rb') as raw:
+            while True:
+                chunk = raw.read(CompressedFile.CHUNK_SIZE)
+                if chunk == '':
+                    break
+                self.write(chunk)
+
+        if remove_original:
+            # Remove raw file
+            os.remove(raw_filename)
 
     def get_executable(self):
         if self.compression_type == 'lzma' or self.compression_type == 'xz':

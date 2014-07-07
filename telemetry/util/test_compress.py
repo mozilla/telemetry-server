@@ -8,11 +8,32 @@ import unittest
 from telemetry.util.compress import CompressedFile
 
 class TestCompressedFile(unittest.TestCase):
+    def setUp(self):
+        test_file = self.get_raw_test_file()
+        assert not os.path.exists(test_file)
+        with open(test_file, 'w') as raw:
+            for line in self.get_test_data():
+                raw.write(line + "\n")
+
+    def tearDown(self):
+        test_file = self.get_raw_test_file()
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+    def get_raw_test_file(self):
+        return os.path.join(self.get_test_dir(), "test.txt")
+
     def get_test_dir(self):
         return "test"
 
     def get_test_data(self):
         return ["line 1", "line 2", "line 3", "another \tline", "line 5"]
+
+    def get_supported_compression_types(self):
+        return ["xz", "lzma", "gz"]
+
+    def get_supported_popen_compression_types(self):
+        return ["xz", "lzma"]
 
     def test_open_now(self):
         with self.assertRaises(IOError):
@@ -60,7 +81,7 @@ class TestCompressedFile(unittest.TestCase):
 
     def test_detect_compression_type(self):
         c = CompressedFile("dummy.gz")
-        for t in ["gz", "lzma", "xz"]:
+        for t in self.get_supported_compression_types():
             example_file = "/path/to/some.compressed.file." + t
             #print "Checking", example_file
             self.assertEqual(t, c.detect_compression_type(example_file))
@@ -73,7 +94,7 @@ class TestCompressedFile(unittest.TestCase):
             self.assertEqual(t, c3.compression_type)
 
     def test_decompress_types(self):
-        for t in ["gz", "lzma", "xz"]:
+        for t in self.get_supported_compression_types():
             self.decompress_one_file(t, force_popen=False)
 
     def decompress_one_file(self, filetype, force_popen):
@@ -92,7 +113,7 @@ class TestCompressedFile(unittest.TestCase):
 
     def test_decompress_popen(self):
         base_dir = self.get_test_dir()
-        for t in ["lzma", "xz"]:
+        for t in self.get_supported_popen_compression_types():
             self.decompress_one_file(t, force_popen=True)
 
     def compress_one_file(self, filetype, force_popen):
@@ -121,13 +142,57 @@ class TestCompressedFile(unittest.TestCase):
         # all is well, remove the file.
         os.remove(write_test_file)
 
+
+    def verify_contents(self, filename, force_popen):
+        # Read it back
+        expected = self.get_test_data()
+        actual = []
+        c = CompressedFile(filename, mode="r", force_popen=force_popen)
+        for line in c:
+            actual.append(line.strip())
+
+        # make sure it looks ok
+        self.assertEqual(len(expected), len(actual))
+        for i in range(len(expected)):
+            self.assertEqual(expected[i], actual[i])
+
+    def compress_from(self, filetype, force_popen):
+        base_dir = self.get_test_dir()
+        raw_test_file = self.get_raw_test_file()
+        comp_test_file = os.path.join(base_dir, "from_test." + filetype)
+        assert not os.path.exists(comp_test_file)
+        c = CompressedFile(comp_test_file, mode="w", force_popen=force_popen)
+        c.compress_from(raw_test_file)
+        c.close()
+        self.verify_contents(comp_test_file, force_popen)
+        os.remove(comp_test_file)
+
     def test_compress_popen(self):
-        for t in ["lzma", "xz"]:
+        for t in self.get_supported_popen_compression_types():
             self.compress_one_file(t, force_popen=True)
 
     def test_compress_types(self):
-        for t in ["lzma", "xz", "gz"]:
+        for t in self.get_supported_compression_types():
             self.compress_one_file(t, force_popen=False)
+
+    def test_compress_from_types(self):
+        for t in self.get_supported_compression_types():
+            self.compress_from(t, force_popen=False)
+
+    def test_compress_from_popen(self):
+        for t in self.get_supported_popen_compression_types():
+            self.compress_from(t, force_popen=True)
+
+    def test_compress_from_cleanup(self):
+        base_dir = self.get_test_dir()
+        comp_test_file = os.path.join(base_dir, "cleanup_test.gz")
+        raw_test_file = self.get_raw_test_file()
+        assert os.path.exists(raw_test_file)
+        c = CompressedFile(comp_test_file, mode="w")
+        c.compress_from(raw_test_file, remove_original=True)
+        c.close()
+        assert not os.path.exists(raw_test_file)
+
 
 if __name__ == "__main__":
     unittest.main()
