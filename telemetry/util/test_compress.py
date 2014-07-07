@@ -21,6 +21,21 @@ class TestCompressedFile(unittest.TestCase):
         c = CompressedFile("dummy.gz", open_now=False)
         self.assertEqual(0, c.line_num)
 
+    def test_open_bad_mode(self):
+        with self.assertRaises(ValueError):
+            c = CompressedFile("dummy.lzma", mode="bogus",
+                open_now=True, force_popen=True)
+
+    def test_no_extension(self):
+        # we can't auto-detect with no file extension
+        with self.assertRaises(ValueError):
+            c = CompressedFile("dummy", compression_type="auto")
+
+    def test_no_extension_manual(self):
+        # we don't need to auto-detect if we specify the type.
+        c = CompressedFile("dummy", compression_type="gz")
+        self.assertEqual("gz", c.compression_type)
+
     def test_detect_compression_type(self):
         c = CompressedFile("dummy.gz")
         for t in ["gz", "lzma", "xz"]:
