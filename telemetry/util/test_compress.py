@@ -35,6 +35,11 @@ class TestCompressedFile(unittest.TestCase):
     def get_supported_popen_compression_types(self):
         return ["xz", "lzma"]
 
+    def test_unknown_compression_type(self):
+        with self.assertRaises(ValueError):
+            c = CompressedFile("dummy.gz", compression_type="foo",
+                    open_now=True)
+
     def test_open_now(self):
         with self.assertRaises(IOError):
             c = CompressedFile("dummy.gz", open_now=True)
