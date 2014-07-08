@@ -22,7 +22,8 @@ except ImportError:
 class CompressedFile():
     SEARCH_PATH = ['/usr/bin', '/usr/local/bin']
     CHUNK_SIZE = 1024 * 1024
-    def __init__(self, filename, mode="r", compression_type="auto", open_now=False, force_popen=False):
+    def __init__(self, filename, mode="r", compression_type="auto",
+                 open_now=False, force_popen=False):
         self.filename = filename
         self.mode = mode
         self.force_popen = force_popen
@@ -35,7 +36,7 @@ class CompressedFile():
         self.line_num = 0
         # Don't automatically open the file right away - we may want to open it
         # just before we try to read from it. This lets us instantiate with
-        # bogus filenames.
+        # bogus filenames for testing.
         if open_now:
             self.open()
 
@@ -64,36 +65,48 @@ class CompressedFile():
                 # Use in-process lzma library if possible.
                 self.handle = lzma.open(self.filename, self.mode)
             else:
+                # Use the compression binaries from the underlying OS.
                 if self.mode == 'r':
-                    # Use Popen to invoke the OS's compression executable
-                    decompress_cmd = [self.get_executable(), "--decompress", "--stdout"]
+                    # Use Popen to invoke the OS's compression executable.
+                    decompress_cmd = [self.get_executable(), "--decompress",
+                                      "--stdout"]
                     self.raw_handle = open(self.filename, "rb")
 
-                    # Popen the decompressing flavour of the given compression
-                    # type.
+                    # Popen the decompress command, redirecting input from our
+                    # file handle.
                     self.p_decompress = Popen(decompress_cmd, bufsize=65536,
                         stdin=self.raw_handle, stdout=PIPE, stderr=sys.stderr)
+
+                    # Use stdout from the child process as the readable handle.
                     self.handle = self.p_decompress.stdout
                 elif self.mode == 'w':
+                    # Use "-0" compression preset for best speed.
                     compress_cmd = [self.get_executable(), "-0"]
-                    # open it!
+
+                    # Open the actual file.
                     self.raw_handle = open(self.filename, "wb")
 
-                    # Popen the compressing flavour of the given compression
-                    # type.
+                    # Popen the compress command, redirecting output to our
+                    # file handle.
                     self.p_compress = Popen(compress_cmd, bufsize=65536,
                         stdin=PIPE, stdout=self.raw_handle, stderr=sys.stderr)
 
+                    # Use stdin from the child process as the writable handle.
                     self.handle = self.p_compress.stdin
                 else:
                     raise ValueError("Unknown mode '{}' for type {}".format(
                             self.mode, self.compression_type))
         elif self.compression_type == 'gz':
             self.handle = gzip.GzipFile(self.filename, mode=self.mode)
+        else:
+            raise ValueError("Unknown compression type:" \
+                             " '{}'".format(self.compression_type))
 
+    # Write compressed data.
     def write(self, content):
         if not self.can_write:
-            raise IOError("Cannot write to file with mode '{}'".format(self.mode))
+            raise IOError("Cannot write to file with mode" \
+                          " '{}'".format(self.mode))
         if not self.handle:
             self.open()
 
@@ -103,29 +116,34 @@ class CompressedFile():
     def compress_from(self, raw_filename, remove_original=False):
         with open(raw_filename, 'rb') as raw:
             while True:
+                # Read chunks from raw_filename, write them to the output file.
                 chunk = raw.read(CompressedFile.CHUNK_SIZE)
                 if chunk == '':
                     break
                 self.write(chunk)
 
         if remove_original:
-            # Remove raw file
+            # Remove raw input file.
             os.remove(raw_filename)
 
+    # Try to find the required compression binary in the given search path.
     def get_executable(self):
         if self.compression_type == 'lzma' or self.compression_type == 'xz':
             for p in CompressedFile.SEARCH_PATH:
                 executable = os.path.join(p, self.compression_type)
                 if os.path.isfile(executable):
                     return executable
-            raise RuntimeError("Could not find '{}' executable".format(self.compression_type))
+            raise RuntimeError("Could not find '{}' " \
+                               "executable".format(self.compression_type))
 
     def __iter__(self):
         return self
 
+    # Iterate the contents of the file by reading one line at a time.
     def next(self):
         if not self.can_read:
-            raise IOError("Cannot read from file with mode '{}'".format(self.mode))
+            raise IOError("Cannot read from file with mode" \
+                          " '{}'".format(self.mode))
         if not self.handle:
             self.open()
 
@@ -135,11 +153,10 @@ class CompressedFile():
         self.line_num += 1
         return line
 
+    # Guess the compression type based on the file extension.
     def detect_compression_type(self, filename):
         if "." not in filename:
             raise ValueError("Unknown file type: " + str(filename))
         last_dot = filename.rfind(".")
         compression_type = filename[last_dot + 1:]
-
-        # TODO: check it against supported types
         return compression_type
