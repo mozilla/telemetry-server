@@ -170,14 +170,14 @@ def main():
                 if should_run(args.dry_run, logger, "Removing input file: {}".format(full_source_filename)):
                     os.remove(full_source_filename)
 
-                if should_run(args.dry_run, logger, "Removing output file: {}".format(full_dest_filename)):
+                if not empty_result and should_run(args.dry_run, logger, "Removing output file: {}".format(full_dest_filename)):
                     os.remove(full_dest_filename)
 
                 if empty_result or args.source_bucket != args.dest_bucket:
                     if should_run(args.dry_run, logger, "Deleting from source bucket"):
                         k.delete()
                 else:
-                    logger.info("Not deleting source: either non-empty or different bucket: {}".format(k.name))
+                    logger.info("Not deleting source: either non-empty or same bucket: {}".format(k.name))
 
                 if sql_update is None:
                     logger.error("Missing sql_update :(")
