@@ -38,6 +38,8 @@ def get_args():
             help="Location to put temporary work files")
     parser.add_argument("-v", "--verbose", action="store_true",
             help="Print verbose output")
+    parser.add_argument("-m", "--min-date",
+            help="Don't look at submission dates earlier than this")
     return parser.parse_args()
 
 def should_run(dry_run, logger, message):
@@ -48,6 +50,23 @@ def should_run(dry_run, logger, message):
     # dry_run == False -> should_run == True
     # and vice versa
     return not dry_run
+
+def skip_by_date(key_name, target_date, logger):
+    if target_date is None:
+        return False
+    path_pieces = key_name.split("/")
+    file_pieces = path_pieces[-1].split(".")
+    submission_date = file_pieces[1]
+    if file_pieces[2] == "v2" and file_pieces[3] == "log":
+        # the filename is in the expected format.
+        if submission_date < target_date:
+            logger.debug("Skipping by date: {} < {} in {}".format(submission_date, target_date, key_name))
+            return True
+        else:
+            logger.debug("Not skipping by date: {} >= {} in {}".format(submission_date, target_date, key_name))
+            return False
+    logger.warn("Filename not in expected format a/b/c/build_id.submission_date.v2.log.hash.extension: {}".format(key_name))
+    return False
 
 def main():
     args = get_args()
@@ -80,6 +99,9 @@ def main():
             for k in source_bucket.list(prefix=prefix, marker=last_key):
                 if k.name.endswith('/'):
                     logger.debug("Skipping directory '{}'".format(k.name))
+                    continue
+                if skip_by_date(k.name, args.min_date, logger):
+                    logger.debug("Skipping file older than {}: {}".format(args.min_date, k.name))
                     continue
                 total_count += 1
                 total_bytes += k.size
