@@ -131,7 +131,7 @@ def main():
                     raw_handle.close()
 
                 sql_update = None
-                upload_file = True
+                empty_result = False
                 if os.stat(tmp_out_file).st_size > 0:
                     logger.debug("Compressing new file...")
                     f_comp = open(full_dest_filename, "wb")
@@ -150,14 +150,14 @@ def main():
                             dest_bucket.name, k.name)
                 else:
                     # Don't upload empty files.
-                    upload_file = False
+                    empty_result = True
                     sql_update = "DELETE FROM published_files WHERE file_name = '{0}';".format(k.name)
                     logger.debug("File was empty, skipping: {}".format(tmp_out_file))
 
                 logger.info("Removing temp output file: {}".format(tmp_out_file))
                 os.remove(tmp_out_file)
 
-                if upload_file and should_run(args.dry_run, logger,
+                if not empty_result and should_run(args.dry_run, logger,
                                               "Uploading to dest bucket"):
                     dest_key = dest_bucket.new_key(k.name)
                     dest_key.set_contents_from_filename(full_dest_filename)
@@ -173,8 +173,11 @@ def main():
                 if should_run(args.dry_run, logger, "Removing output file: {}".format(full_dest_filename)):
                     os.remove(full_dest_filename)
 
-                if should_run(args.dry_run, logger, "Deleting from source bucket"):
-                    k.delete()
+                if empty_result or args.source_bucket != args.dest_bucket:
+                    if should_run(args.dry_run, logger, "Deleting from source bucket"):
+                        k.delete()
+                else:
+                    logger.info("Not deleting source: either non-empty or different bucket: {}".format(k.name))
 
                 if sql_update is None:
                     logger.error("Missing sql_update :(")
