@@ -402,8 +402,6 @@ class Mapper:
                     # TODO: increment "bad line" metrics.
                     print "Bad line:", input_file["name"], ":", line_num, e
             input_file["handle"].close()
-            if "raw_handle" in input_file:
-                input_file["raw_handle"].close()
         context.finish()
 
     def open_input_file(self, input_file):
@@ -415,10 +413,14 @@ class Mapper:
 
         if filename.endswith(StorageLayout.COMPRESSED_SUFFIX):
             decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
-            raw_handle = open(filename, "rb")
-            input_file["raw_handle"] = raw_handle
-            # Popen the decompressing version of StorageLayout.COMPRESS_PATH
-            p_decompress = Popen(decompress_cmd, bufsize=65536, stdin=raw_handle, stdout=PIPE, stderr=sys.stderr)
+            with open(filename, "rb") as raw_handle:
+                # Popen the decompressing version of StorageLayout.COMPRESS_PATH
+                p_decompress = Popen(decompress_cmd,
+                                     bufsize=65536,
+                                     stdin=raw_handle,
+                                     stdout=PIPE,
+                                     stderr=sys.stderr,
+                                     close_fds=True)
             input_file["handle"] = p_decompress.stdout
         else:
             input_file["handle"] = open(filename, "r")
