@@ -69,7 +69,8 @@ class Job:
         if self._input_dir[-1] == os.path.sep:
             self._input_dir = self._input_dir[0:-1]
         self._work_dir = config.get("work_dir")
-        self._input_filter = TelemetrySchema(json.load(open(config.get("input_filter"))))
+        with open(config.get("input_filter")) as filter_file:
+            self._input_filter = TelemetrySchema(json.load(filter_file))
         self._allowed_values = self._input_filter.sanitize_allowed_values()
         self._output_file = config.get("output")
         self._num_mappers = config.get("num_mappers")
@@ -79,11 +80,12 @@ class Job:
         self._aws_key = config.get("aws_key")
         self._aws_secret_key = config.get("aws_secret_key")
         self._profile = config.get("profile")
-        modulefd = open(config.get("job_script"))
-        # let the job script import additional modules under its path
-        sys.path.append(os.path.dirname(config.get("job_script")))
-        ## Lifted from FileDriver.py in jydoop.
-        self._job_module = imp.load_module("telemetry_job", modulefd, config.get("job_script"), ('.py', 'U', 1))
+        with open(config.get("job_script")) as modulefd:
+            # let the job script import additional modules under its path
+            sys.path.append(os.path.dirname(config.get("job_script")))
+            ## Lifted from FileDriver.py in jydoop.
+            self._job_module = imp.load_module(
+                "telemetry_job", modulefd, config.get("job_script"), ('.py', 'U', 1))
 
     def dump_stats(self, partitions):
         total = sum(partitions)
@@ -210,14 +212,13 @@ class Job:
         # TODO: If _output_file ends with a compressed suffix (.gz, .xz, .bz2, etc),
         #       try to compress it after writing.
         if self._num_reducers > to_combine:
-            out = open(self._output_file, "a")
-            for i in range(to_combine, self._num_reducers):
-                # FIXME: this reads the entire reducer output into memory
-                reducer_filename = os.path.join(self._work_dir, "reducer_" + str(i))
-                reducer_output = open(reducer_filename, "r")
-                out.write(reducer_output.read())
-                reducer_output.close()
-                os.remove(reducer_filename)
+            with open(self._output_file, "a") as out:
+                for i in range(to_combine, self._num_reducers):
+                    # FIXME: this reads the entire reducer output into memory
+                    reducer_filename = os.path.join(self._work_dir, "reducer_" + str(i))
+                    with open(reducer_filename, "r") as reducer_output:
+                        out.write(reducer_output.read())
+                    os.remove(reducer_filename)
 
         # TODO: clean up downloaded files?
 
