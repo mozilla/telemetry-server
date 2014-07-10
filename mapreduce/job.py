@@ -24,18 +24,12 @@ import csv
 from subprocess import Popen, PIPE
 import signal
 import cProfile
+import gc
 try:
     from boto.s3.connection import S3Connection
     BOTO_AVAILABLE=True
 except ImportError:
     BOTO_AVAILABLE=False
-
-def find_min_idx(stuff):
-    min_idx = 0
-    for m in range(1, len(stuff)):
-        if stuff[m] < stuff[min_idx]:
-            min_idx = m
-    return min_idx
 
 
 class Job:
@@ -121,11 +115,12 @@ class Job:
         return result
 
     def dedupe_remotes(self, remote_files, local_files):
-        return [ r for r in remote_files if os.path.join(self._input_dir, r.name) not in local_files ]
+        return ( r for r in remote_files
+                   if os.path.join(self._input_dir, r.name) not in local_files )
 
     def mapreduce(self):
         # Find files matching specified input filter
-        files = self.get_filtered_files(self._input_dir)
+        files = set(self.get_filtered_files(self._input_dir))
         remote_files = self.get_filtered_files_s3()
 
         # If we're using the cache dir as the data dir, we will end up reading
@@ -133,24 +128,30 @@ class Job:
         # that exist in the data dir.
         remote_files = self.dedupe_remotes(remote_files, files)
 
-        file_count = len(files) + len(remote_files)
-
-        if file_count == 0:
-            print "Filter didn't match any files... nothing to do"
-            return
-
-        # Not useful to have more mappers than input files.
-        if file_count < self._num_mappers:
-            print "Filter matched only %s input files (%s local in %s and %s " \
-                  "remote from %s). Reducing number of mappers accordingly." \
-                  % (file_count, len(files), self._input_dir, len(remote_files),
-                      self._bucket_name)
-            self._num_mappers = file_count
-
         # Partition files into reasonably equal groups for use by mappers
         print "Partitioning input data..."
         partitions = self.partition(files, remote_files)
         print "Done"
+
+        if not any(part for part in partitions):
+             print "Filter didn't match any files... nothing to do"
+             return
+
+        partitions = [part for part in partitions if part]
+
+        # Not useful to have more mappers than partitions.
+        if len(partitions) < self._num_mappers:
+            print "Filter matched only %d input files (%d local in %s and %d " \
+                  "remote from %s). Reducing number of mappers accordingly." % (
+                  len(partitions), len(files), self._input_dir,
+                  sum(len(part) for part in partitions) - len(files),
+                  self._bucket_name)
+            self._num_mappers = len(partitions)
+
+        # Free up our set of names. We want to minimize
+        # our memory usage prior to forking map jobs.
+        files = None
+        gc.collect()
 
         def checkExitCode(proc):
             # If process was terminated by a signal, exitcode is the negative signal value
@@ -233,32 +234,36 @@ class Job:
 
     # Split up the input files into groups of approximately-equal on-disk size.
     def partition(self, files, remote_files):
-        namesize = [ { "type": "local", "name": files[i], "size": os.stat(files[i]).st_size, "dimensions": self._input_filter.get_dimensions(self._input_dir, files[i]) } for i in range(0, len(files)) ]
-        partitions = []
-        sums = []
-        for p in range(self._num_mappers):
-            partitions.append([])
-            sums.append(0)
+        namesize = ( {
+            "type": "local",
+            "name": fn,
+            "size": os.stat(fn).st_size,
+            "dimensions": self._input_filter.get_dimensions(self._input_dir, fn)
+        } for fn in files )
+
+        partitions = [[] for i in range(self._num_mappers)]
+        sums = [0 for i in range(self._num_mappers)]
         min_idx = 0
 
+        def find_min_idx(stuff):
+            return min(enumerate(stuff), key=lambda x: x[1])[0]
+
         # Greedily assign the largest file to the smallest partition
-        while len(namesize) > 0:
-            current = namesize.pop()
+        for current in namesize:
             #print "putting", current, "into partition", min_idx
             partitions[min_idx].append(current)
             sums[min_idx] += current["size"]
             min_idx = find_min_idx(sums)
 
         # And now do the same with the remote files.
-        if len(remote_files) > 0:
-            for r in remote_files:
-                size = r.size
-                dims = self._input_filter.get_dimensions(".", r.name)
-                remote = {"type": "remote", "name": r.name, "size": size, "dimensions": dims}
-                #print "putting", remote, "into partition", min_idx
-                partitions[min_idx].append(remote)
-                sums[min_idx] += size
-                min_idx = find_min_idx(sums)
+        for r in remote_files:
+            size = r.size
+            dims = self._input_filter.get_dimensions(".", r.name)
+            remote = {"type": "remote", "name": r.name, "size": size, "dimensions": dims}
+            #print "putting", remote, "into partition", min_idx
+            partitions[min_idx].append(remote)
+            sums[min_idx] += size
+            min_idx = find_min_idx(sums)
 
         # Print out some info to see how balanced the partitions were:
         self.dump_stats(sums)
@@ -266,7 +271,6 @@ class Job:
 
     def get_filtered_files(self, searchdir):
         level_offset = searchdir.count(os.path.sep)
-        out_files = []
         for root, dirs, files in os.walk(searchdir):
             level = root.count(os.path.sep) - level_offset
             dirs[:] = [i for i in dirs if self.filter_includes(level, i)]
@@ -279,11 +283,9 @@ class Job:
                         include = False
                         break
                 if include:
-                    out_files.append(full_filename)
-        return out_files
+                    yield full_filename
 
     def get_filtered_files_s3(self):
-        out_files = []
         if not self._local_only:
             print "Fetching file list from S3..."
             # Plain boto should be fast enough to list bucket contents.
@@ -299,13 +301,12 @@ class Job:
             # bucket.
             for f in s3util.list_partitions(bucket, schema=self._input_filter, include_keys=True):
                 count += 1
-                out_files.append(f)
                 if count == 1 or count % 1000 == 0:
                     print "Listed", count, "so far"
+                yield f
             conn.close()
             duration = timer.delta_sec(start)
-            print "Listed", len(out_files), "files in", duration, "seconds"
-        return out_files
+            print "Listed", count, "files in", duration, "seconds"
 
     def filter_includes(self, level, value):
         allowed_values = self._allowed_values[level]
