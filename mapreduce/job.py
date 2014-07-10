@@ -24,6 +24,7 @@ import csv
 from subprocess import Popen, PIPE
 import signal
 import cProfile
+import collections
 import gc
 try:
     from boto.s3.connection import S3Connection
@@ -89,7 +90,7 @@ class Job:
 
     def fetch_remotes(self, remotes):
         # TODO: fetch remotes inside Mappers, and process each one as it becomes available.
-        remote_names = [ r["name"] for r in remotes if r["type"] == "remote" ]
+        remote_names = [ r.name for r in remotes if r.remote ]
 
         # TODO: check cache first.
         result = 0
@@ -232,14 +233,17 @@ class Job:
                 else:
                     print "Warning: Could not find", mfile
 
+    MapperInput = collections.namedtuple('MapperInput',
+        ('remote', 'name', 'size', 'dimensions'))
+
     # Split up the input files into groups of approximately-equal on-disk size.
     def partition(self, files, remote_files):
-        namesize = ( {
-            "type": "local",
-            "name": fn,
-            "size": os.stat(fn).st_size,
-            "dimensions": self._input_filter.get_dimensions(self._input_dir, fn)
-        } for fn in files )
+        namesize = ( self.MapperInput(
+            remote=False,
+            name=fn,
+            size=os.stat(fn).st_size,
+            dimensions=self._input_filter.get_dimensions(self._input_dir, fn)
+        ) for fn in files )
 
         partitions = [[] for i in range(self._num_mappers)]
         sums = [0 for i in range(self._num_mappers)]
@@ -252,14 +256,19 @@ class Job:
         for current in namesize:
             #print "putting", current, "into partition", min_idx
             partitions[min_idx].append(current)
-            sums[min_idx] += current["size"]
+            sums[min_idx] += current.size
             min_idx = find_min_idx(sums)
 
         # And now do the same with the remote files.
         for r in remote_files:
             size = r.size
             dims = self._input_filter.get_dimensions(".", r.name)
-            remote = {"type": "remote", "name": r.name, "size": size, "dimensions": dims}
+            remote = self.MapperInput(
+                remote=True,
+                name=r.name,
+                size=size,
+                dimensions=dims
+            )
             #print "putting", remote, "into partition", min_idx
             partitions[min_idx].append(remote)
             sums[min_idx] += size
@@ -386,31 +395,31 @@ class Mapper:
         # TODO: Stream/decompress the files directly.
         for input_file in inputs:
             try:
-                self.open_input_file(input_file)
+                handle = self.open_input_file(input_file)
             except:
-                print "Error opening", input_file["name"], "(skipping)"
+                print "Error opening", input_file.name, "(skipping)"
                 traceback.print_exc(file=sys.stderr)
                 continue
             line_num = 0
-            for line in input_file["handle"]:
+            for line in handle:
                 line_num += 1
                 try:
                     # Remove the trailing EOL character(s) before passing to
                     # the map function.
                     key, value = line.rstrip('\r\n').split("\t", 1)
-                    mapfunc(key, input_file["dimensions"], value, context)
+                    mapfunc(key, input_file.dimensions, value, context)
                 except ValueError, e:
                     # TODO: increment "bad line" metrics.
-                    print "Bad line:", input_file["name"], ":", line_num, e
-            input_file["handle"].close()
+                    print "Bad line:", input_file.name, ":", line_num, e
+            handle.close()
         context.finish()
 
     def open_input_file(self, input_file):
-        filename = input_file["name"]
-        if input_file["type"] == "remote":
+        filename = input_file.name
+        if input_file.remote:
             # Read so-called remote files from the local cache. Go on the
             # assumption that they have already been downloaded.
-            filename = os.path.join(self.work_dir, "cache", input_file["name"])
+            filename = os.path.join(self.work_dir, "cache", input_file.name)
 
         if filename.endswith(StorageLayout.COMPRESSED_SUFFIX):
             decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
@@ -422,9 +431,9 @@ class Mapper:
                                      stdout=PIPE,
                                      stderr=sys.stderr,
                                      close_fds=True)
-            input_file["handle"] = p_decompress.stdout
-        else:
-            input_file["handle"] = open(filename, "r")
+            return p_decompress.stdout
+
+        return open(filename, "r")
 
 
 class Collector(dict):
