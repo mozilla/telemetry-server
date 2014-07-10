@@ -90,12 +90,10 @@ class Job:
 
     def fetch_remotes(self, remotes):
         # TODO: fetch remotes inside Mappers, and process each one as it becomes available.
-        remote_names = [ r.name for r in remotes if r.remote ]
+        remote_names = ( r.name for r in remotes if r.remote )
 
         # TODO: check cache first.
         result = 0
-        if len(remote_names) == 0:
-            return result
 
         fetch_cwd = os.path.join(self._work_dir, "cache")
         if not os.path.isdir(fetch_cwd):
