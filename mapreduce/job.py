@@ -482,16 +482,16 @@ class Reducer:
             mapper_file = os.path.join(work_dir, "mapper_%d_%d" % (i, reducer_id))
             # read, group by key, call reducefunc, output
             input_fd = open(mapper_file, "rb")
-            while True:
-                try:
+            try:
+                while True:
                     key, value = marshal.load(input_fd)
                     if map_only:
                         # Just write out each row as we see it
                         context.write(key, value)
                     else:
                         collected.collect(key, value)
-                except EOFError:
-                    break
+            except EOFError:
+                input_fd.close()
         if not map_only:
             # invoke the reduce function on each combined output.
             for k,v in collected.iteritems():
