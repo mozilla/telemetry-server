@@ -1,0 +1,163 @@
+<html lang="en">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+    <title>Telemetry: Process Incoming</title>
+
+    <link href="http://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css"
+        rel="stylesheet">
+    <link href="css/bootstrap.css" rel="stylesheet" type="text/css" id="light">
+    <link href="css/metrics-graphics.css" rel="stylesheet" type="text/css" id="light">
+    <link href="" rel="stylesheet" type="text/css" id="dark">
+    <link href="css/metrics-graphics-demo.css" rel="stylesheet" type="text/css">
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+    <script src="js/metrics-graphics.js"></script>
+    <script src="js/main.js"></script>
+</head>
+
+<body>
+    <div id="container" class="container">
+        <div id="content-body">
+            <div id="head">
+                <h1>Telemetry: Process Incoming</h1>
+            </div>
+
+            <div id="description">
+                <p>This is a set of graphs showing the error rate in the code
+                that processes raw incoming telemetry submissions.</p>
+            </div>
+
+            <div id="torso">
+                <div id="records_per_sec"></div>
+                <!--<div id="error_rate"></div>-->
+                <div id="uuid_only_rate"></div>
+                <div id="currency"></div>
+                <div id="xnotdate"></div>
+            </div>
+            <div id="trunk">
+                <div class='row trunk-section'>
+                    <div class='col-lg-4'>
+                        <h2 class='trunk-title'>Overall Error Rate</h2>
+                        <p>This is the overall percentage of incoming
+                        submissions that do not pass validation. Some are
+                        expected (such as submissions from old Firefox
+                        versions), but others may signal a problem.</p>
+                        <div class="btn-group btn-group-sm text-center modify-time-period-controls">
+                            <button type="button" class="btn btn-default active"
+                                data-time_period="">All time</button>
+                            <button type="button" class="btn btn-default"
+                                data-time_period="168">Past week</button>
+                            <button type="button" class="btn btn-default"
+                                data-time_period="24">Past day</button>
+                        </div>
+                    </div>
+
+                    <div class='col-lg-7'>
+                        <div class='row'>
+                            <div class='col-lg-12 gr' id='error_rate'></div>
+                       </div>
+                        <div class='col-lg-1'></div>
+                    </div>
+                </div>
+
+                <div class='row trunk-section'>
+                    <div class='col-lg-4'>
+                        <h2 class='trunk-title'>Interesting Error Rate</h2>
+                        <p>This is the error rate excluding known error types.
+                        </p>
+
+                        <div class="btn-group btn-group-sm text-center modify-time-period-controls">
+                            <button type="button" class="btn btn-default active"
+                                data-time_period="">All time</button>
+                            <button type="button" class="btn btn-default"
+                                data-time_period="168">Past week</button>
+                            <button type="button" class="btn btn-default"
+                                data-time_period="24">Past day</button>
+                        </div>
+                    </div>
+                    <div class='col-lg-7'>
+                        <div class='row'>
+                            <div class='col-lg-12 gr' id='interesting_errors'>
+                            </div>
+                       </div>
+                        <div class='col-lg-1'></div>
+                    </div>
+                </div>
+
+                <div class='row trunk-section'>
+                    <div class='col-lg-4'>
+                        <h2 class='trunk-title'>Linked Charts</h2>
+                        <p>It can be useful to have two charts linked together&mdash;when a rollover in one is triggered, the same rollover is triggered on the same date or data point in the other.</p>
+                    </div>
+                    <div class='col-lg-7'>
+                        <div class='row'>
+                            <div class='col-lg-6 gr' id='briefing-1'></div>
+                            <div class='col-lg-6 gr' id='briefing-2'></div>
+                        </div>
+                        <div class='col-lg-1'></div>
+                    </div>
+                </div>
+
+                <div class='row trunk-section'>
+                    <div class='col-lg-4'>
+                        <h2 class='trunk-title'>Update Chart Data</h2>
+                        <p>We sometimes have the need to split the data and then
+                        gracefully update the chart with the newly selected subset of
+                        data.</p>
+                        <div class="btn-group btn-group-sm text-center split-by-controls">
+                            <button type="button" class="btn btn-default active"
+                                data-y_accessor="release">Release</button>
+                            <button type="button" class="btn btn-default"
+                                data-y_accessor="beta">Beta</button>
+                            <button type="button" class="btn btn-default"
+                                data-y_accessor="alpha">Alpha</button>
+                        </div>
+                    </div>
+                    <div class='col-lg-7'>
+                        <div class='row'>
+                            <div class='col-lg-12 gr' id='split_by'></div>
+                       </div>
+                        <div class='col-lg-1'></div>
+                    </div>
+                </div>
+
+                <div class='row trunk-section'>
+                    <div class='col-lg-4'>
+                        <h2 class='trunk-title'>Modify Time Period</h2>
+                        <p>We sometimes have the need to view data for just the past n days. Here, the <i>transition_on_update</i> option is set to false.</p>
+                        <div class="btn-group btn-group-sm text-center modify-time-period-controls">
+                            <button type="button" class="btn btn-default active"
+                                data-time_period="">All time</button>
+                            <button type="button" class="btn btn-default"
+                                data-time_period="61">Past 2 months</button>
+                            <button type="button" class="btn btn-default"
+                                data-time_period="31">Past month</button>
+                        </div>
+                    </div>
+                    <div class='col-lg-7'>
+                        <div class='row'>
+                            <div class='col-lg-12 gr' id='modify_time_period'></div>
+                        </div>
+                        <div class='col-lg-1'></div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+        <div id='footer'>
+            <a href="http://metricsgraphicsjs.org">MetricsGraphics.js 0.1</a>
+            <br />Made by <a href='https://github.com/almossawi'>Ali Almossawi</a> and
+            <a href="https://github.com/hamilton">Hamilton Ulmer</a> at
+            <a href='https://github.com/mozilla'>Mozilla</a>
+            <br />2014 &middot; Shared under a <a href="http://www.mozilla.org/MPL/2.0/">
+            Mozilla Public License</a>
+            <br /><a href="https://github.com/mozilla/metrics-graphics">
+                <i class="fa fa-github fa-3x" style="line-height:42px"></i>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
