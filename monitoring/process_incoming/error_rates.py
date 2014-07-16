@@ -52,7 +52,7 @@ def parse(url, column_aliases=None):
 def combine_by_hour(data, combined={}):
     for datum in data:
         d = datum['time']
-        trunc = datetime(d.year, d.month, d.day, d.hour)
+        trunc = datetime(d.year, d.month, d.day, d.hour).isoformat()
         if trunc not in combined:
             combined[trunc] = {}
         for k in datum.keys():
@@ -80,6 +80,7 @@ def calculate_rates(data):
         datum['Records_Read_Per_Second'] = records_per_second
         datum['Bad_Record_Percentage'] = bad_record_percentage
         datum['Interesting_Bad_Record_Percentage'] = interesting_bad_record_pct
+        datum['UUID_Bad_Record_Percentage'] = pct(datum.get('uuid_only_path', 0), records_read)
     return data
 
 def get_url(target, debug=False):
@@ -93,7 +94,9 @@ def get_url(target, debug=False):
 def get_graph_url():
     return "http://ec2-50-112-66-71.us-west-2.compute.amazonaws.com:4352/#sandboxes/TelemetryStatsRecordsAggregator/outputs/TelemetryStatsRecordsAggregator.ReaderALL.cbuf"
 
-def display(data, error_types):
+def render(data, error_types, display=True, save_to_filename=None):
+    if not mp_available:
+        raise RuntimeError("Sorry, matplotlib is not available. Install it to display the data.")
     dates = data.keys()
     dates.sort()
     rps = [ data[d]['Records_Read_Per_Second'] for d in dates ]
@@ -121,7 +124,11 @@ def display(data, error_types):
         mp.pyplot.plot([ data[d].get(et, 0) for d in dates ], 'r')
         mp.pyplot.ylabel(et)
 
-    mp.pyplot.show()
+    if save_to_filename:
+        mp.pyplot.savefig(save_to_filename, bbox_inches='tight')
+
+    if display:
+        mp.pyplot.show()
 
 def alert(data, max_error_rate=10, max_interesting_error_rate=1):
     # If error_rate > threshold, we should alert.
@@ -142,6 +149,14 @@ def alert(data, max_error_rate=10, max_interesting_error_rate=1):
         print "Errors detected. Check graph at\n{}\n".format(get_graph_url())
         for error in errors:
             print error
+
+def combine_with(main_data, additional_data):
+    # TODO: have some cutoff in the age of keys we keep. 2 years?
+    for k, v in additional_data.iteritems():
+        if k not in main_data:
+            main_data[k] = v
+    return main_data
+
 
 def main(args):
     # Graph processing rate and error rate per hour
@@ -167,26 +182,44 @@ def main(args):
 
     calculated = calculate_rates(combined)
 
+    # Alert before we combine with old data. We don't want to keep repeating
+    # alerts forever.
+    alert(calculated,
+          max_error_rate=args.overall_threshold,
+          max_interesting_error_rate=args.interesting_threshold)
+
+    if args.combine_with:
+        with open(args.combine_with, 'r') as more_data_file:
+            try:
+                more_data = json.load(more_data_file)
+                combine_with(calculated, more_data)
+            except Exception as e:
+                print "Error loading additional data from", args.combine_with
+
+    if args.save_data_as:
+        with open(args.save_data_as, 'w') as fout:
+            json.dump(calculated, fout)
+
     interesting_error_types = [
         'conversion_error',
         'write_failed',
         'bad_payload',
         'invalid_path',
-        'corrupted_data'
+        'corrupted_data',
+        'UUID_Bad_Record_Percentage'
     ]
 
-    if args.display:
-        display(calculated, interesting_error_types)
-        return 0
+    if args.display or args.save_graph_as:
+        render(calculated, interesting_error_types, args.display, args.save_graph_as)
 
-    alert(calculated,
-          max_error_rate=args.overall_threshold,
-          max_interesting_error_rate=args.interesting_threshold)
     return 0
 
 if __name__ == "__main__":
     parser = ArgumentParser(description='Check Telemetry processing error rate')
     parser.add_argument("--display", action="store_true")
+    parser.add_argument("--save-graph-as")
+    parser.add_argument("--save-data-as")
+    parser.add_argument("--combine-with")
     parser.add_argument("--overall-threshold", default=10, type=float)
     parser.add_argument("--interesting-threshold", default=1, type=float)
     parser.add_argument("--debug", action="store_true")
