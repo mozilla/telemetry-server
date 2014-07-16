@@ -1,6 +1,11 @@
 'use strict';
 
 var defaultFormat = d3.time.format('%b %d %H:00');
+var err_baselines = [
+    {value: 15.0, label: 'Overall error threshold'},
+    {value: 1.0,  label: 'Interesting error threshold'}
+];
+
 function formatLabel(d) {
     return defaultFormat(d);
 }
@@ -9,25 +14,13 @@ $(document).ready(function() {
     //json data that we intend to update later on via on-screen controls
     var split_by_data;
 
-    var torso = {};
-    torso.width = 375;
-    torso.height = 200;
-    torso.right = 20;
-
-    var trunk = {};
-    trunk.width = 320;
-    trunk.height = 150;
-    trunk.left = 35;
-    trunk.right = 10;
-    trunk.xax_count = 5;
-
-    var small = {};
-    small.width = 240;
-    small.height = 140;
-    small.left = 20;
-    small.right = 20;
-    small.top = 20;
-    small.xax_count = 5;
+    var trunk = {
+        width: 320,
+        height: 150,
+        left: 35,
+        right: 10,
+        xax_count: 5
+    };
 
     assignEventListeners();
 
@@ -57,11 +50,12 @@ $(document).ready(function() {
 
         moz_chart({
             title: "Processing Rate (Records/sec)",
+            area: false,
             description: "Processing rate: Number of records processed per second.",
             data: allData["Records_Read_Per_Second"],
-            width: torso.width,
-            height: torso.height,
-            right: torso.right,
+            width: trunk.width * 2,
+            height: trunk.height * 2,
+            right: trunk.right,
             target: '#records_per_sec',
             x_accessor: 'date',
             y_accessor: 'value',
@@ -71,7 +65,6 @@ $(document).ready(function() {
             },
         });
 
-        var err_baselines = [{value:10, label:'overall error threshold'}, {value: 1, label: 'interesting error threshold'}]
         split_by_data = moz_chart({
             title: "Errors (%)",
             description: "Rate of overall errors and interesting errors.",
@@ -90,13 +83,14 @@ $(document).ready(function() {
             },
         });
 
+
         moz_chart({
             title: "UUID-only record rate (%)",
             description: "Rate of submissions from old Firefox versions. This is usually what triggers error alerts.",
             data: [allData["Bad_Record_Percentage"], allData["UUID_Bad_Record_Percentage"]],
-            width: torso.width,
-            height: torso.height,
-            right: torso.right,
+            width: trunk.width * 2,
+            height: trunk.height * 2,
+            right: trunk.right,
             baselines: [err_baselines[0]],
             target: '#uuid_only_rate',
             x_accessor: 'date',
@@ -107,6 +101,66 @@ $(document).ready(function() {
                     formatLabel(d.date) + ': ' + d3.round(d.value, 3));
             },
         });
+
+        moz_chart({
+            title: "Interesting Errors (%)",
+            area: false,
+            description: "Rate of interesting errors.",
+            data: allData["Interesting_Bad_Record_Percentage"],
+            width: trunk.width * 2,
+            height: trunk.height * 2,
+            right: trunk.right,
+            baselines: [{value: 1.0, label: 'alert threshold'}],
+            target: '#interesting_errors',
+            x_accessor: 'date',
+            y_accessor: 'value',
+            //xax_format: formatLabel
+            rollover_callback: function(d, i) {
+                $('div#interesting_errors svg .active_datapoint').html(
+                    formatLabel(d.date) + ': ' + d3.round(d.value, 3));
+            },
+        });
+
+        moz_chart({
+            area: false,
+            description: "The overall number of records read.",
+            data: allData["Records_Read"],
+            width: trunk.width * 2,
+            height: trunk.height * 2,
+            right: trunk.right,
+            target: '#Records_Read',
+            x_accessor: 'date',
+            y_accessor: 'value',
+            //xax_format: formatLabel
+            rollover_callback: function(d, i) {
+                $('div#Records_Read svg .active_datapoint').html(
+                    formatLabel(d.date) + ': ' + d3.round(d.value, 3));
+            },
+        });
+
+        ["bad_payload", "conversion_error", "corrupted_data", "empty_data",
+         "invalid_path", "missing_revision", "missing_revision_repo",
+         "uuid_only_path", "write_failed"].forEach(function(series){
+            moz_chart({
+                title: series,
+                area: false,
+                description: "Number of occurrences",
+                data: allData[series],
+                interpolate: 'linear',
+                width: trunk.width * 2,
+                height: trunk.height * 2,
+                right: trunk.right,
+                target: '#' + series,
+                x_accessor: 'date',
+                y_accessor: 'value',
+                //xax_format: formatLabel
+                rollover_callback: function(d, i) {
+                    $('div#' + series + ' svg .active_datapoint').html(
+                        formatLabel(d.date) + ': ' + d3.round(d.value, 3));
+                },
+            });
+        });
+
     });
 
     function assignEventListeners() {
@@ -125,12 +179,15 @@ $(document).ready(function() {
                 width: trunk.width * 2,
                 height: trunk.height * 2,
                 right: trunk.right,
-                show_years: false,
-                transition_on_update: false,
-                xax_count: 4,
+                baselines: err_baselines,
                 target: 'div#error_rate',
                 x_accessor: 'date',
-                y_accessor: 'value'
+                y_accessor: 'value',
+                transition_on_update: false,
+                rollover_callback: function(d, i) {
+                    $('div#error_rate svg .active_datapoint').html(
+                        formatLabel(d.date) + ': ' + d3.round(d.value, 3));
+                },
             })
         })
     }
