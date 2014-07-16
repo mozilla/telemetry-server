@@ -84,11 +84,11 @@ def calculate_rates(data):
 
 def get_url(target, debug=False):
     if debug:
-        return "file://{}/sample_data/{}".format(os.path.dirname(os.path.realpath(__file__)), target)
+        return "file://{0}/sample_data/{1}".format(os.path.dirname(os.path.realpath(__file__)), target)
     host = "ec2-50-112-66-71.us-west-2.compute.amazonaws.com"
     port = 4352
     path = "/data/"
-    return "http://{}:{}{}{}".format(host, port, path, target)
+    return "http://{0}:{1}{2}{3}".format(host, port, path, target)
 
 def get_graph_url():
     return "http://ec2-50-112-66-71.us-west-2.compute.amazonaws.com:4352/#sandboxes/TelemetryStatsRecordsAggregator/outputs/TelemetryStatsRecordsAggregator.ReaderALL.cbuf"
@@ -139,13 +139,13 @@ def alert(data, max_error_rate=10, max_interesting_error_rate=1):
     errors = []
     for d in dates:
         if data[d]['Bad_Record_Percentage'] > max_error_rate:
-            errors.append("Overall Bad Record rate exceeded threshold on {}: {}% > {}%".format(
+            errors.append("Overall Bad Record rate exceeded threshold on {0}: {1}% > {2}%".format(
                 d, data[d]['Bad_Record_Percentage'], max_error_rate))
         if data[d]['Interesting_Bad_Record_Percentage'] > max_interesting_error_rate:
-            errors.append("Interesting bad record exceeded threshold on {}: {}% > {}%".format(
+            errors.append("Interesting bad record exceeded threshold on {0}: {1}% > {2}%".format(
                 d, data[d]['Interesting_Bad_Record_Percentage'], max_interesting_error_rate))
     if errors:
-        print "Errors detected. Check graph at\n{}\n".format(get_graph_url())
+        print "Errors detected. Check graph at\n{0}\n".format(get_graph_url())
         for error in errors:
             print error
 
@@ -175,7 +175,7 @@ def main(args):
     ]
     for error_type in error_types:
         m = {"Total_Errors": error_type}
-        url = get_url('TelemetryStatsErrorsAggregator.{}.cbuf'.format(error_type), debug=args.debug)
+        url = get_url('TelemetryStatsErrorsAggregator.{0}.cbuf'.format(error_type), debug=args.debug)
         rev_errors = parse(url, m)
         combined = combine_by_hour(rev_errors, combined)
 
