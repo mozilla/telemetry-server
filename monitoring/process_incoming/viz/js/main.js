@@ -165,8 +165,8 @@ $(document).ready(function() {
 
     function assignEventListeners() {
         $('.modify-time-period-controls button').click(function() {
-            var past_n_days = $(this).data('time_period');
-            var data = modify_time_period(split_by_data, past_n_days);
+            var past_n_hours = $(this).data('time_period');
+            var data = modify_time_period(split_by_data, past_n_hours);
 
             //change button state
             $(this).addClass('active')
