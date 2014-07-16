@@ -12,10 +12,9 @@ try:
 except ImportError:
     mp_available = False
 
-import numpy
 import os
 import sys
-import simplejson as json
+import json
 import time
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
