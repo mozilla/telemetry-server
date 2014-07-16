@@ -154,6 +154,12 @@ def combine_with(main_data, additional_data):
     for k, v in additional_data.iteritems():
         if k not in main_data:
             main_data[k] = v
+        # Check the Records_Read key and use whichever one is larger. This
+        # ensures that we keep the most complete value as old data falls out
+        # of the oldest available hour.
+        elif "Records_Read" in v and "Records_Read" in main_data[k]:
+            if v["Records_Read"] > main_data[k]["Records_Read"]:
+                main_data[k] = v
     return main_data
 
 
