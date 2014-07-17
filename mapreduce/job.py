@@ -164,13 +164,14 @@ class Job:
         for i in range(self._num_mappers):
             if len(partitions[i]) > 0:
                 # Fetch the files we need for each mapper
-                print "Fetching remotes for partition", i
-                fetch_result = self.fetch_remotes(partitions[i])
-                if fetch_result == 0:
-                    print "Remote files fetched successfully"
-                else:
-                    print "ERROR: Failed to fetch", fetch_result, "files."
-                    # TODO: Bail, since results will be unreliable?
+                if not self._local_only:
+                    print "Fetching remotes for partition", i
+                    fetch_result = self.fetch_remotes(partitions[i])
+                    if fetch_result == 0:
+                        print "Remote files fetched successfully"
+                    else:
+                        print "ERROR: Failed to fetch", fetch_result, "files."
+                        # TODO: Bail, since results will be unreliable?
                 p = Process(
                         target=Mapper,
                         name=("Mapper-%d" % i),
