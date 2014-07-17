@@ -26,16 +26,17 @@ def parse(url, column_aliases=None):
     lines = urlopen(url).readlines()
     meta = json.loads(lines[0].decode())
 
-    now = datetime.fromtimestamp(meta['time'])
-    #print "request time:", now
+    # The "time" field contains the timestamp of the first data point.
+    first_timestamp = datetime.fromtimestamp(meta['time'])
+    #print "request time:", first_timestamp
     rows = meta['rows']
     delta = timedelta(seconds=meta['seconds_per_row'])
     data = []
     for i in range(1, len(lines)):
         line = lines[i].strip()
-        offset = (rows - i - 1) * delta
+        offset = (i - 1) * delta
         pieces = line.split("\t")
-        datum = { "time": now - offset }
+        datum = { "time": first_timestamp + offset }
         for p in range(len(pieces)):
             val = pieces[p]
             if val == 'nan':
@@ -157,8 +158,8 @@ def combine_with(main_data, additional_data):
         # Check the Records_Read key and use whichever one is larger. This
         # ensures that we keep the most complete value as old data falls out
         # of the oldest available hour.
-        elif "Records_Read" in v and "Records_Read" in main_data[k]:
-            if v["Records_Read"] > main_data[k]["Records_Read"]:
+        elif "Records_Read" in v:
+            if v["Records_Read"] > main_data[k].get("Records_Read", 0):
                 main_data[k] = v
     return main_data
 
