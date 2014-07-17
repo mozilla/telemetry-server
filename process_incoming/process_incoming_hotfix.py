@@ -303,9 +303,9 @@ class ReadRawStep(PipeStep):
 
                 if unpacked.data[0] != "{":
                     # Data looks weird, should be JSON.
-                    self.log("Warning: Found unexpected data for record {0}" \
-                             " in {1} path: {2} data:\n{3}".format(record_count,
-                                 raw_file, path, unpacked.data))
+                    self.log(u"Warning: Found unexpected data for record {0}" \
+                             u" in {1} path: {2} data:\n{3}".format(record_count,
+                                 raw_file, path, unicode(unpacked.data, errors="replace")))
                 else:
                     # Raw JSON, make sure we treat it as unicode.
                     unpacked.data = unicode(unpacked.data, errors="replace")
