@@ -12,7 +12,6 @@ import StringIO as StringIO
 import os
 import errno
 
-
 class UnpackedRecord():
     def __init__(self, len_ip=0, len_path=0, len_data=0, timestamp=0, ip=None,
                  path=None, data=None, error=None):
@@ -138,6 +137,28 @@ def unpack(filename, raw=False, verbose=False, file_version=None, strict=False):
                     # Probably wasn't gzipped, pass along the error.
                     bad_records += 1
                     error = e
+            elif len(data) > 1 and data[0] != '{':
+                # Data is missing the gzip header... hack it!
+                fake_header = struct.pack("<BBBBBBBBBB", 0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0b)
+                try:
+                    reader = StringIO.StringIO(fake_header + data)
+                    # Monkey-patch GzipFile to stop caring about the CRC
+                    _read_eof = gzip.GzipFile._read_eof
+                    gzip.GzipFile._read_eof = lambda *args, **kwargs: None
+
+                    try:
+                        gunzipper = gzip.GzipFile(fileobj=reader, mode="r")
+                        data = gunzipper.read()
+                        gunzipper.close()
+                        reader.close()
+                    finally:
+                        # Un-monkey-patch
+                        gzip.GzipFile._read_eof = _read_eof
+                except Exception, e:
+                    # Probably wasn't gzipped, pass along the error.
+                    bad_records += 1
+                    error = e
+
         yield UnpackedRecord(len_ip, len_path, len_data, timestamp, client_ip, path, data, error)
 
     if bytes_skipped > 0:
