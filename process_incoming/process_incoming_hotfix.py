@@ -331,6 +331,7 @@ class ReadRawStep(PipeStep):
                     self.write_bad_record(path, dims, serialized_data,
                             str(e), "ERROR Writing to output file:",
                             "write_failed")
+                    self.log(traceback.format_exc())
 
                 if self.print_stats:
                     this_update = now()
