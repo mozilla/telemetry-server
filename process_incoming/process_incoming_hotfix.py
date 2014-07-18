@@ -299,7 +299,7 @@ class ReadRawStep(PipeStep):
 
                 submission_date = ts_to_yyyymmdd(unpacked.timestamp)
                 path = unicode(unpacked.path, errors="replace")
-                self.log("Path was: {}".format(path))
+                #self.log("Path was: {}".format(path))
 
                 if unpacked.data[0] != "{":
                     # Data looks weird, should be JSON.
