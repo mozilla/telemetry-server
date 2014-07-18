@@ -40,10 +40,10 @@ class StorageLayout:
 
     def clean_newlines(self, value, tag="value"):
         # Clean any newlines (replace with spaces)
-        for eol in ["\r", "\n"]:
+        for eol in [u"\r", u"\n"]:
             if eol in value:
-                logging.warn("Found an unexpected EOL in %s" % (tag))
-                value = value.replace(eol, " ")
+                logging.warn(u"Found an unexpected EOL in %s" % (tag))
+                value = value.replace(eol, u" ")
         return value
 
     def write_filename(self, uuid, obj, filename):
@@ -65,7 +65,7 @@ class StorageLayout:
 
         # According to SO, this should be atomic on a well-behaved OS:
         # http://stackoverflow.com/questions/7561663/appending-to-the-end-of-a-file-in-a-concurrent-environment
-        with io.open(filename, "a") as fout:
+        with io.open(filename, "a", encoding="utf8") as fout:
             fout.write(output_line)
             filesize = fout.tell()
 
