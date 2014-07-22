@@ -17,7 +17,7 @@ stamps = ['AMI_startup_begin',
           'XPI_startup_end',
           'AMI_startup_end']
 
-section_regex = re.compile(r',"(?:info|addonDetails|slowSQL|ver|log|fileIOReports|histograms|lateWrites|addonHistograms|UIMeasurements|threadHangStats|simpleMeasurements|chromeHangs|slowSQLStartup)":')
+section_regex = re.compile(r',"(?:info|addonDetails|slowSQL|ver|log|fileIOReports|histograms|lateWrites|addonHistograms|UIMeasurements|threadHangStats|simpleMeasurements|chromeHangs|slowSQLStartup)":|}$')
 # Extract a top level section out of the telemetry JSON packet by guessing at string boundaries
 def stringPart(j, section):
   # Find the start of the requested section
@@ -129,17 +129,22 @@ def map(k, d, v, cx):
       result = {}
       send = False
       for measure, val in details.iteritems():
+        if val == 'false':
+          print "Value is false!", k, addonID, measure, details
+          val = 0
         if measure.endswith('_MS'):
           # sanity check the measure; drop the whole entry if the duration seems crazy
           # twenty minutes is a long time to wait for startup...
           if val > (20 * 60 * 1000):
             print "Unusual", measure, "value", val, "in entry", k, addonID
             return
-          result[measure] = {logBucket(val): 1}
+          bucket = logBucket(val)
+          result[measure] = {bucket: 1}
           send = True
         if measure == 'scan_items':
           # counting individual files, so use narrower buckets
-          result[measure] = {logBucket(val, 0.2): 1}
+          bucket = logBucket(val, 0.2)
+          result[measure] = {bucket: 1}
           send = True
       addonName = None
       if 'name' in details:

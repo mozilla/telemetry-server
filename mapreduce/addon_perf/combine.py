@@ -170,7 +170,11 @@ for key, values in addonPerf.iteritems():
         del nameSet["?"]
     names = json.dumps(nameSet)
     if 'scan_items' in values:
-        items = getPercentiles(values['scan_items'])
+        try:
+            items = getPercentiles(values['scan_items'])
+        except Exception as e:
+            print "Bad addonPerf: " + str(e) + ": ", key, values
+            continue
         # How many data points did we get for this add-on on this app/platform?
         points = items[0]
         # If this addon was seen in fewer than 1 in 100 thousand sessions, ignore
