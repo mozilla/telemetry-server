@@ -113,15 +113,15 @@ def list_partitions(bucket, prefix='', level=0, schema=None, include_keys=False)
     if schema is not None:
         allowed_values = schema.sanitize_allowed_values()
     delimiter = '/'
-    if level > 3:
+    if level > len(schema._dimensions) - 3:
         delimiter = '.'
     for k in bucket.list(prefix=prefix, delimiter=delimiter):
         partitions = k.name.split("/")
-        if level > 3:
+        if level > len(schema._dimensions) - 3:
             # split the last couple of partition components by "." instead of "/"
             partitions.extend(partitions.pop().split(".", 2))
         if schema is None or schema.is_allowed(partitions[level], allowed_values[level]):
-            if level >= 5:
+            if level >= len(schema._dimensions) - 1:
                 if include_keys:
                     for f in bucket.list(prefix=k.name):
                         yield f
