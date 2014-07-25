@@ -163,32 +163,32 @@ def writeMeasures(key, values, names, sessions):
         aoWriter.writerow(line)
 
 for key, values in addonPerf.iteritems():
-    # Total number of sessions for this app/platform combination
-    sessions = addonSessions.get((key[0], key[1]), 0)
-    nameSet = addonNames.get(key[2], {})
-    if "?" in nameSet:
-        del nameSet["?"]
-    names = json.dumps(nameSet)
-    if 'scan_items' in values:
-        try:
+    try:
+        # Total number of sessions for this app/platform combination
+        sessions = addonSessions.get((key[0], key[1]), 0)
+        nameSet = addonNames.get(key[2], {})
+        if "?" in nameSet:
+            del nameSet["?"]
+        names = json.dumps(nameSet)
+        if 'scan_items' in values:
             items = getPercentiles(values['scan_items'])
-        except Exception as e:
-            print "Bad addonPerf: " + str(e) + ": ", key, values
-            continue
-        # How many data points did we get for this add-on on this app/platform?
-        points = items[0]
-        # If this addon was seen in fewer than 1 in 100 thousand sessions, ignore
-        if (points * 100000) < sessions:
-            # keep track of rare add-ons as 'Other'
-            for measure, hist in values.iteritems():
-                otherPerf[(key[0], key[1])][measure].update(hist)
-            continue
-        median_items = items[1]
-        # Don't bother with packed add-ons
+            # How many data points did we get for this add-on on this app/platform?
+            points = items[0]
+            # If this addon was seen in fewer than 1 in 100 thousand sessions, ignore
+            if (points * 100000) < sessions:
+                # keep track of rare add-ons as 'Other'
+                for measure, hist in values.iteritems():
+                    otherPerf[(key[0], key[1])][measure].update(hist)
+                continue
+            median_items = items[1]
+            # Don't bother with packed add-ons
         if int(median_items) >= 2:
             writeFiles(key, values, names, sessions, points, median_items)
 
-    writeMeasures(key, values, names, sessions)
+        writeMeasures(key, values, names, sessions)
+    except Exception as e:
+        print "Bad addonPerf: " + str(e) + ": ", key, values
+        continue
 
 form = "{:>9}{:>9}{:>9}{:>9}"
 def dumpHist(hist):
@@ -202,15 +202,15 @@ def dumpHist(hist):
 
 # Now write out the accumulated 'OTHER' values
 for (app, platform), values in otherPerf.iteritems():
-    # for measure, hist in values.iteritems():
-    #     print
-    #     print app, platform, measure
-    #     dumpHist(hist)
-    sessions = addonSessions.get((app, platform), 0)
-    items = getPercentiles(values['scan_items'])
-    key = (app, platform, 'OTHER')
-    writeFiles(key, values, 'OTHER', sessions, items[0], items[1])
-    writeMeasures(key, values, 'OTHER', sessions)
+    try:
+        sessions = addonSessions.get((app, platform), 0)
+        items = getPercentiles(values['scan_items'])
+        key = (app, platform, 'OTHER')
+        writeFiles(key, values, 'OTHER', sessions, items[0], items[1])
+        writeMeasures(key, values, 'OTHER', sessions)
+    except Exception as e:
+        print "Bad addonPerf: " + str(e) + ": ", key, values
+        continue
 
 aofile.close()
 upfile.close()
