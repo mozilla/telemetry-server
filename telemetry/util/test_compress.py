@@ -147,6 +147,60 @@ class TestCompressedFile(unittest.TestCase):
         # all is well, remove the file.
         os.remove(write_test_file)
 
+    def light_versus_heavy(self, file_type, force_popen):
+        base_dir = self.get_test_dir()
+        test_lines = []
+        for i in range(2000):
+            test_lines.append("Hello there {0}!".format(i))
+        test_contents = "\n".join(test_lines)
+        # Write it with a little compression.
+        write_light = os.path.join(base_dir, "clevel_test.1.{}.{}".format(
+                                   force_popen, file_type))
+        assert not os.path.exists(write_light)
+        c = CompressedFile(write_light, mode="w", force_popen=force_popen,
+                           compression_level=1)
+        c.write(test_contents)
+        c.close()
+
+        # Check the resulting size
+        light_compression_size = os.stat(write_light).st_size
+        os.remove(write_light)
+
+        # Write it with max compression.
+        write_heavy = os.path.join(base_dir, "clevel_test.9.{}.{}".format(
+                                   force_popen, file_type))
+        assert not os.path.exists(write_heavy)
+        c = CompressedFile(write_heavy, mode="w", force_popen=force_popen,
+                           compression_level=9)
+        c.write(test_contents)
+        c.close()
+
+        # Check the size again.
+        heavy_compression_size = os.stat(write_heavy).st_size
+        os.remove(write_heavy)
+
+        common_msg = "size should be less than raw size for type {0} " \
+                     "(popen={1})".format(file_type, force_popen)
+
+        self.assertTrue(light_compression_size < len(test_contents),
+                        msg="Lightly Compressed " + common_msg)
+        self.assertTrue(heavy_compression_size < len(test_contents),
+                        msg="Heavily Compressed " + common_msg)
+
+        #print "{0}, popen={1} - raw: {2}, light: {3}, heavy: {4}".format(
+        #    t, popen, len(test_contents), light_compression_size,
+        #    heavy_compression_size)
+        self.assertTrue(light_compression_size > heavy_compression_size,
+                        msg="Light compression ({0}) should be larger " \
+                            "than heavy compression ({1}) for type {2} " \
+                            "(popen={3})".format(light_compression_size,
+                                heavy_compression_size, file_type, force_popen))
+
+    def test_compression_level(self):
+        for t in ["xz", "gz", "lzma"]:
+            for popen in [True, False]:
+                self.light_versus_heavy(t, popen)
+
 
     def verify_contents(self, filename, force_popen):
         # Read it back

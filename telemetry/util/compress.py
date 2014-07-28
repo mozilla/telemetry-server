@@ -23,7 +23,7 @@ class CompressedFile():
     SEARCH_PATH = ['/usr/bin', '/usr/local/bin']
     CHUNK_SIZE = 1024 * 1024
     def __init__(self, filename, mode="r", compression_type="auto",
-                 open_now=False, force_popen=False):
+                 compression_level=None, open_now=False, force_popen=False):
         self.filename = filename
         self.mode = mode
         self.force_popen = force_popen
@@ -31,6 +31,9 @@ class CompressedFile():
             self.compression_type = self.detect_compression_type(self.filename)
         else:
             self.compression_type = compression_type
+
+        # If specified, we use this level, otherwise we use the default level.
+        self.compression_level = compression_level
         self.handle = None
         self.raw_handle = None
         self.line_num = 0
@@ -57,13 +60,17 @@ class CompressedFile():
             self.raw_handle.close()
         if self.handle:
             self.handle.close()
+        if hasattr(self, 'child_process'):
+            self.child_process.wait()
 
     def open(self):
         self.line_num = 0
         if self.compression_type == 'lzma' or self.compression_type == 'xz':
             if has_lzma and not self.force_popen:
                 # Use in-process lzma library if possible.
-                self.handle = lzma.open(self.filename, self.mode)
+                self.handle = lzma.open(self.filename,
+                                        self.mode,
+                                        preset=self.compression_level)
             else:
                 # Use the compression binaries from the underlying OS.
                 if self.mode == 'r':
@@ -74,30 +81,36 @@ class CompressedFile():
 
                     # Popen the decompress command, redirecting input from our
                     # file handle.
-                    self.p_decompress = Popen(decompress_cmd, bufsize=65536,
+                    self.child_process = Popen(decompress_cmd, bufsize=65536,
                         stdin=self.raw_handle, stdout=PIPE, stderr=sys.stderr)
 
                     # Use stdout from the child process as the readable handle.
-                    self.handle = self.p_decompress.stdout
+                    self.handle = self.child_process.stdout
                 elif self.mode == 'w':
-                    # Use "-0" compression preset for best speed.
-                    compress_cmd = [self.get_executable(), "-0"]
+                    # By default, use "-0" compression preset for best speed.
+                    level = 0
+                    if self.compression_level is not None:
+                        level = self.compression_level
+                    compress_cmd = [self.get_executable(), "-{}".format(level)]
 
                     # Open the actual file.
                     self.raw_handle = open(self.filename, "wb")
 
                     # Popen the compress command, redirecting output to our
                     # file handle.
-                    self.p_compress = Popen(compress_cmd, bufsize=65536,
+                    self.child_process = Popen(compress_cmd, bufsize=65536,
                         stdin=PIPE, stdout=self.raw_handle, stderr=sys.stderr)
 
                     # Use stdin from the child process as the writable handle.
-                    self.handle = self.p_compress.stdin
+                    self.handle = self.child_process.stdin
                 else:
                     raise ValueError("Unknown mode '{}' for type {}".format(
                             self.mode, self.compression_type))
         elif self.compression_type == 'gz':
-            self.handle = gzip.GzipFile(self.filename, mode=self.mode)
+            args = [self.filename, self.mode]
+            if self.compression_level is not None:
+                args.append(self.compression_level)
+            self.handle = gzip.GzipFile(*args)
         else:
             raise ValueError("Unknown compression type:" \
                              " '{}'".format(self.compression_type))
