@@ -451,7 +451,7 @@ class CompressCompletedStep(PipeStep):
         basename = filename[0:base_ends]
         # Get a unique name for the compressed file:
         comp_name = basename + "." + uuid.uuid4().hex + StorageLayout.COMPRESSED_SUFFIX
-        comp_file = CompressedFile(comp_name, mode="w", open_now=True)
+        comp_file = CompressedFile(comp_name, mode="w", open_now=True, compression_level=1)
 
         # Rename uncompressed file to a temp name
         tmp_name = comp_name + ".compressing"
