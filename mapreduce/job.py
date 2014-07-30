@@ -16,12 +16,11 @@ import errno
 from datetime import datetime
 from multiprocessing import Process
 from telemetry.telemetry_schema import TelemetrySchema
-from telemetry.persist import StorageLayout
+from telemetry.util.compress import CompressedFile
 import telemetry.util.s3 as s3util
 import telemetry.util.timer as timer
 import subprocess
 import csv
-from subprocess import Popen, PIPE
 import signal
 import cProfile
 import collections
@@ -419,20 +418,7 @@ class Mapper:
             # Read so-called remote files from the local cache. Go on the
             # assumption that they have already been downloaded.
             filename = os.path.join(self.work_dir, "cache", input_file.name)
-
-        if filename.endswith(StorageLayout.COMPRESSED_SUFFIX):
-            decompress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.DECOMPRESSION_ARGS
-            with open(filename, "rb") as raw_handle:
-                # Popen the decompressing version of StorageLayout.COMPRESS_PATH
-                p_decompress = Popen(decompress_cmd,
-                                     bufsize=65536,
-                                     stdin=raw_handle,
-                                     stdout=PIPE,
-                                     stderr=sys.stderr,
-                                     close_fds=True)
-            return p_decompress.stdout
-
-        return open(filename, "r")
+        return CompressedFile(filename)
 
 
 class Collector(dict):
