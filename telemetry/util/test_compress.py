@@ -251,6 +251,7 @@ class TestCompressedFile(unittest.TestCase):
         c.compress_from(raw_test_file, remove_original=True)
         c.close()
         assert not os.path.exists(raw_test_file)
+        os.remove(comp_test_file)
 
 
 if __name__ == "__main__":
