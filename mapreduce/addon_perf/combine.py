@@ -229,7 +229,7 @@ for (app, platform), values in otherPerf.iteritems():
     try:
         sessions = addonSessions.get((app, platform), 0)
         items = getPercentiles(values['scan_items'])
-        key = (app, platform, 'OTHER')
+        key = (app, platform, 'OTHER', '?')
         writeFiles(key, values, 'OTHER', sessions, items[0], items[1])
         writeMeasures(key, values, 'OTHER', sessions)
     except Exception as e:
