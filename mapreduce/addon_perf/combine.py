@@ -7,12 +7,17 @@ import simplejson as json
 import gzip
 import sys
 from collections import defaultdict, Counter
+import re
 
 APP_COLUMN=1
 OS_COLUMN=2
 VER_COLUMN=3
 CHAN_COLUMN=4
 TEXT_COLUMN=5
+
+# We consider an add-on to be popular enough to count, if it appears
+# in at least one out of ever COMMON_ADDON profiles.
+COMMON_ADDON = 50000
 
 # Accumulate the data into a big dict.
 # We use the tuple (app, os, version, channel) as our key
@@ -45,6 +50,13 @@ for a in sys.argv[3:]:
         try:
             keyblob, datablob = line.split("\t", 1)
             key = json.loads(keyblob)
+            # Split out the addon version
+            (addonID, sep, version) = key[5].rpartition(':');
+            if not sep:
+                # No separator, just bare name; rpartition puts value in last field
+                addonID = version
+                version = "?"
+            key[5] = addonID;
 
             if key[0] == "E":
                 excKey = tuple(key[1:5])
@@ -54,8 +66,8 @@ for a in sys.argv[3:]:
                 continue
             # otherwise it's an add-on performance data point
             # For now, aggregate over app version and channel
-            # so the key is just appName, platform, addon ID
-            aoKey = (key[1], key[2], key[5])
+            # so the key is just appName, platform, addon ID, version
+            aoKey = (key[1], key[2], addonID, version)
             data = json.loads(datablob)
             for measure in measures:
                 if measure in data:
@@ -123,23 +135,27 @@ print "Generating add-on data"
 aofilename = outpath + "/weekly_addons_" + outdate + ".csv.gz"
 aofile = gzip.open(aofilename, "w")
 aoWriter = ucsv.writer(aofile)
-aoWriter.writerow(["app_name", "platform", "addon ID", "names",
-                   "measure", "Total Sessions", "Sessions with this add-on", "Impact (popularity * median time)", "Median time (ms)", "75% time", "95% time"])
+aoWriter.writerow(["App_name", "Platform", "Addon ID", "Version", "Name",
+                   "Measure", "Total Sessions", "Sessions with this add-on",
+                   "Impact (popularity * median time)", "Median time (ms)",
+                   "75% time", "95% time"])
 
 # unpacked add-ons
 upfilename = outpath + "/weekly_unpacked_" + outdate + ".csv.gz"
 upfile = gzip.open(upfilename, "w")
 upWriter = ucsv.writer(upfile)
-upWriter.writerow(["app_name", "platform", "addon ID", "names",
-                   "Total sessions", "Sessions with this add-on", "Impact (popularity * median time)", "Median file count", "Median time (ms)", "75% time", "95% time"])
+upWriter.writerow(["App_name", "Platform", "Addon ID", "Version", "Name",
+                   "Total sessions", "Sessions with this add-on",
+                   "Impact (popularity * median time)", "Median file count",
+                   "Median time (ms)", "75% time", "95% time"])
 
 # Lump together rare add-ons as 'OTHER' by app/platform
 otherPerf = defaultdict(dc)
 
-def writeFiles(key, values, names, sessions, points, median_items):
+def writeFiles(key, values, name, sessions, points, median_items):
     times = getPercentiles(values['scan_MS'])
     upLine = list(key)
-    upLine.append(names)
+    upLine.append(name)
     upLine.append(sessions)
     upLine.append(times[0])
     upLine.append(float(points) / sessions * float(times[1]))
@@ -147,13 +163,13 @@ def writeFiles(key, values, names, sessions, points, median_items):
     upLine.extend(times[1:])
     upWriter.writerow(upLine)
 
-def writeMeasures(key, values, names, sessions):
+def writeMeasures(key, values, name, sessions):
     for measure in ['startup_MS', 'shutdown_MS']:
         if not measure in values:
             continue
         hist = values[measure]
         line = list(key)
-        line.append(names)
+        line.append(name)
         line.append(measure)
         line.append(sessions)
         times = getPercentiles(hist)
@@ -162,30 +178,38 @@ def writeMeasures(key, values, names, sessions):
         line.extend(times[1:])
         aoWriter.writerow(line)
 
+# Get the most popular name for the add-on, collapsing ugly broken unicode
+rx = re.compile(u'\ufffd+')
+def getName(addonID):
+    names = addonNames.get(addonID, {})
+    if "?" in names:
+        del names["?"]
+    if len(names) < 1:
+        return "?"
+    name = max(names, key=names.get)
+    return rx.sub("?", name)
+
 for key, values in addonPerf.iteritems():
     try:
         # Total number of sessions for this app/platform combination
         sessions = addonSessions.get((key[0], key[1]), 0)
-        nameSet = addonNames.get(key[2], {})
-        if "?" in nameSet:
-            del nameSet["?"]
-        names = json.dumps(nameSet)
+        name = getName(key[2]);
         if 'scan_items' in values:
             items = getPercentiles(values['scan_items'])
             # How many data points did we get for this add-on on this app/platform?
             points = items[0]
-            # If this addon was seen in fewer than 1 in 100 thousand sessions, ignore
-            if (points * 100000) < sessions:
+            # If this addon was installed in fewer than 1 in COMMON_ADDON sessions, ignore
+            if (points * COMMON_ADDON) < sessions:
                 # keep track of rare add-ons as 'Other'
                 for measure, hist in values.iteritems():
                     otherPerf[(key[0], key[1])][measure].update(hist)
                 continue
             median_items = items[1]
-            # Don't bother with packed add-ons
-        if int(median_items) >= 2:
-            writeFiles(key, values, names, sessions, points, median_items)
+            # Don't record files/scan times for packed add-ons.
+            if int(median_items) >= 2:
+                writeFiles(key, values, name, sessions, points, median_items)
 
-        writeMeasures(key, values, names, sessions)
+        writeMeasures(key, values, name, sessions)
     except Exception as e:
         print "Bad addonPerf: " + str(e) + ": ", key, values
         continue
