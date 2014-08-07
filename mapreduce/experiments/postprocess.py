@@ -7,7 +7,7 @@ infile, outpattern = sys.argv[1:]
 
 class Experiment(object):
     def __init__(self):
-        self.activeBranches = {}
+        self.activeBranches = defaultdict(lambda: 0)
         self.activations = defaultdict(lambda: 0)
         self.terminations = defaultdict(lambda: 0)
 
