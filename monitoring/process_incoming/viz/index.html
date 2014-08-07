@@ -1,0 +1,251 @@
+<html lang="en">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+    <title>Telemetry: Process Incoming</title>
+
+    <link href="http://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css"
+        rel="stylesheet">
+    <link href="css/bootstrap.css" rel="stylesheet" type="text/css" id="light">
+    <link href="css/metrics-graphics.css" rel="stylesheet" type="text/css" id="light">
+    <link href="css/metrics-graphics-demo.css" rel="stylesheet" type="text/css">
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="//d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+    <script src="js/metrics-graphics.js"></script>
+    <script src="js/main.js"></script>
+</head>
+
+<body>
+    <div id="container" class="container">
+        <div id="content-body">
+            <div id="head">
+                <h1>Telemetry: Process Incoming</h1>
+            </div>
+
+            <div id="description">
+                <p>This is a set of graphs showing the error rate in the code
+                that processes raw incoming telemetry submissions.</p>
+                <p>See also: <a href="http://telemetry.mozilla.org/">telemetry.mozilla.org</a>
+                and <a href="http://telemetry-dash.mozilla.org/">telemetry-dash.mozilla.org</a></p>
+            </div>
+
+            <div id="trunk">
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Processing Error Rates</h2>
+                        <p>The blue line is the overall percentage of incoming
+                        submissions that do not pass validation. Some are
+                        expected (such as submissions from old Firefox
+                        versions), but others may signal a problem.</p>
+                        <p>The green line shows the &quot;interesting&quot;
+                        error rate, which excludes known errors. This rate has
+                        a much tighter threshold for alerting.</p>
+                        <div class="btn-group btn-group-sm text-center modify-time-period-controls">
+                            <button type="button" class="btn btn-default active"
+                                data-time_period="">All time</button>
+                            <button type="button" class="btn btn-default"
+                                data-time_period="168">Past week</button>
+                            <button type="button" class="btn btn-default"
+                                data-time_period="24">Past day</button>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-12 gr" id="error_rate"></div>
+                       </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Interesting Error Rate</h2>
+                        <p>Error rate excluding known types. I don't know what's
+                        up with the y-axis scale. Roll over the points to see
+                        the actual rate.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="interesting_errors"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">UUID-only submissions</h2>
+                        <p>Records submitted by old Firefox versions.</p>
+                        <p>Note that the chart shows these submissions (green)
+                        and the overall error rate (blue). These errors are
+                        usually the vast majority of discarded submissions, and
+                        are not generally a cause for concern.</p>
+                        <p>Modern submissions include a number of dimensions in
+                        the URL, including app version, update channel, and so
+                        on. These UUID-ony submissions are of the form:</p>
+                        <code>https://server/submit/telemetry/id</code>
+                        <p>See <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=860846">Bug 860846</a> for details.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="uuid_only_rate"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Total Records Read</h2>
+                        <p>Including successes and errors. This gives a
+                        denominator for the charts below, which are also in
+                        absolute numbers (rather than percentages like
+                        above).</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="Records_Read"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Bad Payload</h2>
+                        <p>These are payloads containing invalid data (but valid
+                         JSON). Examples include a non-integer Histogram bucket
+                         value or an unrecognized bucket name.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="bad_payload"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Corrupted Data</h2>
+                        <p>Instances where a record could not be successfully
+                        read from the <code>incoming</code> batch file.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="corrupted_data"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Invalid Path</h2>
+                        <p>Records with a submission URL containing an
+                        unexpected number of path components (but does
+                        <strong>not</strong> include UUID-only paths).</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="invalid_path"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Missing Revision</h2>
+                        <p>Records containing <code>histograms</code>, but
+                        missing the <code>info.revision</code> field.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="missing_revision"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Missing Revision Repo</h2>
+                        <p>Records containing an <code>info.revision</code>
+                        value of <code>/rev/</code> (missing repository and
+                        actual revision value).</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="missing_revision_repo"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Write Failed</h2>
+                        <p>Writing the converted payload to disk on the server
+                        machine failed.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="write_failed"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Conversion Error</h2>
+                        <p>Data conversion raised an exception, but not for one
+                        of the above known reasons.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="conversion_error"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Empty Data</h2>
+                        <p>This is not necessarily an error, but these are
+                        submissions that contained a zero-length payload.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="empty_data"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+                <div class="row trunk-section">
+                    <div class="col-lg-4">
+                        <h2 class="trunk-title">Processing Rate</h2>
+                        <p>Number of records per second being validated,
+                        converted, and stored.</p>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="row">
+                            <div class="col-lg-6 gr" id="records_per_sec"></div>
+                        </div>
+                        <div class="col-lg-1"></div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+        <div id='footer'>
+            Powered by <a href="http://metricsgraphicsjs.org">MetricsGraphics.js</a>
+        </div>
+    </div>
+</body>
+</html>
