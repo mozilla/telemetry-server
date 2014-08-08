@@ -33,6 +33,7 @@ from telemetry.convert import Converter, BadPayloadError
 from telemetry.persist import StorageLayout
 from telemetry.revision_cache import RevisionCache
 from telemetry.telemetry_schema import TelemetrySchema
+from telemetry.util.compress import CompressedFile
 import telemetry.util.timer as timer
 import telemetry.util.files as fileutil
 import telemetry.util.s3 as s3util
@@ -439,9 +440,6 @@ class ReadRawStep(PipeStep):
 
 # Compress completed output files from ReadRawStep
 class CompressCompletedStep(PipeStep):
-    def setup(self):
-        self.compress_cmd = [StorageLayout.COMPRESS_PATH] + StorageLayout.COMPRESSION_ARGS
-
     def handle(self, record):
         filename = record
         base_ends = filename.find(".log") + 4
@@ -453,34 +451,25 @@ class CompressCompletedStep(PipeStep):
         basename = filename[0:base_ends]
         # Get a unique name for the compressed file:
         comp_name = basename + "." + uuid.uuid4().hex + StorageLayout.COMPRESSED_SUFFIX
-
-        # reserve it!
-        f_comp = open(comp_name, "wb")
-        # TODO: open f_comp with same buffer size as below?
+        comp_file = CompressedFile(comp_name, mode="w", open_now=True, compression_level=1)
 
         # Rename uncompressed file to a temp name
         tmp_name = comp_name + ".compressing"
         os.rename(filename, tmp_name)
 
-        # Read input file as text (line-buffered)
-        f_raw = open(tmp_name, "r", 1)
         start = now()
-
-        # Now set up our processing pipe:
-        # - read from f_raw, compress, write to comp_name
-        p_compress = Popen(self.compress_cmd, bufsize=65536, stdin=f_raw,
-                stdout=f_comp, stderr=sys.stderr)
-
-        # Note: it looks like p_compress.wait() is what we want, but the docs
-        #       warn of a deadlock, so we use communicate() instead.
-        p_compress.communicate()
-
-        raw_bytes = f_raw.tell()
-        comp_bytes = f_comp.tell()
+        try:
+            comp_file.compress_from(tmp_name, remove_original=False)
+            comp_file.close()
+        except Exception as e:
+            self.stats.increment(records_read=1, bad_records=1,
+                    bad_record_type="compression_error")
+            self.log("Error compressing file {0}: {1}".format(filename, e))
+            return
+        raw_bytes = os.stat(tmp_name).st_size
+        comp_bytes = os.stat(comp_name).st_size
         raw_mb = float(raw_bytes) / 1024.0 / 1024.0
         comp_mb = float(comp_bytes) / 1024.0 / 1024.0
-        f_raw.close()
-        f_comp.close()
 
         self.stats.increment(records_read=1, records_written=1,
                 bytes_read=raw_bytes, bytes_written=comp_bytes)

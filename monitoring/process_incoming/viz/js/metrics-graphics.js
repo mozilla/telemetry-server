@@ -336,8 +336,14 @@ function yAxis(args) {
     var yax_format;
     if (args.format == 'count') {
         yax_format = function(f) {
-            var pf = d3.formatPrefix(f);
-            return args.yax_units + pf.scale(f) + pf.symbol;
+            var v;
+            if (f < 1.0) {
+                // Don't scale tiny values.
+                return args.yax_units + (f);
+            } else {
+                var pf = d3.formatPrefix(f);
+                return args.yax_units + pf.scale(f) + pf.symbol;
+            }
         };
     }
     else {
