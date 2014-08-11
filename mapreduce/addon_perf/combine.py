@@ -168,6 +168,14 @@ def writeFiles(key, values, name, sessions, points, median_items):
     upLine.extend(times[1:])
     upWriter.writerow(upLine)
 
+# Shorten a number into xM for millions, xK for thousands
+def shortNum(number):
+    if number > 1000000:
+        return '{:.1f}M'.format(number / 1000000.0)
+    if number > 1000:
+        return '{:.1f}K'.format(number / 1000.0)
+    return str(number)
+
 def writeMeasures(key, values, name, sessions):
     for measure in ['startup_MS', 'shutdown_MS']:
         if not measure in values:
@@ -182,9 +190,10 @@ def writeMeasures(key, values, name, sessions):
         line = list(key)
         line.append(name)
         line.append(measure)
-        per = "{:.4f}".format(float(times[0]) * 100.0 / sessions)
+        percent = float(times[0]) * 100.0 / sessions
+        per = "{:.3f}% of {}".format(percent, shortNum(sessions))
         line.append(per)
-        impact = "{:.6f}".format(float(times[0]) / sessions * float(times[1]))
+        impact = "{:.2f}".format(percent * float(times[1]))
         line.append(impact)
         line.extend(times[1:])
         aoWriter.writerow(line)
