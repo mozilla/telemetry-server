@@ -43,9 +43,13 @@ def jsonPart(j, section):
 # Magic number 0.34 gives us a reasonable spread of buckets
 # for things measured in milliseconds
 def logBucket(v, spread = 0.34):
-  if v < 1:
-    return v
-  return int(math.exp(int(math.log(v) / spread) * spread))
+    try:
+        val = int(v)
+    except:
+        return -1
+    if val < 1:
+        return 0
+    return int(math.exp(int(math.log(val) / spread) * spread))
 
 version_regex = re.compile(r'^([0-9]+).*$')
 
