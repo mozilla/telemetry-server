@@ -162,8 +162,11 @@ def writeFiles(key, values, name, sessions, points, median_items):
     times = getPercentiles(values['scan_MS'])
     upLine = list(key)
     upLine.append(name)
-    upLine.append(times[0])
-    upLine.append(float(points) / sessions * float(times[1]))
+    percent = float(times[0]) * 100.0 / sessions
+    per = "{:.3f}% of {}".format(percent, shortNum(sessions))
+    upLine.append(per)
+    impact = "{:.2f}".format(percent * float(times[1]))
+    upLine.append(impact)
     upLine.append(median_items)
     upLine.extend(times[1:])
     upWriter.writerow(upLine)
