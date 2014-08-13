@@ -91,7 +91,7 @@ class Launcher(object):
 
     def install_apt_dependencies(self, instance):
         print "Installing apt dependencies"
-        aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm xfsprogs")
+        aws_util.install_packages("git python-pip build-essential python-dev xz-utils mdadm xfsprogs ntp")
         if self.config.get("upgrade_os", False):
             sudo('export DEBIAN_FRONTEND=noninteractive; apt-get --yes dist-upgrade')
 

@@ -194,7 +194,7 @@ Resources:
               "        -o DPkg::Options::=--force-confold \\\n",
               "        install $@\n",
               "}\n",
-              "install python-pip git python-psycopg2 python-dateutil python-dev nginx jq\n",
+              "install python-pip git python-psycopg2 python-dateutil python-dev nginx jq ntp\n",
               "pip install --upgrade boto fabric flask flask-login simplejson sqlalchemy uwsgi\n",
               "pip install git+https://github.com/garbados/flask-browserid.git\n",
               "cd /home/ubuntu\n",
