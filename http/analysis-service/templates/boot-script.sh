@@ -3,7 +3,7 @@
 cd /home/ubuntu
 
 # Install a few dependencies
-sudo apt-get -y install xz-utils python-pip git python-dev
+sudo apt-get -y install xz-utils python-pip git python-dev ntp
 sudo pip install --upgrade boto awscli simplejson
 
 # Get users ssh key

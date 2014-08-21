@@ -74,6 +74,7 @@ class Job:
         self._aws_key = config.get("aws_key")
         self._aws_secret_key = config.get("aws_secret_key")
         self._profile = config.get("profile")
+        self._delete_data = config.get("delete_data")
         with open(config.get("job_script")) as modulefd:
             # let the job script import additional modules under its path
             sys.path.append(os.path.dirname(config.get("job_script")))
@@ -175,7 +176,7 @@ class Job:
                 p = Process(
                         target=Mapper,
                         name=("Mapper-%d" % i),
-                        args=(i, self._profile, partitions[i], self._work_dir, self._job_module, self._num_reducers))
+                        args=(i, self._profile, partitions[i], self._work_dir, self._job_module, self._num_reducers, self._delete_data))
                 mappers.append(p)
                 p.start()
             else:
@@ -367,19 +368,19 @@ class TextContext(Context):
         self._sink.write(self.record_separator)
 
 class Mapper:
-    def __init__(self, mapper_id, do_profile, inputs, work_dir, module, partition_count):
+    def __init__(self, mapper_id, do_profile, inputs, work_dir, module, partition_count, delete_files):
         if do_profile:
             profile_out = os.path.join(work_dir, "profile_mapper_" + str(mapper_id))
             pr = cProfile.Profile()
             pr.enable()
 
-        self.run_mapper(mapper_id, inputs, work_dir, module, partition_count)
+        self.run_mapper(mapper_id, inputs, work_dir, module, partition_count, delete_files)
 
         if do_profile:
             pr.disable()
             pr.dump_stats(profile_out)
 
-    def run_mapper(self, mapper_id, inputs, work_dir, module, partition_count):
+    def run_mapper(self, mapper_id, inputs, work_dir, module, partition_count, delete_files):
         self.work_dir = work_dir
 
         print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs"
@@ -410,6 +411,9 @@ class Mapper:
                     # TODO: increment "bad line" metrics.
                     print "Bad line:", input_file.name, ":", line_num, e
             handle.close()
+            if delete_files:
+                print "Removing", input_file.name
+                os.remove(handle.filename)
         context.finish()
 
     def open_input_file(self, input_file):
@@ -511,6 +515,7 @@ def main():
     #TODO: make the input filter optional, default to "everything valid" and generate dims intelligently.
     parser.add_argument("-f", "--input-filter", help="File containing filter spec", required=True)
     parser.add_argument("-v", "--verbose", help="Print verbose output", action="store_true")
+    parser.add_argument("-X", "--delete-data", help="Delete raw data files after mapping", action="store_true")
     parser.add_argument("-p", "--profile", help="Profile mappers and reducers using cProfile", action="store_true")
     args = parser.parse_args()
 
