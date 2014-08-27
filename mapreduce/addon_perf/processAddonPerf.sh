@@ -67,4 +67,4 @@ echo "Created weekly output file:"
 ls -l $OUTPUT/
 
 echo "Copying iacomus configs to s3"
-cp $JOB/addon-perf.json $JOB/addon-scan.json $OUTPUT
+cp $BASE/telemetry-server/$JOB/addon-perf.json $BASE/telemetry-server/$JOB/addon-scan.json $OUTPUT
