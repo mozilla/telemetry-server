@@ -1,0 +1,25 @@
+{
+  "sort-options": {
+    "values": ["Impact", "Popularity", "Median (ms)", "75% (ms)"],
+    "selected": "Impact"
+  },
+  "filter-options": [
+    {"id": "Application",
+     "values": ["", "Firefox", "Fennec"],
+     "selected": ""},
+    {"id": "Platform",
+     "values": ["", "WINNT", "Linux", "Darwin", "Android"],
+     "selected": ""},
+    {"id": "Measure",
+     "values": ["", "startup_MS", "shutdown_MS"],
+     "selected": ""},
+    {"id": "Limit",
+     "values": [10, 20, 50],
+     "selected": 10}
+  ],
+  "title": ["Telemetry Add-on Performance", "Bootstrap add-on start up and shut down times"],
+  "primary-key": ["Application", "Platform", "Addon ID", "Version", "Measure"],
+  "header": ["Application", "Platform", "Addon ID", "Version", "Name", "Measure",
+             "Popularity", "Impact", "Median (ms)", "75% (ms)", "95% (ms)"],
+  "url-prefix": "https://s3-us-west-2.amazonaws.com/telemetry-public-analysis/addon_perf/data/weekly_addons"
+}
