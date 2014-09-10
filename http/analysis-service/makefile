@@ -1,7 +1,7 @@
 CFYAML = ../../telemetry/util/cf-yaml-helper.py
 
 SOURCES_BUCKET = telemetry-analysis-code
-VERSION = 9
+VERSION = 10
 
 FILES = $(shell find * -name "*.py") \
 		$(shell find * -name "*.sh") \
