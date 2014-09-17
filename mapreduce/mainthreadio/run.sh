@@ -24,22 +24,19 @@ if [ ! -d "data" ]; then
 fi
 
 # If we have an argument, process that week.
-WEEK=$1
-if [ -z "$WEEK" ]; then
+DAYS=$1
+if [ -z "$DAYS" ]; then
   # Default to processing "last week"
-  WEEK=0
+  DAYS=1
 fi
 
-MONDAY=$(date -d "last monday" +%Y%m%d)
-BEGIN=$(date -d "$MONDAY - $WEEK weeks " +%Y%m%d)
-END=$(date -d "$BEGIN + 4 days" +%Y%m%d)
-
-BID_BEGIN=$(date -d "$BEGIN - 1 week" +%Y%m%d)
-BID_END=$(date -d "$END - 1 week" +%Y%m%d)
+BEGIN=$(date -d "$TODAY - $DAYS days - 1 weeks" +%Y%m%d)
+END=$(date -d "TODAY - $DAYS days" +%Y%m%d)
+BID_BEGIN=$BEGIN
+BID_END=$BEGIN
 TARGET=$BID_BEGIN
 
 echo "Today is $TODAY, and we're gathering mainthreadio data from $BEGIN to $END for build-ids from $BID_BEGIN to $BID_END"
-
 sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__BID_BEGIN__/$BID_BEGIN/" -e "s/__BID_END__/$BID_END/" filter_template.json > filter.json
 
 BASE=$(pwd)
