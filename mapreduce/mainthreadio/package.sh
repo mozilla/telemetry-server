@@ -7,7 +7,7 @@ if [ -f "$TARBALL" ]; then
     rm -v "$TARBALL"
 fi
 tar czvf "$TARBALL" \
-        combine.py \
+        summary.py \
         csv_header.txt \
         filter_template.json \
         run.sh \

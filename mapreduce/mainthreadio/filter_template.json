@@ -11,7 +11,7 @@
     },
     {
       "field_name": "appUpdateChannel",
-      "allowed_values": "*"
+      "allowed_values": "nightly"
     },
     {
       "field_name": "appVersion",
@@ -19,11 +19,11 @@
     },
     {
       "field_name": "appBuildID",
-      "allowed_values": "*"
+      "allowed_values": {"min": "__BID_BEGIN__", "max": "__BID_END__999999"}
     },
     {
       "field_name": "submission_date",
-      "allowed_values": ["__TARGET_DATE__"]
+      "allowed_values": {"min": "__BEGIN__", "max": "__END__999999"}
     }
   ]
 }
