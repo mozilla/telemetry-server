@@ -1,17 +1,12 @@
 #!/bin/bash
-VERSION=0.1
+VERSION=0.2
 NAME=mainthreadio
 TARBALL=${NAME}-$VERSION.tar.gz
 
 if [ -f "$TARBALL" ]; then
     rm -v "$TARBALL"
 fi
-tar czvf "$TARBALL" \
-        summary.py \
-        csv_header.txt \
-        filter_template.json \
-        run.sh \
-        mainthreadio.py
+tar czvf "$TARBALL" run.sh
 
 S3PATH=s3://telemetry-analysis-code/$NAME/$TARBALL
 

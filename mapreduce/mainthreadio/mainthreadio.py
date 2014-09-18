@@ -75,6 +75,5 @@ def reduce(k, v, cx):
             counts.append(count)
 
         # Output fields:
-        # app_name, app_version, app_update_channel, interval, filename,
-        # submission_count, median_time, median_count
+        # app_name, interval, filename, submission_count, median_time, median_count
         cx.write(k, ",".join([str(len(v)), str(numpy.median(totals)), str(numpy.median(counts))]))

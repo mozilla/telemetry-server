@@ -27,7 +27,7 @@ fi
 DAYS=$1
 if [ -z "$DAYS" ]; then
   # Default to processing "last week"
-  DAYS=1
+  DAYS=0
 fi
 
 BEGIN=$(date -d "$TODAY - $DAYS days - 1 weeks" +%Y%m%d)
@@ -40,7 +40,7 @@ echo "Today is $TODAY, and we're gathering mainthreadio data from $BEGIN to $END
 sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__BID_BEGIN__/$BID_BEGIN/" -e "s/__BID_END__/$BID_END/" filter_template.json > filter.json
 
 BASE=$(pwd)
-FINAL_DATA_FILE=$BASE/$OUTPUT/mainthreadio$TARGET.csv
+FINAL_DATA_FILE=$BASE/$OUTPUT/buildid_$TARGET.csv
 RAW_DATA_FILE=${FINAL_DATA_FILE}.tmp
 
 cd ../../
@@ -61,6 +61,9 @@ cp $BASE/csv_header.txt $FINAL_DATA_FILE
 
 echo "Compute summaries"
 python $BASE/summary.py $RAW_DATA_FILE
+
+echo "Copying iacomus configuration"
+cp $BASE/iacomus.json $BASE/$OUTPUT
 
 cat $RAW_DATA_FILE >> $FINAL_DATA_FILE
 echo "Removing temp file"

@@ -1,1 +1,1 @@
-app_name,app_update_channel,filename,submission_count,median_time,median_count
+app_name,interval,filename,submission_count,median_time,median_count
