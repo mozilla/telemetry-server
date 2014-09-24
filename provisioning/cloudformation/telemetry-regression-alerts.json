@@ -1,0 +1,148 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Telemetry regression alerting. Sets up `medusa` (https://github.com/mozilla/medusa) and its dependencies for generating alerts when a regression is observed in telemetry histograms.",
+
+  "Parameters": {
+    "LoadBalancer": {
+      "Description": "Load Balancer Name of the ELB in front of Web Server nodes",
+      "Type":        "String",
+      "Default":     "telemetry-regressions-lb"
+    },
+    "SSHKeyName": {
+      "Description": "The EC2 Key Pair to allow SSH access to the instances",
+      "Type":        "String",
+      "Default":     "mreid"
+    },
+    "RegressionsBucketName": {
+      "Description": "The name of the S3 bucket in which to store database snapshots",
+      "Type":        "String",
+      "Default":     "telemetry-regressions-v1"
+    },
+    "WebServerInstanceType": {
+      "Description": "Type of EC2 instance to launch for HTTP nodes",
+      "Type":        "String",
+      "Default":     "m1.small"
+    }
+  },
+
+  "Resources": {
+    "WebServerGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones":       { "Fn::GetAZs": "" },
+        "LaunchConfigurationName": { "Ref": "WebServerLaunchConfig" },
+        "MinSize":                 "1",
+        "MaxSize":                 "1",
+        "LoadBalancerNames":       [ { "Ref": "LoadBalancer" } ],
+        "Tags": [
+          { "Key": "Application", "Value": "telemetry-server",              "PropagateAtLaunch": true },
+          { "Key": "Name",        "Value": "telemetry-regression-alerts",   "PropagateAtLaunch": true },
+          { "Key": "Owner",       "Value": { "Ref": "SSHKeyName" },         "PropagateAtLaunch": true }
+        ]
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": "0",
+          "MaxBatchSize": "1",
+          "PauseTime": "PT10M"
+        }
+      }
+    },
+
+    "WebServerIAMProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ { "Ref": "WebServerIAMRole" } ]
+      }
+    },
+
+    "WebServerIAMRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path": "/telemetry/regressions/",
+        "Policies": [ {
+          "PolicyName": "WriteS3Backups",
+          "PolicyDocument": {
+            "Statement": [ {
+              "Effect": "Allow",
+              "Action": [ "s3:GetBucketLocation", "s3:ListAllMyBuckets" ],
+              "Resource": "arn:aws:s3:::*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [ "s3:ListBucket" ],
+              "Resource": [ { "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "RegressionsBucketName" } ] ] } ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [ "s3:PutObject", "s3:GetObject", "s3:DeleteObject" ],
+              "Resource": [ { "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "RegressionsBucketName" }, "/*" ] ] } ]
+            } ]
+          }
+        }]
+      }
+    },
+
+    "WebServerLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "KeyName":            { "Ref": "SSHKeyName" },
+        "ImageId":            "ami-8bb8c0bb",
+        "SecurityGroups":     [ "telemetry" ],
+        "IamInstanceProfile": { "Ref": "WebServerIAMProfile" },
+        "InstanceType":       { "Ref": "WebServerInstanceType" },
+        "UserData": { "Fn::Base64": { "Fn::Join": [ "\n", [
+          "#!/bin/bash",
+          "apt-get update",
+          "DEBIAN_FRONTEND=noninteractive apt-get -y \\",
+          "    -o DPkg::Options::=--force-confdef \\",
+          "    -o DPkg::Options::=--force-confold \\",
+          "    install git nodejs npm python-numpy python-opencv python-matplotlib python-pip",
+          "pip install awscli",
+          "# Set the default AWS region",
+          "if [ ! -d /home/ubuntu/.aws ]; then",
+          "  sudo -u ubuntu mkdir /home/ubuntu/.aws",
+          "fi",
+          "if [ ! -f /home/ubuntu/.aws/config ]; then",
+          { "Fn::Join": [ "", [
+            "  sudo -u ubuntu echo -e '[default]\nregion = ",
+            { "Ref": "AWS::Region" },
+            "' > /home/ubuntu/.aws/config"
+          ] ] },
+          "fi",
+          "mkdir -p /mnt/telemetry",
+          "chown ubuntu:ubuntu /mnt/telemetry",
+          "cd /mnt/telemetry",
+          "export HOME=/mnt/telemetry",
+          "sudo -u ubuntu git clone https://github.com/mozilla/medusa",
+          "sudo -u ubuntu git clone https://github.com/mozilla/cerberus",
+          "sudo -u ubuntu git clone https://github.com/mozilla/iacomus-alerts",
+          "sudo -u ubuntu bash -c \"cd /mnt/telemetry/cerberus; git checkout medusa\"",
+          "cd /mnt/telemetry/medusa",
+          "sudo -u ubuntu LEIN_HOME=/mnt/telemetry/.lein bash run.sh"
+        ] ] } }
+      }
+    }
+  },
+
+  "Outputs": {
+    "LoadBalancer": {
+      "Description": "The name of the Load Balancer in front of the web nodes",
+      "Value":  { "Ref": "LoadBalancer" }
+    },
+    "RegressionsBucketName": {
+      "Description": "The name of the S3 bucket in which database snapshots are stored",
+      "Value":  { "Ref": "RegressionsBucketName" }
+    }
+  }
+}
