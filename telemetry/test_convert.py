@@ -9,6 +9,7 @@ import simplejson as json
 import unittest
 from telemetry_schema import TelemetrySchema
 from convert import Converter, BadPayloadError
+import telemetry.util.files as fu
 
 # python -m unittest telemetry.test_convert
 #   - or -
@@ -423,6 +424,16 @@ class ConvertTest(unittest.TestCase):
     def test_map_key(self):
         for k in ["hello", 5, {"foo": "bar"}]:
             self.assertEqual(k, ConvertTest.converter.map_key(None, k))
+
+    def test_unicode(self):
+        with open('test/unicode_payload.json') as f:
+            payload = f.read()
+        upayload = fu.to_unicode(payload)
+        #upayload = unicode(payload, errors="replace")
+        converted, dimensions = ConvertTest.converter.convert_json(upayload,'20140101')
+        parsed = json.loads(payload)
+        self.assertEqual(parsed["data"], converted["data"])
+
 
 if __name__ == "__main__":
     unittest.main()

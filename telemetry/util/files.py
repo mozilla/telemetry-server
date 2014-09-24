@@ -156,3 +156,8 @@ def makedirs_concurrent(target_dir):
         # in a multi-process environment, and can safely be ignored.
         if e.errno != errno.EEXIST:
             raise
+
+# Use the appropriate defaults for converting Telemetry data
+# to unicode.
+def to_unicode(data, encoding="UTF-8", errors="replace"):
+    return unicode(data, encoding, errors)
