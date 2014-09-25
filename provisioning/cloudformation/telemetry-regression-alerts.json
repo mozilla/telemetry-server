@@ -139,10 +139,19 @@
           "sudo -u ubuntu git clone https://github.com/mozilla/iacomus-alerts",
           "sudo -u ubuntu bash -c \"cd /mnt/telemetry/cerberus; git checkout medusa\"",
           { "Fn::Join": [ "", [
-            "  sudo -u ubuntu bash -c 'cd /mnt/telemetry/medusa/resources; aws s3 cp s3://",
+            "sudo -u ubuntu bash -c 'cd /mnt/telemetry/medusa/resources; aws s3 cp s3://",
             { "Ref": "RegressionsBucketName" },
-            "/medusa.sqlite '"
+            "/medusa.sqlite ./'"
           ] ] },
+          { "Fn::Join": [ "", [
+            "sudo -u ubuntu echo '5 4 * * * ",
+            "cd /mnt/telemetry/cerberus && bash run.sh && ",
+            "cd /mnt/telemetry/iacomus-alerts && bash run.sh && ",
+            "aws s3 cp /mnt/telemetry/medusa/resources/medusa.sqlite s3://",
+            { "Ref": "RegressionsBucketName" },
+            "/medusa.sqlite' > /mnt/telemetry/regressions.cron"
+          ] ] },
+          "crontab -u ubuntu /mnt/telemetry/regressions.cron",
           "cd /mnt/telemetry/medusa",
           "sudo -u ubuntu LEIN_HOME=/mnt/telemetry/.lein bash run.sh"
         ] ] } }
