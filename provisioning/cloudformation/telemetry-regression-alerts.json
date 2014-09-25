@@ -89,7 +89,17 @@
               "Resource": [ { "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "RegressionsBucketName" }, "/*" ] ] } ]
             } ]
           }
-        }]
+        }, {
+          "PolicyName": "SendEmailAlerts",
+          "PolicyDocument": {
+            "Statement": [ {
+              "Sid": "Stmt1411659001934",
+              "Action": [ "ses:SendEmail", "ses:SendRawEmail", "ses:VerifyEmailAddress" ],
+              "Effect": "Allow",
+              "Resource": "*"
+            } ]
+          }
+        } ]
       }
     },
 
@@ -108,7 +118,7 @@
           "    -o DPkg::Options::=--force-confdef \\",
           "    -o DPkg::Options::=--force-confold \\",
           "    install git nodejs npm python-numpy python-opencv python-matplotlib python-pip",
-          "pip install awscli",
+          "pip install awscli boto simplejson",
           "# Set the default AWS region",
           "if [ ! -d /home/ubuntu/.aws ]; then",
           "  sudo -u ubuntu mkdir /home/ubuntu/.aws",
@@ -128,6 +138,11 @@
           "sudo -u ubuntu git clone https://github.com/mozilla/cerberus",
           "sudo -u ubuntu git clone https://github.com/mozilla/iacomus-alerts",
           "sudo -u ubuntu bash -c \"cd /mnt/telemetry/cerberus; git checkout medusa\"",
+          { "Fn::Join": [ "", [
+            "  sudo -u ubuntu bash -c 'cd /mnt/telemetry/medusa/resources; aws s3 cp s3://",
+            { "Ref": "RegressionsBucketName" },
+            "/medusa.sqlite '"
+          ] ] },
           "cd /mnt/telemetry/medusa",
           "sudo -u ubuntu LEIN_HOME=/mnt/telemetry/.lein bash run.sh"
         ] ] } }
