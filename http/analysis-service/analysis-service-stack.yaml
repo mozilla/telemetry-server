@@ -196,7 +196,9 @@ Resources:
               "}\n",
               "install python-pip git python-psycopg2 python-dateutil python-dev nginx jq ntp\n",
               "pip install --upgrade boto fabric flask flask-login simplejson sqlalchemy uwsgi\n",
-              "pip install git+https://github.com/garbados/flask-browserid.git\n",
+              # Forked from https://github.com/garbados/flask-browserid, modded
+              # to support X-Forwarded-Proto header (so it can work behind ELB).
+              "pip install git+https://github.com/mreid-moz/flask-browserid.git\n",
               "cd /home/ubuntu\n",
               "sudo -u ubuntu git clone https://github.com/mozilla/telemetry-server.git\n",
               "sudo -u ubuntu mkdir /home/ubuntu/telemetry_analysis\n",
