@@ -144,12 +144,12 @@
             "/medusa.sqlite ./'"
           ] ] },
           { "Fn::Join": [ "", [
-            "sudo -u ubuntu echo '5 4 * * * ",
-            "cd /mnt/telemetry/cerberus && bash run.sh && ",
-            "cd /mnt/telemetry/iacomus-alerts && bash run.sh && ",
-            "aws s3 cp /mnt/telemetry/medusa/resources/medusa.sqlite s3://",
+            "sudo -u ubuntu echo '5 4 * * * cd /mnt/telemetry && ",
+            "bash cerberus/run.sh &> cerberus.log && ",
+            "bash iacomus-alerts/run.sh &> iacomus-alerts.log && ",
+            "aws s3 cp medusa/resources/medusa.sqlite s3://",
             { "Ref": "RegressionsBucketName" },
-            "/medusa.sqlite' > /mnt/telemetry/regressions.cron"
+            "/medusa.sqlite &> s3backup.log' > /mnt/telemetry/regressions.cron"
           ] ] },
           "crontab -u ubuntu /mnt/telemetry/regressions.cron",
           "cd /mnt/telemetry/medusa",
