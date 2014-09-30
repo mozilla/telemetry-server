@@ -137,7 +137,6 @@
           "sudo -u ubuntu git clone https://github.com/mozilla/medusa",
           "sudo -u ubuntu git clone https://github.com/mozilla/cerberus",
           "sudo -u ubuntu git clone https://github.com/mozilla/iacomus-alerts",
-          "sudo -u ubuntu bash -c \"cd /mnt/telemetry/cerberus; git checkout medusa\"",
           { "Fn::Join": [ "", [
             "sudo -u ubuntu bash -c 'cd /mnt/telemetry/medusa/resources; aws s3 cp s3://",
             { "Ref": "RegressionsBucketName" },
