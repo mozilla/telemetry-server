@@ -143,13 +143,16 @@
             "/medusa.sqlite ./'"
           ] ] },
           { "Fn::Join": [ "", [
-            "sudo -u ubuntu echo '5 4 * * * cd /mnt/telemetry && ",
-            "bash cerberus/run.sh &> cerberus.log && ",
-            "bash iacomus-alerts/run.sh &> iacomus-alerts.log && ",
-            "aws s3 cp medusa/resources/medusa.sqlite s3://",
+            "echo '#!/bin/bash'                                  > /mnt/telemetry/update.sh\n",
+            "echo 'cd /mnt/telemetry'                           >> /mnt/telemetry/update.sh\n",
+            "echo 'cerberus/run.sh &> cerberus.log'             >> /mnt/telemetry/update.sh\n",
+            "echo 'iacomus-alerts/run.sh &> iacomus-alerts.log' >> /mnt/telemetry/update.sh\n",
+            "echo 'aws s3 cp medusa/resources/medusa.sqlite s3://",
             { "Ref": "RegressionsBucketName" },
-            "/medusa.sqlite &> s3backup.log' > /mnt/telemetry/regressions.cron"
+            "/medusa.sqlite &> s3backup.log'                    >> /mnt/telemetry/update.sh"
           ] ] },
+          "sudo -u ubuntu chmod +x /mnt/telemetry/update.sh"
+          "sudo -u ubuntu echo '5 4 * * * /mnt/telemetry/update.sh' > /mnt/telemetry/regressions.cron"
           "crontab -u ubuntu /mnt/telemetry/regressions.cron",
           "cd /mnt/telemetry/medusa",
           "sudo -u ubuntu LEIN_HOME=/mnt/telemetry/.lein bash run.sh"
