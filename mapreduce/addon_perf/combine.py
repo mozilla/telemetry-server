@@ -16,9 +16,11 @@ VER_COLUMN=3
 CHAN_COLUMN=4
 TEXT_COLUMN=5
 
-# We consider an add-on to be popular enough to count, if it appears
+# We consider an add-on / version to be popular enough to count
+# if it appears at least MINIMUM_SESSIONS times, and
 # in at least one out of every COMMON_ADDON profiles.
-COMMON_ADDON = 50000
+MINIMUM_SESSIONS = 20
+COMMON_ADDON = 10000
 
 # Accumulate the data into a big dict.
 # We use the tuple (app, os, version, channel) as our key
@@ -179,15 +181,19 @@ def shortNum(number):
         return '{:.1f}K'.format(number / 1000.0)
     return str(number)
 
+# Does this count meet our criteria for "widely enough installed"?
+def isCommon(count, sessions):
+    count = int(count)
+    return (((count * COMMON_ADDON) >= sessions) and (count >= MINIMUM_SESSIONS))
+
 def writeMeasures(key, values, name, sessions):
     for measure in ['startup_MS', 'shutdown_MS']:
         if not measure in values:
             continue
         hist = values[measure]
         times = getPercentiles(hist)
-        # If measure was recorded in fewer than 1 in COMMON_ADDON sessions, ignore
-        if (int(times[0]) * COMMON_ADDON) < sessions:
-            # keep track of rare add-ons as 'Other'
+        # If measure was recorded in too few sessions, treat as OTHER
+        if not isCommon(times[0], sessions):
             otherPerf[(key[0], key[1])][measure].update(hist)
             continue
         line = list(key)
@@ -223,7 +229,7 @@ for key, values in addonPerf.iteritems():
             points = int(items[0])
             median_items = items[1]
             # Don't record files/scan times for rarely installed or packed add-ons.
-            if (points * COMMON_ADDON) >= sessions and int(median_items) >= 2:
+            if isCommon(points, sessions) and int(median_items) >= 2:
                 writeFiles(key, values, name, sessions, points, median_items)
 
         writeMeasures(key, values, name, sessions)
