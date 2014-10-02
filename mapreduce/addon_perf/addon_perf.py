@@ -137,11 +137,6 @@ def map(k, d, v, cx):
           print "Value is false!", k, addonID, measure, details
           val = 0
         if measure.endswith('_MS'):
-          # sanity check the measure; drop the whole entry if the duration seems crazy
-          # twenty minutes is a long time to wait for startup...
-          if val > (20 * 60 * 1000):
-            print "Unusual", measure, "value", val, "in entry", k, addonID
-            return
           bucket = logBucket(val)
           result[measure] = {bucket: 1}
           send = True
