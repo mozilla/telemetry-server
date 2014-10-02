@@ -380,6 +380,10 @@
           "  # PI servers don't produce these logs, so delete the config:",
           "  rm /etc/heka.d/server.toml",
           "fi",
+          "# Refresh histogram_tools.py:",
+          "cd /home/ubuntu/telemetry-server/telemetry",
+          "rm -f histogram_tools.py",
+          "sudo -u ubuntu bash ../bin/get_histogram_tools.sh",
           { "Fn::Join": [ "", [
             "echo '{\"incoming_bucket\":\"", { "Ref": "IncomingBucketName" }, "\",",
             "\"incoming_queue\":\"", { "Ref": "IncomingQueueName" }, "\",",
@@ -563,6 +567,10 @@
           "  # PI servers don't produce these logs, so delete the config:",
           "  rm /etc/heka.d/server.toml",
           "fi",
+          "# Refresh histogram_tools.py:",
+          "cd /home/ubuntu/telemetry-server/telemetry",
+          "rm -f histogram_tools.py",
+          "sudo -u ubuntu bash ../bin/get_histogram_tools.sh",
           { "Fn::Join": [ "", [
             "echo '{\"incoming_bucket\":\"", { "Ref": "IncomingBucketName" }, "\",",
             "\"incoming_queue\":\"", { "Ref": "IncomingQueueName" }, "\",",
