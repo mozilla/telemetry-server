@@ -151,6 +151,7 @@
             { "Ref": "RegressionsBucketName" },
             "/medusa.sqlite &> s3backup.log'                    >> /mnt/telemetry/update.sh"
           ] ] },
+          "chown ubuntu:ubuntu /mnt/telemetry/update.sh",
           "sudo -u ubuntu chmod +x /mnt/telemetry/update.sh",
           "sudo -u ubuntu echo '5 4 * * * /mnt/telemetry/update.sh' > /mnt/telemetry/regressions.cron",
           "crontab -u ubuntu /mnt/telemetry/regressions.cron",
