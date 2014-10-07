@@ -50,7 +50,7 @@ python -u -m mapreduce.job $BASE/addons.py \
  --data-dir $BASE/data \
  --work-dir $BASE/work \
  --output $BASE/$OUTPUT/addons.csv.tmp \
- --bucket telemetry-published-v2  --data-dir $BASE/work/cache --local-only
+ --bucket telemetry-published-v2  #--data-dir $BASE/work/cache --local-only
 
 sort -t"," -k2 -n  -r $BASE/$OUTPUT/addons.csv.tmp | head -n 200 > $BASE/$OUTPUT/addons.csv
 rm $BASE/$OUTPUT/addons.csv.tmp
