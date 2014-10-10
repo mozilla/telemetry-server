@@ -38,9 +38,9 @@ def map(k, d, v, cx):
     AMI_startup = simple.get('AMI_startup_begin', None)
     firstPaint = simple.get('firstPaint', None)
     startup = firstPaint - AMI_startup if firstPaint and AMI_startup else None
- 
+
     # Let's remove machines with older configurations or with suspect startup times
-    if not startup or not version.startswith("6") or os != "WINNT" \
+    if not startup or startup < 0 or not version.startswith("6") or os != "WINNT" \
        or cpucount < 2 or memsize < 2 or startup > 60000:
         return
 

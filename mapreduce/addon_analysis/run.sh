@@ -57,7 +57,7 @@ python -u -m mapreduce.job $BASE/addons.py \
  --output $RAW_ADDON_FILE \
  --bucket telemetry-published-v2  # --data-dir $BASE/work/cache --local-only
 
-sort -t"," -k2 -n  -r $RAW_ADDON_FILE | head -n 200 > $FINAL_ADDON_FILE && rm $RAW_ADDON_FILE
+sort -t"," -k2 -n -r $RAW_ADDON_FILE | head -n 200 > $FINAL_ADDON_FILE && rm $RAW_ADDON_FILE
 echo startup,$(cat $FINAL_ADDON_FILE | cut -d ',' -f 1 | paste -sd ",") > $FINAL_DATA_FILE
 
 echo "Starting addons vector transformation"
