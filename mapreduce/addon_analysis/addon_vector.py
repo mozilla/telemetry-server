@@ -2,6 +2,7 @@ import simplejson as json
 import numpy
 import io
 import csv
+import os
 from string import maketrans
 
 import numpy as np
@@ -10,7 +11,7 @@ import scipy.stats
 
 top_addons = []
 
-with open("mapreduce/addon_analysis/output/addons.csv") as f:
+with open(os.environ["FINAL_ADDON_FILE"]) as f:
     lines = f.readlines()
     for line in lines:
         line = line.split(',')
@@ -37,8 +38,8 @@ def map(k, d, v, cx):
     AMI_startup = simple.get('AMI_startup_begin', None)
     firstPaint = simple.get('firstPaint', None)
     startup = firstPaint - AMI_startup if firstPaint and AMI_startup else None
-
-    # Let's remove machines with older configurations
+ 
+    # Let's remove machines with older configurations or with suspect startup times
     if not startup or not version.startswith("6") or os != "WINNT" \
        or cpucount < 2 or memsize < 2 or startup > 60000:
         return
