@@ -3,7 +3,7 @@
 cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
 sudo add-apt-repository --yes ppa:marutter/rrutter
 sudo apt-get update
-sudo apt-get --yes install python-numpy git r-base r-base-dev
+sudo apt-get --yes install python-scipy python-numpy git r-base r-base-dev
 
 #rm -rf telemetry-server
 #git clone https://github.com/mozilla/telemetry-server.git
