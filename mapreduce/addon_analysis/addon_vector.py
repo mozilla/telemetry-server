@@ -38,10 +38,11 @@ def map(k, d, v, cx):
     AMI_startup = simple.get('AMI_startup_begin', None)
     firstPaint = simple.get('firstPaint', None)
     startup = firstPaint - AMI_startup if firstPaint and AMI_startup else None
+    shutdown = simple.get('shutdownDuration', None)
 
     # Let's remove machines with older configurations or with suspect startup times
     if not startup or startup < 0 or not version.startswith("6") or os != "WINNT" \
-       or cpucount < 2 or memsize < 2 or startup > 60000:
+       or cpucount < 2 or memsize < 2 or startup > 60000 or not shutdown:
         return
 
     # Build a list of add-ons
@@ -64,7 +65,7 @@ def map(k, d, v, cx):
         addon_names.remove("Default")
 
     addon_names = tuple(addon_names.intersection(top_addons))
-    cx.write(tuple([k]) + addon_names, startup)
+    cx.write(tuple([k]) + addon_names, [startup, shutdown])
 
 def setup_reduce(cx):
     cx.field_separator = ","
@@ -73,8 +74,9 @@ def reduce(k, v, cx):
     if len(v) != 1:
         return
 
+    map = __builtins__['map']
     addon_vector = ""
     addons = set(k[1:])
-    addons = __builtins__['map'](lambda x: "1" if x in addons else "0", top_addons)
+    addons = map(lambda x: "1" if x in addons else "0", top_addons)
 
-    cx.write(str(v[0]), ",".join(addons))
+    cx.write(",".join(map(str, v[0])), ",".join(addons))
