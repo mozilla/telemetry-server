@@ -35,7 +35,7 @@ fi
 BASE=$(pwd)
 BEGIN=$(date -d "$TODAY - $DAYS days" +%Y%m%d)
 END=$(date -d "TODAY - $DAYS days" +%Y%m%d)
-VERSION=$(curl http://en.wikipedia.org/wiki/History_of_Firefox\#Release_history | pcregrep -o1 "latest version, <.*>Firefox (.*)</a>")
+VERSION=$(curl http://en.wikipedia.org/wiki/History_of_Firefox#Release_history | pcregrep -o1 "latest version, <.*>Firefox (.*)</a>")
 
 echo "Today is $TODAY, and we're gathering data from $BEGIN to $END"
 sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__VERSION__/$VERSION/" filter_template.json > filter.json
@@ -58,7 +58,7 @@ python -u -m mapreduce.job $BASE/addons.py \
  --bucket telemetry-published-v2  # --data-dir $BASE/work/cache --local-only
 
 sort -t"," -k2 -n -r $RAW_ADDON_FILE | head -n 500 > $FINAL_ADDON_FILE && rm $RAW_ADDON_FILE
-echo startup,shutdown,$(cat $FINAL_ADDON_FILE | cut -d ',' -f 1 | paste -sd ",") > $FINAL_DATA_FILE
+echo startup,shutdown,cpucount,memsize,$(cat $FINAL_ADDON_FILE | cut -d ',' -f 1 | paste -sd ",") > $FINAL_DATA_FILE
 
 echo "Starting addons vector transformation"
 FINAL_ADDON_FILE=$FINAL_ADDON_FILE python -u -m mapreduce.job $BASE/addon_vector.py \

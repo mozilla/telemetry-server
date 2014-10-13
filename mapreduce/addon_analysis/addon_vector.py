@@ -65,7 +65,7 @@ def map(k, d, v, cx):
         addon_names.remove("Default")
 
     addon_names = tuple(addon_names.intersection(top_addons))
-    cx.write(tuple([k]) + addon_names, [startup, shutdown])
+    cx.write(tuple([k]) + addon_names, [startup, shutdown, cpucount, memsize])
 
 def setup_reduce(cx):
     cx.field_separator = ","
