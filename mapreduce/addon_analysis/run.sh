@@ -35,16 +35,16 @@ fi
 BASE=$(pwd)
 BEGIN=$(date -d "$TODAY - $DAYS days" +%Y%m%d)
 END=$(date -d "TODAY - $DAYS days" +%Y%m%d)
-VERSION=$(curl http://en.wikipedia.org/wiki/History_of_Firefox#Release_history | pcregrep -o1 "latest version, <.*>Firefox (.*)</a>")
+VERSION=$(python last_version.py)
 
 echo "Today is $TODAY, and we're gathering data from $BEGIN to $END"
-sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__VERSION__/$VERSION/" filter_template.json > filter.json
+sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__VERSION__/$VERSION/" -e "s/__VERSION__/$VERSION/" filter_template.json > filter.json
 
 FINAL_DATA_FILE=$BASE/$OUTPUT/addon_startup_$BEGIN.csv
 RAW_DATA_FILE=${FINAL_DATA_FILE}.tmp
 FINAL_ADDON_FILE=$BASE/$OUTPUT/addons_$BEGIN.csv
 RAW_ADDON_FILE=${FINAL_ADDON_FILE}.tmp
-SUMMARY_FILE=$BASE/$OUTPUT/addon_startup_summary_$BEGIN.csv
+SUMMARY_FILE=$BASE/$OUTPUT/addon_summary_$BEGIN_
 
 cd ../../
 echo "Selecting top addons"
@@ -74,5 +74,3 @@ echo "Mapreduce job exited with code: $?"
 
 cat $RAW_DATA_FILE >> $FINAL_DATA_FILE && rm $RAW_DATA_FILE
 sudo Rscript $BASE/model.R $FINAL_DATA_FILE $SUMMARY_FILE
-
-# rm $BASE/$OUTPUT/addons.csv
