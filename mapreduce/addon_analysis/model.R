@@ -73,7 +73,10 @@ predict_metric <- function(df, metric, prefix, log.transform=c(FALSE, TRUE)) {
     result <- extract(model)
 
   # addon_plot(result)
-  write.csv(result, file=paste(prefix, "_", metric, ".csv", sep=""))
+  result <- data.frame(lapply(result, function(x){sapply(x, toString)}))
+  base <- basename(prefix)
+  path <- dirname(prefix)
+  write.csv(result, file=paste(path, "/", metric, "_", base, ".csv", sep=""), row.names=FALSE, quote=FALSE)
 }
 
 args <- commandArgs(trailingOnly = TRUE)

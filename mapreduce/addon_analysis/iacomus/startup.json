@@ -12,5 +12,5 @@
   "title": ["Add-ons startup influence", "Correlations between startup time and add-ons"],
   "primary-key": ["Add-on"],
   "header": ["Estimate (ms)", "Error (ms)", "t-statistic", "False Positive Probability", "Add-on"],
-  "url-prefix": "http://localhost:9000/addon_summary_startup"
+  "url-prefix": "https://s3-us-west-2.amazonaws.com/telemetry-public-analysis/addon_analysis/data/startup_addon_summary"
 }

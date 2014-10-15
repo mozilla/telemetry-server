@@ -12,5 +12,5 @@
   "title": ["Add-ons shutdown influence", "Correlations between shutdown time and add-ons"],
   "primary-key": ["Add-on"],
   "header": ["Estimate (%)", "Error (ms)", "t-statistic", "False Positive Probability", "Add-on"],
-  "url-prefix": "http://localhost:9000/addon_summary_shutdown"
+  "url-prefix": "https://s3-us-west-2.amazonaws.com/telemetry-public-analysis/addon_analysis/data/shutdown_addon_summary"
 }
