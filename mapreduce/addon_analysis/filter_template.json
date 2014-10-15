@@ -15,7 +15,7 @@
     },
     {
       "field_name": "appVersion",
-      "allowed_values": {"min": "__VERSION__", "max": "__VERSION__.999"}
+      "allowed_values": {"min": "__VERSIONBEGIN__.0", "max": "__VERSIONEND__.0.999"}
     },
     {
       "field_name": "appBuildID",

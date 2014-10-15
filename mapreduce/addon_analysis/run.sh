@@ -38,13 +38,14 @@ END=$(date -d "TODAY - $DAYS days" +%Y%m%d)
 VERSION=$(python last_version.py)
 
 echo "Today is $TODAY, and we're gathering data from $BEGIN to $END"
-sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__VERSION__/$VERSION/" -e "s/__VERSION__/$VERSION/" filter_template.json > filter.json
+sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__VERSIONBEGIN__/$(($VERSION - 1))/" \
+    -e "s/__VERSIONEND__/$VERSION/" filter_template.json > filter.json
 
-FINAL_DATA_FILE=$BASE/$OUTPUT/addon_startup_$BEGIN.csv
+FINAL_DATA_FILE=$BASE/$OUTPUT/addons_startup_$BEGIN.csv
 RAW_DATA_FILE=${FINAL_DATA_FILE}.tmp
 FINAL_ADDON_FILE=$BASE/$OUTPUT/addons_$BEGIN.csv
 RAW_ADDON_FILE=${FINAL_ADDON_FILE}.tmp
-SUMMARY_FILE=$BASE/$OUTPUT/addon_summary_$BEGIN_
+SUMMARY_FILE=$BASE/$OUTPUT/addon_summary_$BEGIN
 
 cd ../../
 echo "Selecting top addons"
