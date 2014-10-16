@@ -35,7 +35,7 @@ fi
 BASE=$(pwd)
 BEGIN=$(date -d "$TODAY - $DAYS days" +%Y%m%d)
 END=$(date -d "TODAY - $DAYS days" +%Y%m%d)
-VERSION=$(python last_version.py)
+VERSION=$(python last_version.py $BEGIN)
 
 echo "Today is $TODAY, and we're gathering data from $BEGIN to $END"
 sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__VERSIONBEGIN__/$(($VERSION - 1))/" \
@@ -75,10 +75,8 @@ echo "Mapreduce job exited with code: $?"
 
 cat $RAW_DATA_FILE >> $FINAL_DATA_FILE && rm $RAW_DATA_FILE
 sudo Rscript $BASE/model.R $FINAL_DATA_FILE $SUMMARY_FILE
-gzip startup*.csv
-gzip shutdown*.csv
-cp $BASE/iacomus/startup.json $BASE/$OUTPUT
-cp $BASE/iacomus/shutdown.json $BASE/$OUTPUT
+gzip $BASE/$OUTPUT/{startup*,shutdown*}.csv
+cp $BASE/iacomus/{startup,shutdown}.json $BASE/$OUTPUT
 
 rm $FINAL_DATA_FILE
 rm $FINAL_ADDON_FILE
