@@ -25,10 +25,8 @@ if [ ! -d "data" ]; then
     mkdir -p "data"
 fi
 
-# If we have an argument, process that week.
 DAYS=$1
 if [ -z "$DAYS" ]; then
-  # Default to processing "last week"
   DAYS=1
 fi
 
