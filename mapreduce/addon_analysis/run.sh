@@ -43,6 +43,7 @@ FINAL_DATA_FILE=$BASE/$OUTPUT/addons_startup_$BEGIN.csv
 RAW_DATA_FILE=${FINAL_DATA_FILE}.tmp
 FINAL_ADDON_FILE=$BASE/$OUTPUT/addons_$BEGIN.csv
 RAW_ADDON_FILE=${FINAL_ADDON_FILE}.tmp
+RAW_ADDON_FILE1=${FINAL_ADDON_FILE}.1.tmp
 SUMMARY_FILE=$BASE/$OUTPUT/addon_summary_$BEGIN
 
 cd ../../
@@ -56,7 +57,8 @@ python -u -m mapreduce.job $BASE/addons.py \
  --output $RAW_ADDON_FILE \
  --bucket telemetry-published-v2  # --data-dir $BASE/work/cache --local-only
 
-sort -t"," -k2 -n -r $RAW_ADDON_FILE | head -n 500 > $FINAL_ADDON_FILE && rm $RAW_ADDON_FILE
+sort -t"," -k2 -n -r $RAW_ADDON_FILE  > $RAW_ADDON_FILE1
+head -n 500 $RAW_ADDON_FILE1 > $FINAL_ADDON_FILE && rm $RAW_ADDON_FILE $RAW_ADDON_FILE1
 echo startup,shutdown,cpucount,memsize,$(cat $FINAL_ADDON_FILE | cut -d ',' -f 1 | paste -sd ",") > $FINAL_DATA_FILE
 
 echo "Starting addons vector transformation"
