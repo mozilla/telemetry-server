@@ -5,9 +5,9 @@ sudo add-apt-repository --yes ppa:marutter/rrutter
 sudo apt-get update
 sudo apt-get --yes install python-scipy python-numpy git r-base r-base-dev pcregrep
 
-#rm -rf telemetry-server
-#git clone https://github.com/mozilla/telemetry-server.git
-#cd telemetry-server/mapreduce/addon_analysis
+rm -rf telemetry-server
+git clone https://github.com/mozilla/telemetry-server.git
+cd telemetry-server/mapreduce/addon_analysis
 
 OUTPUT=output
 TODAY=$(date +%Y%m%d)
