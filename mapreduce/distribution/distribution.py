@@ -32,7 +32,7 @@ def map(k, d, v, cx):
         disk = "NA"
 
     cx.write(("Firefox", appUpdateChannel, appVersion, os, version, \
-              memsize + "-GB", cpucount + "-cores", disk, gpu_vendor), 1)
+              memsize + "-GB", cpucount + "-cores", gpu_vendor, disk), 1)
 
 def setup_reduce(cx):
     cx.field_separator = ","
