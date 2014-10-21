@@ -8,7 +8,6 @@ def map(k, d, v, cx):
     simple = parsed['simpleMeasurements']
 
     os = info['OS']
-    arch = info['arch']
     version = info['version']
     cpucount = str(info['cpucount'])
     memsize = str(int(round(info['memsize']/1000.)))
@@ -17,11 +16,6 @@ def map(k, d, v, cx):
 
     if os == "WINNT":
         os = "Windows"
-
-    if arch == "x86":
-        arch = "32-bit"
-    elif arch == "x86-64":
-        arch = "64-bit"
 
     if gpu_vendor == "0x10de":
         gpu_vendor = "Nvidia-GPU"
@@ -37,7 +31,7 @@ def map(k, d, v, cx):
     else:
         disk = "NA"
 
-    cx.write(("Firefox", appUpdateChannel, appVersion, os, version, arch, \
+    cx.write(("Firefox", appUpdateChannel, appVersion, os, version, \
               memsize + "-GB", cpucount + "-cores", disk, gpu_vendor), 1)
 
 def setup_reduce(cx):
