@@ -33,7 +33,7 @@ fi
 BASE=$(pwd)
 BEGIN=$(date -d "$TODAY - $DAYS days" +%Y%m%d)
 END=$(date -d "TODAY - $DAYS days" +%Y%m%d)
-VERSION=$(python last_version.py $BEGIN)
+VERSION=$(python $BASE/last_version.py $BEGIN)
 
 echo "Today is $TODAY, and we're gathering data from $BEGIN to $END"
 sed -e "s/__BEGIN__/$BEGIN/" -e "s/__END__/$END/" -e "s/__VERSIONBEGIN__/$(($VERSION - 1))/" \
