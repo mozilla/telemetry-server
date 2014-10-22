@@ -3,8 +3,16 @@
 cd /home/ubuntu
 
 # Install a few dependencies
-sudo apt-get -y install xz-utils python-pip git python-dev ntp
-sudo pip install --upgrade boto awscli simplejson
+install()
+{
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get -y \
+        -o DPkg::Options::=--force-confdef \
+        -o DPkg::Options::=--force-confold \
+        install $@
+}
+install xz-utils python-pip git python-dev ntp
+pip install --upgrade boto awscli simplejson
 
 # Get users ssh key
 python - << END
@@ -15,12 +23,11 @@ k = b.get_key('{{ ssh_key }}')
 k.get_contents_to_filename('/home/ubuntu/user_key.pub')
 END
 
-
 {% if ephemeral_map %}
 # RAID0 Configuration:
 {% set raid_devices = ephemeral_map.keys()|sort %}
 {% set device_list = " ".join(raid_devices) %}
-export DEBIAN_FRONTEND=noninteractive; apt-get --yes install mdadm xfsprogs
+install mdadm xfsprogs
 umount /mnt
 yes | mdadm --create /dev/md0 --level=0 -c64 --raid-devices={{ raid_devices|length }} {{ device_list }}
 echo 'DEVICE {{ device_list }}' >> /etc/mdadm/mdadm.conf
