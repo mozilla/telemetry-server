@@ -49,7 +49,7 @@ $RAID_CONFIGURATION
 pip install --upgrade awscli
 mkdir -p $BASE
 chown ubuntu:ubuntu $BASE
-sudo -u ubuntu bash <<EOF
+sudo -Hu ubuntu bash <<EOF
 if [ -d "~/telemetry-server" ]; then
   cd ~/telemetry-server
   git pull
