@@ -6,7 +6,7 @@
   "base_dir": "/mnt/hotfix",
   "log_dir_name": "hotfix",
   "instance_type": "m3.large",
-  "image": "ami-90e67fa0",
+  "image": "ami-39501209",
   "security_groups": ["telemetry"],
   "region": "us-west-2",
   "placement": "us-west-2c",
