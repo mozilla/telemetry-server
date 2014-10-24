@@ -6,7 +6,7 @@
   "filter-options": [
       {"id": "Limit",
        "values": [20, 50, 100, 200, 500],
-       "selected": 10
+       "selected": 20
       }
     ],
   "title": ["Add-ons shutdown influence", "Correlations between shutdown time and add-ons"],
