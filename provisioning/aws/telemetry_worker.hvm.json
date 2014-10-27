@@ -1,0 +1,20 @@
+{
+  "ssl_user": "ubuntu",
+  "ssl_key_name": "mreid",
+  "ssl_key_path": "~/.ssh/aws/mreid.pem",
+  "ssl_retries": 10,
+  "upgrade_os": true,
+  "base_dir": "/mnt/telemetry",
+  "instance_type": "c3.2xlarge",
+  "image": "ami-eb4608db",
+  "security_groups": ["telemetry"],
+  "region": "us-west-2",
+  "placement": "us-west-2c",
+  "shutdown_behavior": "stop",
+  "name": "telemetry-worker-hvm",
+  "default_tags": {
+    "Owner": "mreid",
+    "Application": "telemetry-server"
+  },
+  "skip_termination": true
+}
