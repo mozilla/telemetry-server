@@ -49,6 +49,10 @@ def map(k, d, v, cx):
             if name is not None:
                 addon_names.add(name.replace(",", "-"))
 
+    # Remove incorrect pings
+    if "Default" not in addon_names:
+        return
+
     cx.write("TOTAL", 1)
     for addon in addon_names:
         cx.write(addon, 1)

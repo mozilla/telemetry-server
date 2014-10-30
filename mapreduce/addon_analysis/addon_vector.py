@@ -57,7 +57,7 @@ def map(k, d, v, cx):
                 addon_names.add(name.replace(",", "-"))
 
     # Remove incorrect pings
-    if len(addon_names) == 0 or "Default" not in addon_names:
+    if "Default" not in addon_names:
         return
 
     # Let's count Default only when no other add-on is enabled
