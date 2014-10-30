@@ -49,8 +49,8 @@ def map(k, d, v, cx):
             if name is not None:
                 addon_names.add(name.replace(",", "-"))
 
+    cx.write("TOTAL", 1)
     for addon in addon_names:
-        cx.write("TOTAL", 1)
         cx.write(addon, 1)
 
 def setup_reduce(cx):
