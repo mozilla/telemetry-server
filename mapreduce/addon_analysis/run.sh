@@ -3,7 +3,7 @@
 cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
 sudo add-apt-repository --yes ppa:marutter/rrutter
 sudo apt-get update
-sudo apt-get --yes install python-scipy python-numpy git r-base r-base-dev pcregrep
+sudo apt-get --yes install python-scipy python-numpy python-pandas git r-base r-base-dev pcregrep
 
 rm -rf telemetry-server
 git clone https://github.com/mozilla/telemetry-server.git
@@ -43,7 +43,6 @@ FINAL_DATA_FILE=$BASE/$OUTPUT/addons_startup_$BEGIN.csv
 RAW_DATA_FILE=${FINAL_DATA_FILE}.tmp
 FINAL_ADDON_FILE=$BASE/$OUTPUT/addons_$BEGIN.csv
 RAW_ADDON_FILE=${FINAL_ADDON_FILE}.tmp
-RAW_ADDON_FILE1=${FINAL_ADDON_FILE}.1.tmp
 SUMMARY_FILE=$BASE/$OUTPUT/addon_summary_$BEGIN
 
 cd ../../
@@ -55,10 +54,9 @@ python -u -m mapreduce.job $BASE/addons.py \
  --data-dir $BASE/data \
  --work-dir $BASE/work \
  --output $RAW_ADDON_FILE \
- --bucket telemetry-published-v2  # --data-dir $BASE/work/cache --local-only
+ --bucket telemetry-published-v2 # --data-dir $BASE/work/cache --local-only
 
-sort -t"," -k2 -n -r $RAW_ADDON_FILE  > $RAW_ADDON_FILE1
-head -n 500 $RAW_ADDON_FILE1 > $FINAL_ADDON_FILE && rm $RAW_ADDON_FILE $RAW_ADDON_FILE1
+python $BASE/sort.py $RAW_ADDON_FILE $FINAL_ADDON_FILE
 echo startup,shutdown,cpucount,memsize,$(cat $FINAL_ADDON_FILE | cut -d ',' -f 1 | paste -sd ",") > $FINAL_DATA_FILE
 
 echo "Starting addons vector transformation"
@@ -74,9 +72,10 @@ FINAL_ADDON_FILE=$FINAL_ADDON_FILE python -u -m mapreduce.job $BASE/addon_vector
 echo "Mapreduce job exited with code: $?"
 
 cat $RAW_DATA_FILE >> $FINAL_DATA_FILE && rm $RAW_DATA_FILE
-sudo Rscript $BASE/model.R $FINAL_DATA_FILE $SUMMARY_FILE
+sudo Rscript $BASE/model.R $FINAL_DATA_FILE $FINAL_ADDON_FILE $SUMMARY_FILE
 gzip $BASE/$OUTPUT/{startup*,shutdown*}.csv
 cp $BASE/iacomus/{startup,shutdown}.json $BASE/$OUTPUT
 
+rm $RAW_ADDON_FILE
 rm $FINAL_DATA_FILE
 rm $FINAL_ADDON_FILE

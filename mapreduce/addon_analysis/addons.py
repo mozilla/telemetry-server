@@ -50,6 +50,7 @@ def map(k, d, v, cx):
                 addon_names.add(name.replace(",", "-"))
 
     for addon in addon_names:
+        cx.write("TOTAL", 1)
         cx.write(addon, 1)
 
 def setup_reduce(cx):
