@@ -5,9 +5,6 @@ is.installed <- function(mypkg){
 if (!is.installed("dplyr"))
   install.packages("dplyr", repos="http://cran.rstudio.com/")
 
-if (!is.installed("plyr"))
-  install.packages("plyr", repos="http://cran.rstudio.com/")
-
 if (!is.installed("caret"))
   install.packages("caret", repos="http://cran.rstudio.com/")
 
@@ -76,7 +73,8 @@ predict_metric <- function(df, freq, metric, prefix, log.transform=c(FALSE, TRUE
 
   # addon_plot(result)
   result <- data.frame(lapply(result, function(x){sapply(x, toString)}))
-  result <- join(result, freq)
+  result <- left_join(result, freq) %.% select(-Pr)
+  result <- result[, c("addon", "freq", "Estimate", "Error", "t")]
 
   base <- basename(prefix)
   path <- dirname(prefix)
