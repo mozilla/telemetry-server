@@ -146,6 +146,8 @@
             "echo '#!/bin/bash'                                  > /mnt/telemetry/update.sh\n",
             "echo 'cd /mnt/telemetry'                           >> /mnt/telemetry/update.sh\n",
             "echo 'export PATH=$PATH:/usr/local/bin'            >> /mnt/telemetry/update.sh\n",
+            "echo 'cd medusa; git pull'                         >> /mnt/telemetry/update.sh\n",
+            "echo 'cd -'                                        >> /mnt/telemetry/update.sh\n",
             "echo 'cerberus/run.sh &> cerberus.log'             >> /mnt/telemetry/update.sh\n",
             "echo 'iacomus-alerts/run.sh &> iacomus-alerts.log' >> /mnt/telemetry/update.sh\n",
             "echo 'aws s3 cp medusa/resources/medusa.sqlite s3://",
