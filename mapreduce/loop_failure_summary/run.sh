@@ -47,7 +47,7 @@ cat $JOB_DIR/header.txt > $FINAL_DATA_FILE
 cat $RAW_DATA_FILE >> $FINAL_DATA_FILE
 rm $RAW_DATA_FILE
 
-aws s3 cp s3://telemetry-public-analysis/loop_failures/data/failures_by_type.json $JOB_DIR/failures_by_type.json
+aws s3 cp s3://telemetry-private-analysis/loop_failures/data/failures_by_type.json $JOB_DIR/failures_by_type.json
 if [ -f "$JOB_DIR/failures_by_type.json" ]; then
   # back up the existing one
   cp $JOB_DIR/failures_by_type.json $BASE/$OUTPUT/failures_by_type.json.prev
