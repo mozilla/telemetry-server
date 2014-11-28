@@ -63,7 +63,7 @@ class TelemetrySchema:
             return str(value)
         return TelemetrySchema.DISALLOWED_VALUE
 
-    def get_dimensions(self, basedir, filename):
+    def get_dimensions(self, basedir, filename, dirs_only=False):
         canonical_base = os.path.realpath(basedir)
         canonical_file = os.path.realpath(filename)
 
@@ -74,11 +74,13 @@ class TelemetrySchema:
         dimfile = canonical_file[len(canonical_base)+1:]
         dims = dimfile.split(os.path.sep)
         filename = dims.pop()
-        file_dims = filename.split(".")
 
-        # Last two dimensions are in the filename, separated by dots:
-        dims.append(file_dims.pop(0))
-        dims.append(file_dims.pop(0))
+        if not dirs_only:
+            file_dims = filename.split(".")
+
+            # Last two dimensions are in the filename, separated by dots:
+            dims.append(file_dims.pop(0))
+            dims.append(file_dims.pop(0))
         return dims
 
     def get_filename(self, basedir, dimensions, version=1):

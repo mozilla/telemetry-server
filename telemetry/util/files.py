@@ -161,3 +161,37 @@ def makedirs_concurrent(target_dir):
 # to unicode.
 def to_unicode(data, encoding="UTF-8", errors="replace"):
     return unicode(data, encoding, errors)
+
+def strip_path_prefix(base_dir, full_path):
+    canonical_base = os.path.realpath(base_dir)
+    canonical_full = os.path.realpath(full_path)
+    if not canonical_full.startswith(canonical_base):
+        raise ValueError("Error: path '%s' is not under base dir '%s'" % (full_path, base_dir))
+
+    # Chop off the base dir and one path separator
+    return canonical_full[len(canonical_base)+1:]
+
+def list_partitions(searchdir, schema=None, dirs_only=False, full_paths=True):
+    level_offset = searchdir.count(os.path.sep)
+    allowed_values = []
+    if schema is not None:
+        allowed_values = schema.sanitize_allowed_values()
+
+    for root, dirs, files in os.walk(searchdir):
+        level = root.count(os.path.sep) - level_offset
+        if schema is not None:
+            dirs[:] = [i for i in dirs if schema.is_allowed(i, allowed_values[level])]
+        for f in files:
+            full_filename = os.path.join(root, f)
+            include = True
+            if schema is not None:
+                dims = schema.get_dimensions(searchdir, full_filename, dirs_only)
+                for l in range(level, len(allowed_values)):
+                    if not schema.is_allowed(dims[l], allowed_values[l]):
+                        include = False
+                        break
+            if not full_paths:
+                full_filename = strip_path_prefix(searchdir, full_filename)
+
+            if include:
+                yield full_filename

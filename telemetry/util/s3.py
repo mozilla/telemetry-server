@@ -108,16 +108,16 @@ def upload_one(args):
     return target, remote_key, err
 
 
-def list_partitions(bucket, prefix='', level=0, schema=None, include_keys=False):
+def list_partitions(bucket, prefix='', level=0, schema=None, include_keys=False, dirs_only=False):
     #print "Listing...", prefix, level
     if schema is not None:
         allowed_values = schema.sanitize_allowed_values()
     delimiter = '/'
-    if level > 3:
+    if level > 3 and not dirs_only:
         delimiter = '.'
     for k in bucket.list(prefix=prefix, delimiter=delimiter):
         partitions = k.name.split("/")
-        if level > 3:
+        if level > 3 and not dirs_only:
             # split the last couple of partition components by "." instead of "/"
             partitions.extend(partitions.pop().split(".", 2))
         if schema is None or schema.is_allowed(partitions[level], allowed_values[level]):
