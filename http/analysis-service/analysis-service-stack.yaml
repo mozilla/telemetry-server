@@ -310,6 +310,16 @@ Resources:
                                 {Ref: temporaryBucket},
                                 '/*'
                               ]]}
+        # Grant list-buckets access temporarily (as a workaround for bugs
+        # in the Scala S3 lib)
+        - PolicyName:         telemetryPublishedWorkerListBuckets
+          PolicyDocument:
+            Statement:
+              - Effect:       Allow
+                Action:
+                  - 's3:ListAllMyBuckets'
+                Resource:
+                  - '*'
 
   # IAM instance profile granting workerInstanceIAMRole to worker instances
   workerInstanceProfile:
