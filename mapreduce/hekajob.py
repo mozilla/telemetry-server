@@ -141,11 +141,8 @@ class Job:
 
         # Not useful to have more mappers than partitions.
         if len(partitions) < self._num_mappers:
-            print "Filter matched only %d input files (%d local in %s and %d " \
-                  "remote from %s). Reducing number of mappers accordingly." % (
-                  len(partitions), len(files), self._input_dir,
-                  sum(len(part) for part in partitions) - len(files),
-                  self._bucket_name)
+            print "Filter matched only %d input files. Reducing number of mappers accordingly." % (
+                  len(partitions),)
             self._num_mappers = len(partitions)
 
         # Free up our set of names. We want to minimize
