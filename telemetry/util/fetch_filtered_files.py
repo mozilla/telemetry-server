@@ -83,7 +83,9 @@ class Fetcher:
             os.makedirs(fetch_cwd)
 
         for i in range(0, self._num_dirs):
-            os.makedirs(os.path.join(self._base_dir, "out", str(i)))
+            outdir = os.path.join(self._base_dir, "out", str(i))
+            if not os.path.isdir(outdir):
+                os.makedirs(outdir)
         # TODO: build retry count into Loader.
         loader = s3util.Loader(fetch_cwd, self._bucket_name,
             aws_key=self._aws_key, aws_secret_key=self._aws_secret_key,
