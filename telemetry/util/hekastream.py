@@ -1,0 +1,132 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import hashlib
+import message_pb2
+import struct
+import gzip
+import StringIO as StringIO
+import os
+import errno
+
+class UnpackedRecord():
+    def __init__(self, raw, header, message=None, error=None):
+        self.raw = raw
+        self.header = header
+        self.message = message
+        self.error = error
+
+# Returns (bytes_skipped=int, eof_reached=bool)
+def read_until_next(fin, separator=0x1e):
+    bytes_skipped = 0
+    while True:
+        c = fin.read(1)
+        if c == '':
+            return (bytes_skipped, True)
+        elif ord(c) != separator:
+            bytes_skipped += 1
+        else:
+            break
+    return (bytes_skipped, False)
+
+# Stream Framing:
+#  https://hekad.readthedocs.org/en/latest/message/index.html
+def read_one_record(input_stream, raw=False, verbose=False, strict=False):
+    # Read 1 byte record separator (and keep reading until we get one)
+    total_bytes = 0
+    skipped, eof = read_until_next(input_stream, 0x1e)
+    total_bytes += skipped
+    if eof:
+        return None
+    else:
+        # we've read one separator (plus anything we skipped)
+        total_bytes += 1
+
+    if skipped > 0:
+        if strict:
+            raise ValueError("Unexpected character(s) at the start of record")
+        if verbose:
+            print "Skipped", skipped, "bytes to find a valid separator"
+
+    raw_record = struct.pack("<B", 0x1e)
+
+    # Read the header length
+    header_length_raw = input_stream.read(1)
+    if header_length_raw == '':
+        return None
+
+    total_bytes += 1
+    raw_record += header_length_raw
+
+    # The "<" is to force it to read as Little-endian to match the way it's
+    # written. This is the "native" way in linux too, but might as well make
+    # sure we read it back the same way.
+    (header_length,) = struct.unpack('<B', header_length_raw)
+
+    header_raw = input_stream.read(header_length)
+    if header_raw == '':
+        return None
+    total_bytes += header_length
+    raw_record += header_raw
+
+    header = message_pb2.Header()
+    header.ParseFromString(header_raw)
+    unit_separator = input_stream.read(1)
+    total_bytes += 1
+    if ord(unit_separator[0]) != 0x1f:
+        error_msg = "Unexpected unit separator character in record #{} " \
+                "at offset {}: {}".format(record_count, total_bytes,
+                ord(unit_separator[0]))
+        if strict:
+            raise ValueError(error_msg)
+        return UnpackedRecord(raw_record, header, error=error_msg)
+    raw_record += unit_separator
+
+    #print "message length:", header.message_length
+    message_raw = input_stream.read(header.message_length)
+
+    total_bytes += header.message_length
+    raw_record += message_raw
+
+    message = None
+    if not raw:
+        message = message_pb2.Message()
+        message.ParseFromString(message_raw)
+
+    return UnpackedRecord(raw_record, header, message)
+
+
+def unpack(filename, raw=False, verbose=False, strict=False):
+    fin = None
+    if filename.endswith(".gz"):
+        fin = gzip.open(filename, "rb")
+    else:
+        fin = open(filename, "rb")
+    record_count = 0
+    bad_records = 0
+    total_bytes = 0
+    while True:
+        r = None
+        try:
+            r = read_one_record(fin, raw, verbose, strict)
+        except ValueError as e:
+            if strict:
+                raise e
+            elif verbose:
+                print e
+        if r is None:
+            break
+
+        if verbose and r.error is not None:
+            print r.error
+        record_count += 1
+        total_bytes += len(r.raw)
+        yield r
+
+    if verbose:
+        print "Processed", record_count, "records"
+    fin.close()
