@@ -71,6 +71,7 @@ class Fetcher:
         self._aws_key = config.get("aws_key")
         self._aws_secret_key = config.get("aws_secret_key")
         self._verbose = config.get("verbose")
+        self._max_bytes = config.get("max_bytes")
 
     def fetch(self):
         remotes = self.filter()
@@ -103,6 +104,8 @@ class Fetcher:
                 if self._verbose:
                     print "Moving", local, "to", out_name
                 os.rename(local, out_name)
+                if self._max_bytes >= 0 and downloaded_bytes > self._max_bytes:
+                    break
                 file_counter += 1
             else:
                 print "Failed to download", remote
@@ -110,6 +113,8 @@ class Fetcher:
         duration_sec = timer.delta_sec(start)
         downloaded_mb = float(downloaded_bytes) / 1024.0 / 1024.0
         print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
+        if file_counter < len(remote_names):
+            print "Downloaded", file_counter, "of", len(remote_names), "files. Hit max_bytes =", self._max_bytes
         return result
 
     def filter(self):
@@ -145,6 +150,7 @@ def main():
     parser.add_argument("-d", "--base-dir", help="Base data directory", required=True)
     parser.add_argument("-b", "--bucket", help="S3 Bucket name")
     parser.add_argument("-k", "--aws-key", help="AWS Key", default=None)
+    parser.add_argument("-x", "--max-bytes", help="Stop after fetching this many bytes.", type=int, default=-1)
     parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", default=None)
     parser.add_argument("-v", "--verbose", help="Print verbose output", action="store_true")
     args = parser.parse_args()
