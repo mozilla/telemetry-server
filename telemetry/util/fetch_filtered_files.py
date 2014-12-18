@@ -70,6 +70,7 @@ class Fetcher:
         self._bucket_name = config.get("bucket")
         self._aws_key = config.get("aws_key")
         self._aws_secret_key = config.get("aws_secret_key")
+        self._skip_move = config.get("skip_move")
         self._verbose = config.get("verbose")
         self._max_bytes = config.get("max_bytes")
 
@@ -83,10 +84,11 @@ class Fetcher:
         if not os.path.isdir(fetch_cwd):
             os.makedirs(fetch_cwd)
 
-        for i in range(0, self._num_dirs):
-            outdir = os.path.join(self._base_dir, "out", str(i))
-            if not os.path.isdir(outdir):
-                os.makedirs(outdir)
+        if not self._skip_move:
+            for i in range(0, self._num_dirs):
+                outdir = os.path.join(self._base_dir, "out", str(i))
+                if not os.path.isdir(outdir):
+                    os.makedirs(outdir)
         # TODO: build retry count into Loader.
         loader = s3util.Loader(fetch_cwd, self._bucket_name,
             aws_key=self._aws_key, aws_secret_key=self._aws_secret_key,
@@ -100,10 +102,11 @@ class Fetcher:
                 if self._verbose:
                     print "Downloaded", remote
                 downloaded_bytes += os.path.getsize(local)
-                out_name = os.path.join(self._base_dir, "out", str(file_counter % self._num_dirs), str(file_counter))
-                if self._verbose:
-                    print "Moving", local, "to", out_name
-                os.rename(local, out_name)
+                if not self._skip_move:
+                    out_name = os.path.join(self._base_dir, "out", str(file_counter % self._num_dirs), str(file_counter))
+                    if self._verbose:
+                        print "Moving", local, "to", out_name
+                    os.rename(local, out_name)
                 if self._max_bytes >= 0 and downloaded_bytes > self._max_bytes:
                     break
                 file_counter += 1
@@ -152,6 +155,7 @@ def main():
     parser.add_argument("-k", "--aws-key", help="AWS Key", default=None)
     parser.add_argument("-x", "--max-bytes", help="Stop after fetching this many bytes.", type=int, default=-1)
     parser.add_argument("-s", "--aws-secret-key", help="AWS Secret Key", default=None)
+    parser.add_argument("-M", "--skip-move", help="Do not partition files into output dirs", action="store_true")
     parser.add_argument("-v", "--verbose", help="Print verbose output", action="store_true")
     args = parser.parse_args()
 
