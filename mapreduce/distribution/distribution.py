@@ -5,7 +5,10 @@ def map(k, d, v, cx):
     parsed = json.loads(v)
     reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date = d
     info = parsed['info']
-    simple = parsed['simpleMeasurements']
+    simple = parsed.get('simpleMeasurements', None)
+    
+    if not simple:
+        return
 
     os = info['OS']
     version = info['version']
