@@ -7,7 +7,7 @@ def map(k, d, v, cx):
     info = parsed['info']
     simple = parsed.get('simpleMeasurements', None)
     
-    if not simple:
+    if not simple or not info['memsize']:
         return
 
     os = info['OS']
