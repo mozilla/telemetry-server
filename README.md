@@ -75,6 +75,7 @@ It accepts single submissions using the same type of URLs supported by
 to be submitted as part of the URL.
 
 To set up a test server locally:
+
 1. Install node.js (left as an exercise to the reader)
 2. Edit `http/server_config.json`, replacing `log_path` and `stats_log_file` with directories suitable to your machine
 3. Run the server using `cd http; node ./server.js ./server_config.js`
