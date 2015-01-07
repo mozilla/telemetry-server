@@ -14,11 +14,20 @@ import Queue as Q
 import re
 import signal
 import simplejson as json
+import socket
+import struct
 import subprocess
 import sys
 import time
 import traceback
 import uuid
+
+HEKA_SUPPORT = False
+try:
+    import message_pb2 as heka
+    HEKA_SUPPORT = True
+except:
+    pass
 
 from collections import defaultdict
 from datetime import date, datetime
@@ -264,6 +273,44 @@ class ReadRawStep(PipeStep):
 
     def setup(self):
         self.expected_dim_count = len(self.schema._dimensions)
+        self.tee_conn = None
+        if HEKA_SUPPORT:
+            try:
+                self.tee_conn = socket.create_connection(("127.0.0.1", 30231))
+                self.log("Successfully connected to heka socket")
+            except Exception as e:
+                self.log("Error setting up heka socket: {}".format(e))
+                pass
+        else:
+            self.log("No heka support - failed to import heka protobuf")
+
+    def tee(self, r):
+        if self.tee_conn is not None:
+            try:
+                path_bits = r.path.split("/")
+                message = heka.Message()
+                message.timestamp = r.timestamp * 1000000
+                message.logger = "telemetry_raw"
+                message.uuid = path_bits[0]
+                message.payload = fileutil.to_unicode(r.data)
+                ip_field = message.fields.add()
+                ip_field.name = "remote_addr"
+                ip_field.value_string.append(r.ip)
+                ip_field.representation = "ipv4"
+
+                message_str = message.SerializeToString()
+
+                header = heka.Header()
+                header.message_length = len(message_str)
+
+                header_str = header.SerializeToString()
+
+                self.tee_conn.send(struct.pack("<BB", 0x1e, len(header_str)))
+                self.tee_conn.send(header_str)
+                self.tee_conn.send(struct.pack("<B", 0x1f))
+                self.tee_conn.send(message_str)
+            except Exception as e:
+                self.log("Error sending to heka: {}".format(e))
 
     def handle(self, raw_file):
         self.log("Reading " + raw_file)
@@ -298,6 +345,12 @@ class ReadRawStep(PipeStep):
                             bytes_uncompressed=current_bytes_uncompressed,
                             bad_records=1, bad_record_type="empty_data")
                     continue
+
+                # Send this record along.
+                try:
+                    self.tee(unpacked)
+                except Exception as e:
+                    self.log("Error teeing record")
 
                 submission_date = ts_to_yyyymmdd(unpacked.timestamp)
                 path = unicode(unpacked.path, errors="replace")
