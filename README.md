@@ -74,6 +74,25 @@ It accepts single submissions using the same type of URLs supported by
 [Bagheera][7], and expects (but doesn't require) the [partition information][9]
 to be submitted as part of the URL.
 
+To set up a test server locally:
+1. Install node.js (left as an exercise to the reader)
+2. Edit `http/server_config.json`, replacing `log_path` and `stats_log_file` with directories suitable to your machine
+3. Run the server using `cd http; node ./server.js ./server_config.js`
+4. Send some test data to the server. Using curl: `curl -X POST http://127.0.0.1:8080/submit/telemetry/foo/bar/baz -d '{"test": 1}'`
+
+Stop the server, and check that there is a `telemetry.log.<something>.finished` file in the directory you specified in step 2 above.
+
+You can examine the resulting file in python (from the root of the repo):
+```python
+import telemetry.util.files as fu
+for r in fu.unpack('/path/to/telemetry.log.<something>.finished'):
+    print "URL Path:", r.path
+    print "JSON Payload:", r.data
+    print "Submission Timestamp:", r.timestamp
+    print "Submission IP:", r.ip
+    print "Error (if any):", r.error
+```
+
 `telemetry/convert.py`
 ------------
 Contains the `Converter` class, which is used to convert a JSON payload from
