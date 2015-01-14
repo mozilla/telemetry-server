@@ -46,6 +46,9 @@
      {% if current_user.is_authenticated() %}
       <ul class="nav navbar-nav">
        <li {% block home_active %} {% endblock %}><a href="/">Home</a></li>
+       <li {% block cluster_active %} {% endblock %} >
+        <a href="{{ url_for('cluster_get_params') }}">Launch a Spark Cluster</a>
+       </li>
        <li {% block worker_active %} {% endblock %} >
         <a href="{{ url_for('get_worker_params') }}">Launch a Worker</a>
        </li>
