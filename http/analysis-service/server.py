@@ -915,14 +915,14 @@ def cluster_spawn():
 
     # Associate a few tags
     emr.add_tags(jobflow_id, {
-        "Owner":            current_user.email,
-        "Name":             request.form['name'],
-        "Application":      app.config['INSTANCE_APP_TAG']
+        "Owner": current_user.email,
+        "Name": request.form['name'],
+        "Application": app.config['INSTANCE_APP_TAG']
     })
 
     # Send an email to the user who launched it
     params = {
-        'monitoring_url':   abs_url_for('cluster_monitor', jobflow_id = jobflow_id)
+        'monitoring_url': abs_url_for('cluster_monitor', jobflow_id = jobflow_id)
     }
     ses.send_email(
         source = app.config['EMAIL_SOURCE'],
@@ -939,7 +939,7 @@ def cluster_spawn():
 def cluster_monitor(jobflow_id):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
-        return  login_manager.unauthorized()
+        return login_manager.unauthorized()
 
     try:
         jobflow = emr.describe_jobflow(jobflow_id)
@@ -950,9 +950,9 @@ def cluster_monitor(jobflow_id):
     return render_template(
         'cluster/monitor.html',
         jobflow_id = jobflow_id,
-        instance_state  = jobflow.state,
-        public_dns      = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
-        terminate_url   = abs_url_for('cluster_kill', jobflow_id = jobflow_id)
+        instance_state = jobflow.state,
+        public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
+        terminate_url = abs_url_for('cluster_kill', jobflow_id = jobflow_id)
     )
 
 @app.route("/cluster/kill/<jobflow_id>", methods=["GET"])
@@ -960,7 +960,7 @@ def cluster_monitor(jobflow_id):
 def cluster_kill(jobflow_id):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
-        return  login_manager.unauthorized()
+        return login_manager.unauthorized()
 
     try:
         jobflow = emr.describe_jobflow(jobflow_id)
@@ -973,9 +973,9 @@ def cluster_kill(jobflow_id):
     # Alright then, let's report status
     return render_template(
         'cluster/kill.html',
-        jobflow_id  = jobflow_id,
-        jobflow_state  = jobflow.state,
-        public_dns      = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
+        jobflow_id = jobflow_id,
+        jobflow_state = jobflow.state,
+        public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
     )
 
 @app.route("/status", methods=["GET"])
