@@ -337,6 +337,9 @@ def job_to_form(job):
         form['schedule-frequency'] = 'daily'
     return form
 
+def validate_public_key(pubkey):
+    return pubkey.startswith("ssh-rsa AAAAB3") or pubkey.startswith("ssh-dss AAAAB3")
+
 @app.before_first_request
 def initialize_jobs():
     # We want to make sure that the server starts off with a full set
@@ -541,6 +544,13 @@ def validate_job_form(request, is_update=True, old_job=None):
 
     return job, job_meta, errors
 
+def get_tag_value(tags, key):
+    for i in range(len(tags)):
+        tag = tags[i]
+        if key == tag.key:
+            return tag.value
+    return None
+
 @app.route("/schedule/new", methods=["POST"])
 @login_required
 def create_scheduled_job():
@@ -732,7 +742,7 @@ def spawn_worker_instance():
     # Bug 961200: Check that a proper OpenSSH public key was uploaded.
     # It should start with "ssh-rsa AAAAB3"
     pubkey = request.files['public-ssh-key'].read()
-    if not pubkey.startswith("ssh-rsa AAAAB3") and not pubkey.startswith("ssh-dss AAAAB3"):
+    if not validate_public_key(pubkey):
         errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
 
     if errors:
@@ -796,7 +806,7 @@ def spawn_worker_instance():
 def monitor(instance_id):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
-        return  login_manager.unauthorized()
+        return login_manager.unauthorized()
 
     try:
         # Fetch the actual instance
@@ -873,8 +883,12 @@ def cluster_spawn():
         if val is None or val.strip() == '':
             errors[f] = "This field is required"
 
-    if not re.match("\d+", request.form["n-workers"]):
-        errors["n-workers"] = "This field should be a number"
+    try:
+        n_workers = int(request.form["n-workers"])
+        if n_workers <= 0:
+            raise Exception
+    except:
+        errors["n-workers"] = "This field should be a positive number"
 
     # Check required file
     if not request.files['public-ssh-key']:
@@ -883,14 +897,13 @@ def cluster_spawn():
     # Bug 961200: Check that a proper OpenSSH public key was uploaded.
     # It should start with "ssh-rsa AAAAB3"
     pubkey = request.files['public-ssh-key'].read()
-    if not pubkey.startswith("ssh-rsa AAAAB3") and not pubkey.startswith("ssh-dss AAAAB3"):
+    if not validate_public_key(pubkey):
         errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
 
     if errors:
         return cluster_get_params(errors, request.form)
 
     # Create EMR cluster
-    n_workers = int(request.form["n-workers"])
     n_instances = n_workers if n_workers == 1 else n_workers + 1
 
     install_spark_bootstrap = BootstrapAction('Install Spark',
@@ -943,7 +956,11 @@ def cluster_monitor(jobflow_id):
 
     try:
         jobflow = emr.describe_jobflow(jobflow_id)
+        cluster = emr.describe_cluster(jobflow_id)
     except:
+        return "No such cluster: {}".format(jobflow_id), 404
+
+    if get_tag_value(cluster.tags, "Owner") != current_user.email:
         return "No such cluster: {}".format(jobflow_id), 404
 
     # Alright then, let's report status
@@ -964,7 +981,11 @@ def cluster_kill(jobflow_id):
 
     try:
         jobflow = emr.describe_jobflow(jobflow_id)
+        cluster = emr.describe_cluster(jobflow_id)
     except:
+        return "No such cluster: {}".format(jobflow_id), 404
+
+    if get_tag_value(cluster.tags, "Owner") != current_user.email:
         return "No such cluster: {}".format(jobflow_id), 404
 
     # Terminate cluster

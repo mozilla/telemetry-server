@@ -8,8 +8,8 @@ INSTANCE_TYPE      = 'c3.4xlarge'
 # EMR configuration
 # Master and slave instance types should be the same as the telemetry
 # setup bootstrap action depends on it to autotune the cluster.
-MASTER_INSTANCE_TYPE = 'c3.4xlarge'
-SLAVE_INSTANCE_TYPE = 'c3.4xlarge'
+MASTER_INSTANCE_TYPE = INSTANCE_TYPE
+SLAVE_INSTANCE_TYPE = INSTANCE_TYPE
 SPARK_VERSION = '1.1.1.e'
 AMI_VERSION = '3.3.1'
 
