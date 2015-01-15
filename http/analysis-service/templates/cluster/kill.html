@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block cluster_active %} class="active" {% endblock %}
+
+{% block title %}
+ <h1>Your cluster is now dying, and will soon be dead.</h1>
+{% endblock %}
+
+{% block content %}
+<p class="lead">We've requested that your cluster ({{ jobflow_id }}) be killed.</p>
+
+<div class="row">
+ <div class="col-md-2"><strong>ID:</strong></div>
+ <div class="col-md-10">{{ jobflow_id }}</div>
+</div>
+<div class="row">
+ <div class="col-md-2"><strong>State:</strong></div>
+ <div class="col-md-10">{{ jobflow_state }}</div>
+</div>
+<br/>
+{% endblock %}
+

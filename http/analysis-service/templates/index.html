@@ -2,9 +2,21 @@
 {% block home_active %} class="active" {% endblock %}
 {% block content %}
 <div class="row">
- <div class="col-md-6">
+ <div class="col-md-4">
+  <h2>Launch a Spark Cluster</h2>
+  <p>Launch a Spark cluster in the cloud and use it for custom data analysis.
+  The cluster will be available for 24 hours, then it will be automatically
+  terminated.</p>
+  <p class="lead">
+   <a href="{{ url_for('cluster_get_params') }}">
+    <img width="48" src="{{ url_for('static', filename='cluster.png') }}" />
+    Launch an ad-hoc Spark cluster
+   </a>
+  </p>
+ </div>
+ <div class="col-md-4">
   <h2>Launch a Worker</h2>
-  <p>Launch a server in the cloud and use it for custom data analysis.
+  <p>Launch a server in the cloud and use it for custom map-reduce data analysis.
   The machine will be available for 24 hours, then it will be automatically
   terminated.</p>
   <p class="lead">
@@ -14,7 +26,7 @@
    </a>
   </p>
  </div>
- <div class="col-md-6">
+ <div class="col-md-4">
    <h2>Schedule a Job</h2>
    <p>Run a telemetry analysis on a scheduled basis. The output of the analysis
    will be published in Amazon S3.</p>
