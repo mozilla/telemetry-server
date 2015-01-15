@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block head %}
+{{ super() }}
+{% if not public_dns %}
+<meta http-equiv="refresh" content="5" />
+{% endif %}
+{% endblock %}
+
+{% block cluster_active %} class="active" {% endblock %}
+
+{% block title %}
+<h1>Cluster Monitoring</h1>
+{% endblock %}
+
+{% block content %}
+<p class="lead">Summary:</p>
+<div class="row">
+  <div class="col-md-2"><strong>ID:</strong></div>
+  <div class="col-md-10">{{ jobflow_id }}</div>
+</div>
+<div class="row">
+  <div class="col-md-2"><strong>State:</strong></div>
+  <div class="col-md-10">{{ instance_state }}</div>
+</div>
+<div class="row">
+  <div class="col-md-2"><strong>Public DNS:</strong></div>
+  <div class="col-md-10">
+    {% if public_dns and (instance_state == "WAITING" or instance_state == "RUNNING") %}
+    {{ public_dns }}
+    {% else %}
+    Please wait, instance details will appear when the machine is ready.
+    {% endif %}
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-2"><strong>Terminate it here:</strong></div>
+  <div class="col-md-10"><a href="{{ terminate_url }}">{{ terminate_url }}</a></div>
+</div>
+<div>
+  <h3>Your cluster will be killed in 24 hours! Be sure to save any work!</h3>
+</div>
+<br>
+<p class="lead">Connecting:</p>
+{% if instance_state == "WAITING" or instance_state == "RUNNING" %}
+<p>
+  The default username is <code>hadoop</code>, so you can tunnel your IPython
+  notebook using a command like:
+</p>
+<p>
+  <code>ssh -i my-private-key -L 8888:localhost:8888 hadoop@{{ public_dns }}</code>
+</p>
+<p>
+  You can save some typing by adding defaults to your <code>~/.ssh/config</code> file:
+</p>
+<pre>Host *.compute.amazonaws.com
+  User hadoop
+  LocalForward 8888 localhost:8888
+  Identityfile ~/.ssh/{my-private-key}
+</pre>
+<p>
+  Now you can launch your <a href="http://localhost:8888" target="_blank">
+    IPython notebook</a> from Firefox.
+</p>
+{% else %}
+<p>
+  Your cluster is still launching. Please wait and the connection
+  details will appear here when it is ready.
+</p>
+{% endif %}
+
+<p class="lead">Further Reading:</p>
+<p>
+  For a guide of how to use this shiny new cluster, check out
+  <a href="http://www.robertovitillo.com">
+    :rvitillo's blog post on the topic</a>.
+</p>
+
+<h3> Good luck :)</h3>
+{% endblock %}
+
