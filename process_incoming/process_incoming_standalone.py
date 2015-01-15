@@ -290,7 +290,7 @@ class ReadRawStep(PipeStep):
                 path_bits = r.path.split("/")
                 message = heka.Message()
                 message.timestamp = r.timestamp * 1000000
-                message.logger = "telemetry_raw"
+                message.logger = "telemetry"
                 message.uuid = path_bits[0]
                 message.payload = fileutil.to_unicode(r.data)
                 ip_field = message.fields.add()
