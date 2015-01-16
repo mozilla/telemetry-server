@@ -20,8 +20,8 @@
   <table>
    {% set username = current_user.email.split('@')[0] %}
 
-   {% call macros.make_input('name', 'Server Name', 'text', username + '-telemetry-analysis') %}
-    The server name identifies this machine within AWS. Use something short
+   {% call macros.make_input('name', 'Cluster Name', 'text', username + '-telemetry-analysis') %}
+    The cluster name identifies this cluster within AWS. Use something short
     like &quot;{{ username }}-charset-usage&quot;
    {% endcall %}
 
