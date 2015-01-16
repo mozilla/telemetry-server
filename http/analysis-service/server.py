@@ -885,10 +885,10 @@ def cluster_spawn():
 
     try:
         n_workers = int(request.form["n-workers"])
-        if n_workers <= 0:
+        if n_workers <= 0 or n_workers > 20:
             raise Exception
     except:
-        errors["n-workers"] = "This field should be a positive number"
+        errors["n-workers"] = "This field should be a positive number within [1, 20]."
 
     # Check required file
     if not request.files['public-ssh-key']:
