@@ -2,7 +2,7 @@
 
 {% block head %}
 {{ super() }}
-{% if not public_dns %}
+{% if not (instance_state == "WAITING" or instance_state == "RUNNING") %}
 <meta http-equiv="refresh" content="5" />
 {% endif %}
 {% endblock %}
@@ -24,12 +24,12 @@
   <div class="col-md-10">{{ instance_state }}</div>
 </div>
 <div class="row">
-  <div class="col-md-2"><strong>Public DNS:</strong></div>
+  <div class="col-md-2"><strong>Master public DNS:</strong></div>
   <div class="col-md-10">
     {% if public_dns and (instance_state == "WAITING" or instance_state == "RUNNING") %}
     {{ public_dns }}
     {% else %}
-    Please wait, instance details will appear when the machine is ready.
+    Please wait, instance details will appear when the master is ready.
     {% endif %}
   </div>
 </div>
