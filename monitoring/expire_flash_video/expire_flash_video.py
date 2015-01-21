@@ -114,7 +114,6 @@ def main():
                     continue
                 total_count += 1
                 if not should_expire(k.name, args.expiry_date, logger):
-                    #logger.debug("File is too new to expire: {} is after {}".format(args.expiry_date, k.name))
                     continue
                 exp_count += 1
                 total_bytes += k.size
