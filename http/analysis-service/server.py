@@ -5,6 +5,7 @@ from flask import Flask, render_template, g, request, redirect, url_for
 from flask.ext.login import LoginManager, login_required, current_user
 from flask.ext.browserid import BrowserID
 from user import User, AnonymousUser
+from boto.emr import connect_to_region as emr_connect, BootstrapAction
 from boto.ec2 import connect_to_region as ec2_connect
 from boto.ses import connect_to_region as ses_connect
 from boto.s3 import connect_to_region as s3_connect
@@ -18,12 +19,14 @@ from subprocess import check_output, CalledProcessError
 from tempfile import mkstemp
 import crontab
 import json
+import re
 
 # Create flask app
 app = Flask(__name__)
 app.config.from_object('config')
 
 # Connect to AWS
+emr  = emr_connect(app.config['AWS_REGION'])
 ec2 = ec2_connect(app.config['AWS_REGION'])
 ses = ses_connect('us-east-1') # only supported region!
 s3  = s3_connect(app.config['AWS_REGION'])
@@ -334,6 +337,9 @@ def job_to_form(job):
         form['schedule-frequency'] = 'daily'
     return form
 
+def validate_public_key(pubkey):
+    return pubkey.startswith("ssh-rsa AAAAB3") or pubkey.startswith("ssh-dss AAAAB3")
+
 @app.before_first_request
 def initialize_jobs():
     # We want to make sure that the server starts off with a full set
@@ -538,6 +544,13 @@ def validate_job_form(request, is_update=True, old_job=None):
 
     return job, job_meta, errors
 
+def get_tag_value(tags, key):
+    for i in range(len(tags)):
+        tag = tags[i]
+        if key == tag.key:
+            return tag.value
+    return None
+
 @app.route("/schedule/new", methods=["POST"])
 @login_required
 def create_scheduled_job():
@@ -729,7 +742,7 @@ def spawn_worker_instance():
     # Bug 961200: Check that a proper OpenSSH public key was uploaded.
     # It should start with "ssh-rsa AAAAB3"
     pubkey = request.files['public-ssh-key'].read()
-    if not pubkey.startswith("ssh-rsa AAAAB3") and not pubkey.startswith("ssh-dss AAAAB3"):
+    if not validate_public_key(pubkey):
         errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
 
     if errors:
@@ -793,7 +806,7 @@ def spawn_worker_instance():
 def monitor(instance_id):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
-        return  login_manager.unauthorized()
+        return login_manager.unauthorized()
 
     try:
         # Fetch the actual instance
@@ -844,6 +857,146 @@ def kill(instance_id):
         instance_state  = instance.state,
         public_dns      = instance.public_dns_name,
         monitoring_url  = abs_url_for('monitor', instance_id = instance.id)
+    )
+
+@app.route("/cluster", methods=["GET"])
+@login_required
+def cluster_get_params(errors=None, values=None):
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+    return render_template('cluster/cluster.html', errors=errors, values=values,
+        token=str(uuid4()))
+
+@app.route("/cluster/new", methods=["POST"])
+@login_required
+def cluster_spawn():
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+
+    errors = {}
+
+    # Check required fields
+    for f in ['name', 'token', 'n-workers']:
+        val = request.form[f]
+        if val is None or val.strip() == '':
+            errors[f] = "This field is required"
+
+    try:
+        n_workers = int(request.form["n-workers"])
+        if n_workers <= 0 or n_workers > 20:
+            raise Exception
+    except:
+        errors["n-workers"] = "This field should be a positive number within [1, 20]."
+
+    # Check required file
+    if not request.files['public-ssh-key']:
+        errors['code-tarball'] = "Public key file is required"
+
+    # Bug 961200: Check that a proper OpenSSH public key was uploaded.
+    # It should start with "ssh-rsa AAAAB3"
+    pubkey = request.files['public-ssh-key'].read()
+    if not validate_public_key(pubkey):
+        errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
+
+    if errors:
+        return cluster_get_params(errors, request.form)
+
+    # Create EMR cluster
+    n_instances = n_workers if n_workers == 1 else n_workers + 1
+
+    install_spark_bootstrap = BootstrapAction('Install Spark',
+                                              's3://support.elasticmapreduce/spark/install-spark',
+                                              ['-v', app.config['SPARK_VERSION']])
+
+    setup_telemetry_bootstrap = BootstrapAction('Setup Telemetry',
+                                                's3://telemetry-spark-emr/telemetry.sh',
+                                                ['--public-key', pubkey])
+
+    jobflow_id = emr.run_jobflow(name = request.form['token'],
+                              ec2_keyname = 'mozilla_vitillo',
+                              master_instance_type = app.config['MASTER_INSTANCE_TYPE'],
+                              slave_instance_type = app.config['SLAVE_INSTANCE_TYPE'],
+                              num_instances = n_instances,
+                              ami_version = app.config['AMI_VERSION'],
+                              service_role = 'EMR_DefaultRole',
+                              job_flow_role = 'telemetry-spark-emr',
+                              visible_to_all_users = True,
+                              keep_alive = True,
+                              bootstrap_actions = [install_spark_bootstrap, setup_telemetry_bootstrap])
+
+    # Associate a few tags
+    emr.add_tags(jobflow_id, {
+        "Owner": current_user.email,
+        "Name": request.form['name'],
+        "Application": app.config['INSTANCE_APP_TAG']
+    })
+
+    # Send an email to the user who launched it
+    params = {
+        'monitoring_url': abs_url_for('cluster_monitor', jobflow_id = jobflow_id)
+    }
+    ses.send_email(
+        source = app.config['EMAIL_SOURCE'],
+        subject = ("telemetry-analysis cluster: %s (%s) launched" % (request.form['name'], jobflow_id)),
+        format = 'html',
+        body = render_template('cluster/email.html', **params),
+        to_addresses = [current_user.email]
+    )
+
+    return redirect(url_for('cluster_monitor', jobflow_id = jobflow_id))
+
+@app.route("/cluster/monitor/<jobflow_id>", methods=["GET"])
+@login_required
+def cluster_monitor(jobflow_id):
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+
+    try:
+        jobflow = emr.describe_jobflow(jobflow_id)
+        cluster = emr.describe_cluster(jobflow_id)
+    except:
+        return "No such cluster: {}".format(jobflow_id), 404
+
+    if get_tag_value(cluster.tags, "Owner") != current_user.email:
+        return "No such cluster: {}".format(jobflow_id), 404
+
+    # Alright then, let's report status
+    return render_template(
+        'cluster/monitor.html',
+        jobflow_id = jobflow_id,
+        instance_state = jobflow.state,
+        public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
+        terminate_url = abs_url_for('cluster_kill', jobflow_id = jobflow_id)
+    )
+
+@app.route("/cluster/kill/<jobflow_id>", methods=["GET"])
+@login_required
+def cluster_kill(jobflow_id):
+    # Check that the user logged in is also authorized to do this
+    if not current_user.is_authorized():
+        return login_manager.unauthorized()
+
+    try:
+        jobflow = emr.describe_jobflow(jobflow_id)
+        cluster = emr.describe_cluster(jobflow_id)
+    except:
+        return "No such cluster: {}".format(jobflow_id), 404
+
+    if get_tag_value(cluster.tags, "Owner") != current_user.email:
+        return "No such cluster: {}".format(jobflow_id), 404
+
+    # Terminate cluster
+    emr.terminate_jobflow(jobflow_id)
+
+    # Alright then, let's report status
+    return render_template(
+        'cluster/kill.html',
+        jobflow_id = jobflow_id,
+        jobflow_state = jobflow.state,
+        public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
     )
 
 @app.route("/status", methods=["GET"])
