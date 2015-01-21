@@ -263,11 +263,12 @@ class PipeStep(object):
 class ReadRawStep(PipeStep):
     UUID_ONLY_PATH = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
     def __init__(self, num, name, raw_files, completed_files, log_file,
-            stats_file, schema, converter, storage, bad_filename):
+            stats_file, schema, converter, storage, bad_filename, tee_host):
         self.schema = schema
         self.converter = converter
         self.storage = storage
         self.bad_filename = bad_filename
+        self.tee_host = tee_host
         PipeStep.__init__(self, num, name, raw_files, completed_files,
                 log_file, stats_file)
 
@@ -276,7 +277,7 @@ class ReadRawStep(PipeStep):
         self.tee_conn = None
         if HEKA_SUPPORT:
             try:
-                self.tee_conn = socket.create_connection(("127.0.0.1", 30231))
+                self.tee_conn = socket.create_connection((self.tee_host, 9001))
                 self.log("Successfully connected to heka socket")
             except Exception as e:
                 self.log("Error setting up heka socket: {}".format(e))
@@ -628,6 +629,9 @@ def main():
             help="Location of the desired telemetry schema")
     parser.add_argument("-m", "--max-output-size", metavar="N", type=int,
             default=500000000, help="Rotate output files after N bytes")
+    parser.add_argument("--tee-host",
+            default="127.0.0.1",
+            help="Data Pipeline host to tee data to")
     parser.add_argument("-D", "--dry-run", action="store_true",
             help="Don't modify remote files")
     parser.add_argument("-n", "--no-clean", action="store_true",
@@ -795,7 +799,7 @@ def main():
             # Begin reading raw input
             raw_readers = start_workers(logger, num_cpus, "Reader", ReadRawStep,
                     raw_files, (completed_files, args.log_file, args.stats_file,
-                    schema, converter, storage, args.bad_data_log))
+                    schema, converter, storage, args.bad_data_log, args.tee_host))
 
             # Tell readers to stop when they get to the end:
             finish_queue(raw_files, num_cpus)
