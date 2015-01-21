@@ -43,9 +43,9 @@ def get_args():
 
 def should_run(dry_run, logger, message):
     if dry_run:
-        logger.info("Dry run: Not really " + message)
+        logger.debug("Dry run: Not really " + message)
     else:
-        logger.info(message)
+        logger.debug(message)
     # dry_run == False -> should_run == True
     # and vice versa
     return not dry_run
@@ -74,7 +74,7 @@ def main():
     if args.verbose:
         logger.setLevel(logging.DEBUG)
     else:
-        logger.setLevel(logging.WARNING)
+        logger.setLevel(logging.INFO)
 
     logger.info("Expiring `flash_video` data older than {}.".format(args.expiry_date))
     logger.debug("Connecting to S3...")
@@ -119,15 +119,14 @@ def main():
                 total_bytes += k.size
                 last_key = k.name
                 if total_count % 100 == 0:
-                    logger.info("Expired {} of {} total files in {}s. Last key was {}".format(
+                    logger.debug("Expired {} of {} total files in {}s. Last key was {}".format(
                         exp_count, total_count, timer.delta_sec(start_time), last_key))
-                logger.debug("Deleting {} from S3 bucket".format(k.name))
+                logger.info("Deleting {} from S3 bucket".format(k.name))
                 sql_update = "DELETE FROM published_files WHERE file_name = '{0}';".format(k.name)
                 if should_run(args.dry_run, logger, "Deleting from S3 bucket"):
                     k.delete()
 
                 if should_run(args.dry_run, logger, "Notifying coordinator"):
-                    logger.debug("Actually notifying coordinator")
                     db_cursor.execute(sql_update)
                     db_conn.commit()
                     logger.debug("Coordinator notified")
@@ -135,7 +134,7 @@ def main():
         except socket.error, e:
             logger.error("Error listing keys: {}".format(e))
             logger.error(traceback.format_exc())
-            logger.info("Continuing from last seen key: {}".format(last_key))
+            logger.debug("Continuing from last seen key: {}".format(last_key))
     if db_conn is not None:
         db_conn.close()
     total_mb = round(total_bytes / 1024.0 / 1024.0, 2)
