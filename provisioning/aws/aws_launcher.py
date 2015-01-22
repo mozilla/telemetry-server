@@ -97,7 +97,7 @@ class Launcher(object):
 
     def install_python_dependencies(self, instance):
         print "Installing python dependencies"
-        sudo('pip install --upgrade simplejson boto fabric awscli')
+        sudo('pip install --upgrade simplejson boto fabric awscli protobuf')
 
     def install_misc_dependencies(self, instance):
         pass

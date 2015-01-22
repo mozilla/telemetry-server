@@ -165,6 +165,7 @@ class TelemetryServerLauncher(Launcher):
              "-o {1}/processed " \
              "-t telemetry/telemetry_schema.json " \
              "-l /var/log/telemetry/telemetry-incoming.log " \
+             "--tee-host ec2-54-149-157-82.us-west-2.compute.amazonaws.com " \
              "-s /var/log/telemetry/telemetry-incoming-stats.log >> " \
              "/var/log/telemetry/telemetry-incoming.out 2>&1\" >> {0}".format(
                 c_file, base_dir))
