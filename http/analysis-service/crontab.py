@@ -1,4 +1,5 @@
 import os
+import os.path
 from subprocess import check_output, CalledProcessError
 from tempfile import mkstemp
 
@@ -7,8 +8,7 @@ CRON_DISCLAIMER = """#### DO NOT EDIT THIS SECTION BY HAND ####
 #### YOUR CHANGES WILL BE OVERWRITTEN ####"""
 CRON_END      = "#--END TELEMETRY SCHEDULED JOBS--"
 CRONTAB_CMD = "/usr/bin/crontab"
-# Yuck - it's very ugly to have the path specified here :(
-CRON_RUNNER_LOCATION = "/home/ubuntu/telemetry_analysis/jobs/run.sh"
+CRON_RUNNER_LOCATION = os.path.dirname(os.path.realpath(__file__)) + "/jobs/run.sh"
 
 def get_existing_crontab():
     # Note: annoyingly, OSX's crontab exits non-zero if there

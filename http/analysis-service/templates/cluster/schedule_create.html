@@ -1,0 +1,20 @@
+{% extends "cluster/schedule.html" %}
+{% block content %}
+<p class="lead">Success!</p>
+
+<p>Your code has been uploaded to <code>{{ code_s3path }}</code>.</p>
+<p>Any output files found in relative to where the notebook will be execute will
+  be published at <code>{{ data_s3path }}</code>. The output files will overwrite
+  anything already in that location in S3.</p>
+<p>The job will be run <strong>{{ job_frequency }}</strong> at
+  <strong>{{ job_time }}{{ job_dow }}{{ job_dom }}</strong>.</p>
+<p>The job will be allowed to run for a max of
+  <strong>{{ job_timeout }}</strong> minutes, after which it will be killed.
+
+<p>
+  Cron spec will be <code>{{ cron_spec }}</code>
+<p>
+<p>
+  <a class="btn btn btn-success" href="{{ url_for('cluster_schedule_job') }}">Go back</a>
+</p>
+{% endblock %}
