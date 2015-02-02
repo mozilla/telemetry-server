@@ -570,8 +570,8 @@ def _validate_job_form(is_cluster, request, is_update=True, old_job=None):
         except:
             errors["n-workers"] = "This field should be a positive number within [1, 20]."
     else:
-        "commandline": request.form["commandline"]
-        "output_dir": request.form["output-dir"]
+        job["commandline"] = request.form["commandline"]
+        job["output_dir"] = request.form["output-dir"]
 
     if old_job:
         job['id'] = old_job['id']
