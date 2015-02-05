@@ -8,10 +8,10 @@ if [ ! -f "$JOB_CONFIG" ]; then
     exit 1
 fi
 
-if [ $(jq 'has("n-workers")' < $JOB_CONFIG) = true ]; then # Spark cluster
+if [ $(jq 'has("num_workers")' < $JOB_CONFIG) = true ]; then # Spark cluster
     AMI_VERSION=$(jq -r '.ami_version' < "$JOB_CONFIG")
     SPARK_VERSION=$(jq -r '.spark_version' < "$JOB_CONFIG")
-    N_WORKERS=$(jq -r '."n-workers"' < "$JOB_CONFIG")
+    N_WORKERS=$(jq -r '."num_workers"' < "$JOB_CONFIG")
     MASTER_TYPE=$(jq -r '.master_instance_type' < "$JOB_CONFIG")
     SLAVE_TYPE=$(jq -r '.slave_instance_type' < "$JOB_CONFIG")
     CLUSTER_NAME=$(jq -r '.cluster_name' < "$JOB_CONFIG")

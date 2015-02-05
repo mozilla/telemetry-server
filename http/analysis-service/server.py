@@ -75,7 +75,7 @@ def initialize_db(db):
         Column("code_uri",              String(300), nullable=False),
         Column("commandline",           String,      nullable=False),
         Column("data_bucket",           String(200), nullable=False),
-        Column("n-workers",             Integer,     nullable=True),
+        Column("num_workers",           Integer,     nullable=True),
         Column("output_dir",            String(100), nullable=False),
         Column("output_visibility",     String(10),  nullable=False),
         Column("schedule_minute",       String(20),  nullable=False),
@@ -86,6 +86,27 @@ def initialize_db(db):
     )
     # Create the table
     db['metadata'].create_all(tables=[scheduled_jobs])
+    # TODO: The above does not create the serial column properly in PostgreSQL.
+    #       Use this SQL:
+    # CREATE TABLE scheduled_jobs (
+    #     id                    SERIAL PRIMARY KEY,
+    #     owner                 VARCHAR(50) NOT NULL,
+    #     name                  VARCHAR(100) UNIQUE NOT NULL,
+    #     timeout_minutes       INT NOT NULL,
+    #     code_uri              VARCHAR(300) NOT NULL,
+    #     commandline           VARCHAR NOT NULL,
+    #     data_bucket           VARCHAR(200) NOT NULL,
+    #     output_dir            VARCHAR(100) NOT NULL,
+    #     output_visibility     VARCHAR(10) NOT NULL,
+    #     schedule_minute       VARCHAR(20) NOT NULL,
+    #     schedule_hour         VARCHAR(20) NOT NULL,
+    #     schedule_day_of_month VARCHAR(20) NOT NULL,
+    #     schedule_month        VARCHAR(20) NOT NULL,
+    #     schedule_day_of_week  VARCHAR(20) NOT NULL
+    # );
+    # -- Make job id start from 1000
+    # ALTER SEQUENCE scheduled_jobs_id_seq RESTART WITH 1000;
+    # CREATE INDEX scheduled_jobs_owner_idx on scheduled_jobs(owner);
 
 def get_db():
     """Opens a new database connection if there is none yet for the
@@ -114,9 +135,9 @@ def get_jobs(owner=None, is_cluster=None):
     if is_cluster is None:
         condition = True
     elif is_cluster:
-        condition = (table.c.code_uri.endswith(".ipynb"))
+        condition = (table.c.num_workers is not None)
     else:
-        condition = (table.c.code_uri.endswith(".tar.gz"))
+        condition = (table.c.num_workers is None)
 
     if owner is None:
         # Get all jobs
@@ -192,7 +213,7 @@ def build_config(job):
     if job["code_uri"].endswith(".ipynb"):
         config = {
             "ssl_key_name": "mozilla_vitillo",
-            "n-workers": job['n-workers'],
+            "num_workers": job['num_workers'],
             "master_instance_type": app.config['MASTER_INSTANCE_TYPE'],
             "slave_instance_type": app.config['SLAVE_INSTANCE_TYPE'],
             "spark_version": app.config["SPARK_VERSION"],
@@ -245,9 +266,6 @@ def update_configs(jobs=None):
             jobs.append(j)
 
     for job in jobs:
-        # Should be either:
-        #   telemetry-public-analysis-worker or
-        #   telemetry-private-analysis-worker
         config = build_config(job)
         path = os.path.dirname(os.path.realpath(__file__))
         filename = "{}/jobs/{}.json".format(path, job['id'])
@@ -410,7 +428,7 @@ def _validate_job_form(is_cluster, request, is_update=True, old_job=None):
     job_meta = {}
 
     if is_cluster:
-        fields = ['job-name', 'n-workers', 'schedule-frequency', 'schedule-time-of-day', 'timeout']
+        fields = ['job-name', 'num_workers', 'schedule-frequency', 'schedule-time-of-day', 'timeout']
     else:
         fields = ['job-name', 'commandline', 'output-dir', 'schedule-frequency', 'schedule-time-of-day', 'timeout']
 
@@ -563,12 +581,14 @@ def _validate_job_form(is_cluster, request, is_update=True, old_job=None):
 
     if is_cluster:
         try:
-            n_workers = int(request.form["n-workers"])
+            n_workers = int(request.form["num_workers"])
             if n_workers <= 0 or n_workers > 20:
                 raise Exception
-            job['n-workers'] = n_workers
+            job['num_workers'] = n_workers
         except:
-            errors["n-workers"] = "This field should be a positive number within [1, 20]."
+            errors["num_workers"] = "This field should be a positive number within [1, 20]."
+        job["commandline"] = ""
+        job["output_dir"] = ""
     else:
         job["commandline"] = request.form["commandline"]
         job["output_dir"] = request.form["output-dir"]
@@ -950,17 +970,17 @@ def cluster_spawn():
     errors = {}
 
     # Check required fields
-    for f in ['name', 'token', 'n-workers']:
+    for f in ['name', 'token', 'num_workers']:
         val = request.form[f]
         if val is None or val.strip() == '':
             errors[f] = "This field is required"
 
     try:
-        n_workers = int(request.form["n-workers"])
+        n_workers = int(request.form["num_workers"])
         if n_workers <= 0 or n_workers > 20:
             raise Exception
     except:
-        errors["n-workers"] = "This field should be a positive number within [1, 20]."
+        errors["num_workers"] = "This field should be a positive number within [1, 20]."
 
     # Check required file
     if not request.files['public-ssh-key']:

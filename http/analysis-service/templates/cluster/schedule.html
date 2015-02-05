@@ -66,10 +66,9 @@
     notebook below, but not both at the same time.
     {% endcall %}
 
-    {% call macros.make_input('code', 'Code Tarball', type='file', required=False) %}
-    If desired, upload a new code tarball. If you don't want to change the
-    code, leave this blank. Recommended form:
-    <code>{{ values['job-name'] }}-0.1.tar.gz</code>.
+    {% call macros.make_input('code', 'IPython notebook', type='file', required=False) %}
+    If desired, upload a new IPython notebook. If you don't want to change the
+    notebook, leave this blank.
     {% endcall %}
 
     {% else %}
@@ -86,7 +85,7 @@
 
     {% endif %}
 
-    {% call macros.make_input('n-workers', 'Cluster Size', value='1') %}
+    {% call macros.make_input('num_workers', 'Cluster Size', value='1') %}
     The number of workers for this cluster. Please keep in mind to use resources
     sparingly.
     {% endcall %}
