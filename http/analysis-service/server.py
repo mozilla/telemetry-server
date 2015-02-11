@@ -135,6 +135,7 @@ def get_jobs(owner=None, is_cluster=None):
     if is_cluster is None:
         condition = True
     elif is_cluster:
+        # see http://stackoverflow.com/questions/5602918/postgresql-select-null-values-in-sqlalchemy
         condition = (table.c.num_workers != None)
     else:
         condition = (table.c.num_workers == None)
