@@ -695,7 +695,7 @@ def _edit_scheduled_job(is_cluster, job_id):
         print "Updated job id", job_id
         jobs = []
         for j in get_jobs():
-            jos.append(j)
+            jobs.append(j)
         update_configs(jobs)
         update_crontab(jobs)
 
