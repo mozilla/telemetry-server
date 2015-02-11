@@ -135,9 +135,9 @@ def get_jobs(owner=None, is_cluster=None):
     if is_cluster is None:
         condition = True
     elif is_cluster:
-        condition = (table.c.num_workers is not None)
+        condition = (table.c.num_workers != None)
     else:
-        condition = (table.c.num_workers is None)
+        condition = (table.c.num_workers == None)
 
     if owner is None:
         # Get all jobs
@@ -628,7 +628,7 @@ def _create_scheduled_job(is_cluster):
     if result.inserted_primary_key > 0:
         print "Inserted job id", result.inserted_primary_key
         jobs = []
-        for j in get_jobs(is_cluster=is_cluster):
+        for j in get_jobs():
             jobs.append(j)
         update_configs(jobs)
         update_crontab(jobs)
@@ -694,8 +694,8 @@ def _edit_scheduled_job(is_cluster, job_id):
     if result.rowcount > 0:
         print "Updated job id", job_id
         jobs = []
-        for j in get_jobs(is_cluster=is_cluster):
-            jobs.append(j)
+        for j in get_jobs():
+            jos.append(j)
         update_configs(jobs)
         update_crontab(jobs)
 
