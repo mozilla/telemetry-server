@@ -3,7 +3,7 @@
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 JOB_CONFIG="$DIR/$1.json"
 
-export PATH=/usr/bin/:$PATH
+export PATH=/usr/bin/:/usr/local/bin/:$PATH
 
 if [ ! -f "$JOB_CONFIG" ]; then
     echo "ERROR: missing config file for job $1"
