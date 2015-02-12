@@ -66,7 +66,7 @@
       "Properties": {
         "AvailabilityZones":       { "Fn::GetAZs": "" },
         "LaunchConfigurationName": { "Ref": "WebServerLaunchConfig" },
-        "MinSize":                 "2",
+        "MinSize":                 "3",
         "MaxSize":                 "10",
         "LoadBalancerNames":       [ { "Ref": "LoadBalancer" } ],
         "NotificationConfiguration": {
