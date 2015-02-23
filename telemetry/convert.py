@@ -18,6 +18,7 @@ from histogram_tools import Histogram, DefinitionException
 from telemetry_schema import TelemetrySchema
 import traceback
 import persist
+from infoFieldsMap import envFieldMap, adapterFieldMap, appFieldMap
 from datetime import date
 import time
 try:
@@ -36,6 +37,8 @@ class Converter:
     """A class for converting incoming payloads to a more compact form"""
     VERSION_UNCONVERTED = 1
     VERSION_CONVERTED = 2
+    # the unified FHR/Telemetry ping has a top-level version of 2 and payload version of 4
+    VERSION_UNIFIED = 2
     VERSION_FXOS_1_3 = 3
     GEOIP_COUNTRY_PATH = "/usr/local/var/GeoIP/GeoLite2-Country.mmdb"
 
@@ -146,10 +149,127 @@ class Converter:
         json_dict = json.loads(jsonstr)
         return self.convert_obj(json_dict, date, ip)
 
+    def add_info_fields(self, info, srcSection, rules, dstSuffix=""):
+        for dstField, srcFields in rules.iteritems():
+            dstField += dstSuffix
+            if dstField in info:
+                # Ping already has this field in info!
+                # TODO: Make this throw?
+                dstField = "environment." + dstField
+            # Recurse into the unified ping's structure according to the map
+            val = srcSection
+            for field in srcFields:
+                if field in val:
+                   val = val[field]
+                else:
+                    # this unified ping doesn't report this particular field
+                    val = None
+                    break
+            # Copy the value into ping.info[field name]
+            if val != None:
+                info[dstField] = val
+
+    def convert_saved_session(self, json_dict):
+        # Step 1 of conversion:
+        #   ping.payload.* => ping.* (histograms, info, etc)
+        payload = json_dict["payload"]
+        for field in payload:
+            if field == "info" or field == "ver":
+                # info field needs to be merged, ping.ver has different meaning
+                continue
+            elif field in json_dict:
+                # TODO: Make this throw?
+                json_dict["payload." + str(field)] = payload[field]
+                continue
+            else:
+                json_dict[field] = payload[field]
+
+        # Merge ping.payload.info.* fields to ping.info.*
+        payload_info = payload["info"]
+        for field in payload_info:
+            if field not in json_dict["info"]:
+                json_dict["info"][field] = payload_info[field]
+        # Back up payload.ver
+        json_dict["payload.ver"] = payload["ver"]
+
+        # Get rid of duplicated data in the payload field
+        del json_dict["payload"]
+
+        # Step 2 of conversion:
+        #   Recreate the old-style ping.info section from fields that are
+        #   now in ping.environment
+        envFields = json_dict["environment"]
+        info = json_dict["info"]
+        self.add_info_fields(info, envFields, envFieldMap)
+
+        adapters = None
+        try:
+            adapters = envFields["system"]["gfx"]["adapters"]
+        except KeyError, TypeError:
+            pass
+
+        if type(adapters) == list and len(adapters):
+            self.add_info_fields(info, adapters[0], adapterFieldMap)
+            if len(adapters) > 1:
+                # Copy details of the second GPU
+                self.add_info_fields(info, adapters[1], adapterFieldMap, "2")
+                info["isGPU2Active"] = bool(adapters[1].get("GPUActive"))
+
+        # Fix up clientID
+        json_dict["clientID"] = json_dict.get("clientId")
+
+        # Step 3:
+        #   Add a "ver" field to make it look like a classic ping, and
+        #   delete the "version" field to make the conversion idempotent.
+        #   This ping will then be passed through convert_obj again to
+        #   fix up the histograms.
+        json_dict["original.version"] = json_dict["version"]
+        del json_dict["version"]
+        json_dict["ver"] = Converter.VERSION_UNCONVERTED
+
     def convert_obj(self, json_dict, date, ip=None):
-        info = json_dict.get("info", None)
-        # Check if the payload is already converted:
-        if "ver" in json_dict:
+        if "version" in json_dict:
+            # This is a new unified (FHR+Telemetry) ping
+            if json_dict["version"] != Converter.VERSION_UNIFIED:
+                raise ValueError("Unknown unified ping version: " + str(json_dict["version"]))
+            elif "type" not in json_dict:
+                raise ValueError("Unified ping has no top-level 'type' field")
+            elif "application" not in json_dict:
+                raise ValueError("Unified ping has no top-level 'application' field")
+            elif "payload" not in json_dict:
+                raise ValueError("Unified ping has no top-level 'payload' field")
+
+            # Create a ping.info field and copy select ping.application fields.
+            # This is the minimum required for compatibility with the calling
+            # process_incoming* scripts
+            info = json_dict["info"] = {}
+            self.add_info_fields(info, json_dict["application"], appFieldMap)
+            if json_dict["payload"].get("info"):
+                info["reason"] = json_dict["payload"]["info"].get("reason")
+
+            if json_dict["type"] == "main":
+                # Handle "Main" ping type
+                if "environment" not in json_dict:
+                    raise ValueError("Unified ping with type=main has no 'environment' field")
+
+                if info.get("reason") == "saved-session":
+                    # This is a saved-session ping in the new unified format,
+                    # make it look like a classic saved-session ping
+                    self.convert_saved_session(json_dict)
+                    # call convert again to convert the histograms
+                    return self.convert_obj(json_dict, date, ip)
+                else:
+                    # Most likely a sub-session daily or environment-changed ping, so don't alter it further,
+                    # just let it get written out
+                    pass
+            else:
+                # Some new ping type: activation/upgrade/deletion, or future types.
+                # Don't alter it further
+                pass
+
+        elif "ver" in json_dict:
+            # This looks like a classic ping (from before Telemetry/FHR unification)
+            info = json_dict.get("info", None)
             if json_dict["ver"] == Converter.VERSION_UNCONVERTED:
                 if info is None:
                     raise ValueError("Missing in payload: info")
