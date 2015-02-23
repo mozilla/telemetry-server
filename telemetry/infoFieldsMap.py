@@ -56,10 +56,8 @@ envFieldMap = {
     "winHDDModel": ["system", "hdd", "system", "model"],
     "winHDDRevision": ["system", "hdd", "system", "revision"],
     # environment.addons section
-    # "activeExperiment": ["addons", "activeExperiment", "id"],
-    # "activeExperimentBranch": ["addons", "activeExperiment", "branch"],
-    "activeExperiment": ["addons", "activeExperiment"],
-    "activeExperimentBranch": ["addons", "activeExperimentBranch"],
+    "activeExperiment": ["addons", "activeExperiment", "id"],
+    "activeExperimentBranch": ["addons", "activeExperiment", "branch"],
     "persona": ["addons", "theme", "id"],
 }
 
