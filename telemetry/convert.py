@@ -122,7 +122,6 @@ class Converter:
         return self._histocache[key]
 
     def rewrite_hists(self, revision_url, histograms):
-        print "vdjeric looking up revision url:", str(revision_url), str(len(revision_url))
         histogram_defs = self._cache.get_histograms_for_revision(revision_url)
         if histogram_defs is None:
             raise ValueError("Failed to fetch histograms for URL: %s" % revision_url)
@@ -222,39 +221,40 @@ class Converter:
         json_dict["clientID"] = json_dict.get("clientId")
 
         # Step 3:
-        #   Add a "ver" field to make it look like a classic ping.
-        #   This ping will then be passed through convert_obj again to
-        #   fix up the histograms.
+        #   Add a "ver" field to make it look like a classic ping to
+        #   existing analysis jobs
         json_dict["ver"] = Converter.VERSION_UNIFIED_CONVERTED
+
+    def convert_histograms(self, json_dict):
+        info = json_dict.get("info", None)
+        if info is None:
+            raise ValueError("Missing in payload: info")
+
+        # Convert it and update the version
+        if "revision" not in info:
+            # We need "revision" to correctly convert histograms. If
+            # we don't have histograms in the payload, we don't care
+            # about revision (since we don't need to convert anything)
+            if "histograms" in json_dict:
+                raise ValueError("Missing in payload: info.revision")
+        else:
+            revision = info.get("revision")
+            if "histograms" not in json_dict:
+                raise ValueError("Missing in payload: histograms")
+            try:
+                json_dict["histograms"] = self.rewrite_hists(revision, json_dict["histograms"])
+            except DefinitionException, e:
+                raise ValueError("Bad Histogram definition for revision {0}: {1}".format(revision, e))
+            except KeyError, e:
+                raise ValueError("Bad Histogram key for revision {0}: {1}".format(revision, e))
 
     def convert_obj(self, json_dict, date, ip=None):
         if "ver" in json_dict:
             # This looks like a classic ping (from before Telemetry/FHR unification)
             info = json_dict.get("info", None)
-            if (json_dict["ver"] == Converter.VERSION_UNCONVERTED or
-               json_dict["ver"] == Converter.VERSION_UNIFIED_CONVERTED):
-                if info is None:
-                    raise ValueError("Missing in payload: info")
-
-                # Convert it and update the version
-                if "revision" not in info:
-                    # We need "revision" to correctly convert histograms. If
-                    # we don't have histograms in the payload, we don't care
-                    # about revision (since we don't need to convert anything)
-                    if "histograms" in json_dict:
-                        raise ValueError("Missing in payload: info.revision")
-                else:
-                    revision = info.get("revision")
-                    if "histograms" not in json_dict:
-                        raise ValueError("Missing in payload: histograms")
-                    try:
-                        json_dict["histograms"] = self.rewrite_hists(revision, json_dict["histograms"])
-                    except DefinitionException, e:
-                        raise ValueError("Bad Histogram definition for revision {0}: {1}".format(revision, e))
-                    except KeyError, e:
-                        raise ValueError("Bad Histogram key for revision {0}: {1}".format(revision, e))
-                if json_dict["ver"] != Converter.VERSION_UNIFIED_CONVERTED:
-                  json_dict["ver"] = Converter.VERSION_CONVERTED
+            if (json_dict["ver"] == Converter.VERSION_UNCONVERTED):
+                self.convert_histograms(json_dict)
+                json_dict["ver"] = Converter.VERSION_CONVERTED
             elif json_dict["ver"] == Converter.VERSION_FXOS_1_3:
                 info = {
                     "reason": "ftu",
@@ -269,7 +269,8 @@ class Converter:
                 if "pingID" in json_dict:
                     del json_dict["pingID"]
                 json_dict["ver"] = Converter.VERSION_CONVERTED
-            elif json_dict["ver"] != Converter.VERSION_CONVERTED:
+            elif (json_dict["ver"] != Converter.VERSION_CONVERTED and
+                  json_dict["ver"] != Converter.VERSION_UNIFIED_CONVERTED):
                 raise ValueError("Unknown payload version: " + str(json_dict["ver"]))
             # else it's already converted.
 
@@ -278,8 +279,10 @@ class Converter:
             # https://ci.mozilla.org/job/mozilla-central-docs/Tree_Documentation/toolkit/components/telemetry/telemetry/index.html
             pingType = json_dict.get("type")
             pingVersion = json_dict["version"]
+
+            # Verify some basic assumptions
             if (pingVersion != Converter.VERSION_UNIFIED and
-               pingVersion != Converter.VERSION_UNIFIED_CONVERTED):
+                pingVersion != Converter.VERSION_UNIFIED_CONVERTED):
                 raise ValueError("Unknown unified ping version: " + str(json_dict["version"]))
             elif not pingType:
                 raise ValueError("Unified ping has no top-level 'type' field")
@@ -289,37 +292,44 @@ class Converter:
                 raise ValueError("Unified ping has no top-level 'payload' field")
 
             if pingVersion == Converter.VERSION_UNIFIED:
-              # Create a ping.info field and copy select ping.application fields.
-              # This is the minimum required for compatibility with the calling
-              # process_incoming* scripts
-              if "info" in json_dict:
-                raise ValueError("Raw unified ping has an existing ping.info field")
+                # Create a ping.info field and copy select ping.application fields.
+                # This is the minimum required for compatibility with the calling
+                # process_incoming* scripts
+                if "info" in json_dict:
+                    raise ValueError("Raw unified ping has an existing ping.info field")
 
-              info = json_dict["info"] = {}
-              self.add_info_fields(info, json_dict["application"], appFieldMap)
-              info["reason"] = pingType
-              json_dict["version"] = Converter.VERSION_UNIFIED_CONVERTED
+                info = json_dict["info"] = {}
+                self.add_info_fields(info, json_dict["application"], appFieldMap)
+                info["reason"] = pingType
+                json_dict["version"] = Converter.VERSION_UNIFIED_CONVERTED
 
-              if pingType == "saved-session":
-                  # This is a saved-session ping in the unified format,
-                  # make it look like a classic saved-session ping
-                  if "environment" not in json_dict:
-                      raise ValueError("Unified saved-session ping missing 'environment' field")
-                  self.convert_saved_session(json_dict)
-                  # call convert again to convert the histograms
-                  return self.convert_obj(json_dict, date, ip)
-              else:
-                  # main ping (reason = daily, shutdown, or environment-changed)
-                  # or a future ping type (activation, upgrade, deletion)
-                  # Don't alter it further
-                  pass
+                if pingType == "saved-session" or pingType == "main":
+                    # This is a unified ping in the "main" ping format:
+                    # https://ci.mozilla.org/job/mozilla-central-docs/Tree_Documentation/toolkit/components/telemetry/telemetry/main-ping.html
+                    json_payload = json_dict["payload"] 
+                    if "info" not in json_payload:
+                        raise ValueError("Unified " + pingType + " missing payload.info")
+                    elif "histograms" not in json_payload:
+                        raise ValueError("Unified " + pingType + " missing payload.histograms")
+                    # Convert the histograms section to the more compact representation
+                    self.convert_histograms(json_payload)
+
+                    # Make unified saved-session pings look like classic pings
+                    if pingType == "saved-session":
+                        if not "environment" in json_dict:
+                            raise ValueError("Unified saved-session ping missing 'environment' field")
+                        self.convert_saved_session(json_dict)
+                else:
+                    # Future ping type (activation, upgrade, deletion)
+                    # Don't alter it further
+                    pass
             else:
-              # This unified ping was already converted. Do nothing
-              info = json_dict["info"]
-              pass
-
+                # pingVersion == Converter.VERSION_UNIFIED_CONVERTED:
+                # This unified ping was already converted. Do nothing
+                info = json_dict["info"]
+                pass
         else:
-            raise ValueError("Missing payload version")
+            raise ValueError("Missing ping.ver and ping.version")
 
         if info is None:
             raise ValueError("Missing in payload: info")
