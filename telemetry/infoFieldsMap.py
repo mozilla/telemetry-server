@@ -7,7 +7,7 @@
 
 # Mappings of new unified-ping fields to classic-ping "info" fields
 
-# Maps unified-ping.application.* => classic-ping.info.*
+# classic-ping.info.* => unified-ping.application.*
 appFieldMap = {
     "appName": ["name"],
     "appUpdateChannel": ["channel"],
@@ -20,7 +20,7 @@ appFieldMap = {
     "vendor": ["vendor"],
 }
 
-# Maps unified-ping.environment.* => classic-ping.info.*
+# classic-ping.info.* => unified-ping.environment.*
 envFieldMap = {
     # environment.build section
     "appID": ["build", "applicationId"],
@@ -33,6 +33,7 @@ envFieldMap = {
     # environment.system section
     "cpucount": ["system", "cpu", "count"],
     "memsize": ["system", "memoryMB"],
+    "isWow64": ["system", "isWow64"],
     # environment.system.device section
     "device": ["system", "device", "model"],
     "manufacturer": ["system", "device", "manufacturer"],
@@ -61,7 +62,7 @@ envFieldMap = {
     "persona": ["addons", "theme", "id"],
 }
 
-# Maps unified-ping.environment.gfx.adapters[].* => classic-ping.info.adapter*
+# classic-ping.info.adapter* => unified-ping.environment.gfx.adapters[].*
 adapterFieldMap = {
     "adapterDescription": ["description"],
     "adapterVendorID": ["vendorID"],
@@ -72,7 +73,4 @@ adapterFieldMap = {
     "adapterDriverVersion": ["driverVersion"],
     "adapterDriverDate": ["driverDate"],
 }
- 
-dimensionMap = {
-    "reason": ""
-}
+
