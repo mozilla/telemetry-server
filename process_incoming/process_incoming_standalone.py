@@ -356,7 +356,7 @@ class ReadRawStep(PipeStep):
                             if dims[i] != parsed_dims[i]:
                                 self.log("Record {0} mismatched dimension " \
                                          "{1}: '{2}' != '{3}'".format(
-                                            record_count, i, dims[1],
+                                            record_count, i, dims[i],
                                             parsed_dims[i]))
                         serialized_data = self.converter.serialize(parsed_data)
                         dims = parsed_dims
