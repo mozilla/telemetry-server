@@ -122,6 +122,7 @@ class Converter:
         return self._histocache[key]
 
     def rewrite_hists(self, revision_url, histograms):
+        print "vdjeric looking up revision url:", str(revision_url), str(len(revision_url))
         histogram_defs = self._cache.get_histograms_for_revision(revision_url)
         if histogram_defs is None:
             raise ValueError("Failed to fetch histograms for URL: %s" % revision_url)
@@ -230,8 +231,8 @@ class Converter:
         if "ver" in json_dict:
             # This looks like a classic ping (from before Telemetry/FHR unification)
             info = json_dict.get("info", None)
-            if json_dict["ver"] == Converter.VERSION_UNCONVERTED or
-               json_dict["ver"] == Converter.VERSION_UNIFIED_CONVERTED:
+            if (json_dict["ver"] == Converter.VERSION_UNCONVERTED or
+               json_dict["ver"] == Converter.VERSION_UNIFIED_CONVERTED):
                 if info is None:
                     raise ValueError("Missing in payload: info")
 
@@ -277,8 +278,8 @@ class Converter:
             # https://ci.mozilla.org/job/mozilla-central-docs/Tree_Documentation/toolkit/components/telemetry/telemetry/index.html
             pingType = json_dict.get("type")
             pingVersion = json_dict["version"]
-            if pingVersion != Converter.VERSION_UNIFIED and
-               pingVersion != Converter.VERSION_UNIFIED_CONVERTED:
+            if (pingVersion != Converter.VERSION_UNIFIED and
+               pingVersion != Converter.VERSION_UNIFIED_CONVERTED):
                 raise ValueError("Unknown unified ping version: " + str(json_dict["version"]))
             elif not pingType:
                 raise ValueError("Unified ping has no top-level 'type' field")
