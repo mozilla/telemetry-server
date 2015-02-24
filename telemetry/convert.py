@@ -329,7 +329,7 @@ class Converter:
                 info = json_dict["info"]
                 pass
         else:
-            raise ValueError("Missing ping.ver and ping.version")
+            raise ValueError("Missing payload version")
 
         if info is None:
             raise ValueError("Missing in payload: info")
