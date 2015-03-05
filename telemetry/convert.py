@@ -58,11 +58,26 @@ class Converter:
 
     def get_geo_country(self, ip):
         country = None
-        if self._geoip:
-            try:
-                country = self._geoip.country(ip).country.iso_code
-            except AddressNotFoundError, e:
-                pass
+        err = None
+        if ip is not None and self._geoip:
+            for candidate in str(ip).split(","):
+                candidate = candidate.strip()
+                if candidate == "":
+                    continue
+                try:
+                    country = self._geoip.country(candidate).country.iso_code
+                except AddressNotFoundError, e:
+                    pass
+                except Exception, e:
+                    err = e
+
+                # Return the first known country.
+                if country is not None:
+                    return country
+
+        if err is not None:
+            raise err
+
         return country
 
     def map_value(self, histogram, val):
@@ -310,7 +325,7 @@ class Converter:
                 if pingType == "saved-session" or pingType == "main":
                     # This is a unified ping in the "main" ping format:
                     # https://ci.mozilla.org/job/mozilla-central-docs/Tree_Documentation/toolkit/components/telemetry/telemetry/main-ping.html
-                    json_payload = json_dict["payload"] 
+                    json_payload = json_dict["payload"]
                     if "info" not in json_payload:
                         raise ValueError("Unified " + pingType + " missing payload.info")
                     elif "histograms" not in json_payload:

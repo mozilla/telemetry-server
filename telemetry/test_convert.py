@@ -339,6 +339,42 @@ class ConvertTest(unittest.TestCase):
         # Firefox payloads should not be geocoded
         self.assertNotIn("geoCountry", converted["info"])
 
+    def test_csv_geo(self):
+        test_invalid = {
+            "bla": None,
+            "123": None,
+            "500.500.500.500": None,
+        }
+
+        test_valid = {
+            ",,,,": None,
+            "": None,
+            "8.8.8.8": "US",
+            "142.68.238.79": "CA",
+            "2001:4860:4860::8888": "US",
+            "127.0.0.1": None,
+            "127.0.0.1, 8.8.8.8": "US",
+            "127.0.0.1, 10.0.0.1": None,
+            "127.0.0.1, 8.8.8.8": "US",
+            "127.0.0.1, 142.68.238.79": "CA",
+            "8.8.8.8, 142.68.238.79": "US",
+            "142.68.238.79, 8.8.8.8": "CA",
+            "142.68.238.79 ,,127.0.0.1,, 8.8.8.8": "CA",
+        }
+
+        self.assertIs(ConvertTest.converter.get_geo_country(None), None)
+
+        for ip, expected_country in test_invalid.iteritems():
+            with self.assertRaises(ValueError):
+                ConvertTest.converter.get_geo_country(ip)
+
+        for ip, expected_country in test_valid.iteritems():
+            actual_country = ConvertTest.converter.get_geo_country(ip)
+            if expected_country is None:
+                self.assertIs(actual_country, None)
+            else:
+                self.assertEqual(actual_country, expected_country)
+
     def test_bad_payload_bogus_bucket_value(self):
         raw = self.get_payload("normal")
         raw["histograms"]["STARTUP_CRASH_DETECTED"]["values"][0] = "two"
