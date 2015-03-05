@@ -204,6 +204,10 @@ class Converter:
         info = json_dict["info"]
         self.add_info_fields(info, envFields, envFieldMap)
 
+        # WINNT is reported as Windows_NT in the unified ping
+        if info.get("OS") == "Windows_NT":
+            info["OS"] = "WINNT"
+
         adapters = None
         try:
             adapters = envFields["system"]["gfx"]["adapters"]
