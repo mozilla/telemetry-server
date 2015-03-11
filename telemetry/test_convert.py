@@ -319,7 +319,7 @@ class ConvertTest(unittest.TestCase):
 
             # Make sure that the raw bytes are correct:
             # Incoming is UTF-8, so we expect
-            #   W i k i p 0xc3 0xc9 d i a
+            #   W i k i p 0xc3 0xa9 d i a
             self.assertEqual(ord(r.data[0xd16]), 0x70)
             self.assertEqual(ord(r.data[0xd17]), 0xc3)
             self.assertEqual(ord(r.data[0xd18]), 0xa9)
