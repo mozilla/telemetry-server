@@ -545,7 +545,6 @@ class ConvertTest(unittest.TestCase):
         with open('test/unicode_payload.json') as f:
             payload = f.read()
         upayload = fu.to_unicode(payload)
-        #upayload = unicode(payload, errors="replace")
         converted, dimensions = ConvertTest.converter.convert_json(upayload,'20140101')
         parsed = json.loads(payload)
         self.assertEqual(parsed["data"], converted["data"])

@@ -46,8 +46,8 @@ def main():
         # (ie. seconds)
         submission_date = date.fromtimestamp(r.timestamp / 1000).strftime("%Y%m%d")
         # Deal with unicode
-        path = unicode(r.path, errors="replace")
-        data = unicode(r.data, errors="replace")
+        path = fileutil.to_unicode(r.path)
+        data = fileutil.to_unicode(r.data)
 
         bytes_read += r.len_ip + r.len_path + r.len_data + fileutil.RECORD_PREAMBLE_LENGTH[file_version]
         #print "Path for record", record_count, path, "length of data:", r.len_data, "data:", data[0:5] + "..."
