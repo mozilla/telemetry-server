@@ -375,8 +375,8 @@ class Converter:
         return result
 
     # Serialize to minimal JSON
-    def serialize(self, json_dict):
-        return json.dumps(json_dict, separators=(',', ':'))
+    def serialize(self, json_dict, sort_keys=False):
+        return json.dumps(json_dict, separators=(',', ':'), sort_keys=sort_keys)
 
 def process(converter, target_date=None):
     line_num = 0
