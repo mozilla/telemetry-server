@@ -291,6 +291,86 @@ class ConvertTest(unittest.TestCase):
             self.assertEqual(converted["histograms"][h], expected_converted_histograms[h])
         self.assertIs(converted["info"].get("geoCountry"), None)
 
+    def print_byte_range(self, data, start=None, end=None):
+        if start is None:
+            start = 0
+        if end is None:
+            end = len(data)
+        for i in range(start, end):
+            pieces = {
+                "i": i,
+                "o": ord(data[i]),
+                "c": data[i]
+            }
+            print "0x%(i)04x %(i)04d = 0x%(o)02x %(o)3d %(c)s" % pieces
+        print "----"
+
+    def test_utf8(self):
+        count = 0
+        # This packed file contains the same record twice, once gzipped, once
+        # raw. The record contains the UTF-8 encoded string "Wikipédia"
+        for r in fu.unpack('test/unicode.v1.packed', file_version="v1"):
+            self.assertIs(r.error, None)
+            self.assertTrue(len(r.data) > 0)
+            self.assertEqual(r.data[0], '{')
+            count += 1
+
+            # self.print_byte_range(r.data, 3323, 3362)
+
+            # Make sure that the raw bytes are correct:
+            # Incoming is UTF-8, so we expect
+            #   W i k i p 0xc3 0xa9 d i a
+            self.assertEqual(ord(r.data[0xd16]), 0x70)
+            self.assertEqual(ord(r.data[0xd17]), 0xc3)
+            self.assertEqual(ord(r.data[0xd18]), 0xa9)
+            self.assertEqual(ord(r.data[0xd19]), 0x64)
+
+            # Convert the data the wrong way:
+            bad = unicode(r.data, errors="replace")
+            # self.print_byte_range(bad, 3323, 3362)
+
+            # Verify that we see the replacement chars in the expected places:
+            #   W i k i p 0xfffd 0xfffd d i a
+            self.assertEqual(ord(bad[0xd16]), 0x70)
+            self.assertEqual(ord(bad[0xd17]), 0xfffd)
+            self.assertEqual(ord(bad[0xd18]), 0xfffd)
+            self.assertEqual(ord(bad[0xd19]), 0x64)
+
+            # Now convert properly:
+            good = fu.to_unicode(r.data)
+            # self.print_byte_range(good, 3322, 3360)
+
+            # Now we have unicode, so we expect
+            #   W i k i p 0xe9 d i a
+            self.assertEqual(ord(good[0xd15]), 0x70)
+            self.assertEqual(ord(good[0xd16]), 0xe9)
+            self.assertEqual(ord(good[0xd17]), 0x64)
+
+            converted, dimensions = ConvertTest.converter.convert_json(good, "20131114", None)
+
+            engine = converted["simpleMeasurements"]["UITelemetry"]["toolbars"]["currentSearchEngine"]
+            # print engine
+
+            self.assertEqual(ord(engine[4]), 0x70)
+            self.assertEqual(ord(engine[5]), 0xe9)
+            self.assertEqual(ord(engine[6]), 0x64)
+
+            serialized = ConvertTest.converter.serialize(converted, sort_keys=True)
+
+            # self.print_byte_range(serialized, 4007, 4049)
+            # Now we have escaped unicode, so we expect
+            #   W i k i p \ u 0 0 e 9 d i a
+            self.assertEqual(ord(serialized[0xfc2]), 0x70)
+            self.assertEqual(ord(serialized[0xfc3]), 0x5c)
+            self.assertEqual(ord(serialized[0xfc4]), 0x75)
+            self.assertEqual(ord(serialized[0xfc5]), 0x30)
+            self.assertEqual(ord(serialized[0xfc6]), 0x30)
+            self.assertEqual(ord(serialized[0xfc7]), 0x65)
+            self.assertEqual(ord(serialized[0xfc8]), 0x39)
+            self.assertEqual(ord(serialized[0xfc9]), 0x64)
+
+        self.assertEqual(count, 2)
+
     def test_plain_geo(self):
         self.assertEqual(ConvertTest.converter.get_geo_country("8.8.8.8"), "US")
         self.assertEqual(ConvertTest.converter.get_geo_country("2001:4860:4860::8888"), "US")
@@ -465,7 +545,6 @@ class ConvertTest(unittest.TestCase):
         with open('test/unicode_payload.json') as f:
             payload = f.read()
         upayload = fu.to_unicode(payload)
-        #upayload = unicode(payload, errors="replace")
         converted, dimensions = ConvertTest.converter.convert_json(upayload,'20140101')
         parsed = json.loads(payload)
         self.assertEqual(parsed["data"], converted["data"])

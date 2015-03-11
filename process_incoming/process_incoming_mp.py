@@ -173,7 +173,7 @@ class ReadRawStep(PipeStep):
                 # Incoming timestamps are in milliseconds, so convert to POSIX first
                 # (ie. seconds)
                 submission_date = date.fromtimestamp(timestamp / 1000).strftime("%Y%m%d")
-                path = unicode(path, errors="replace")
+                path = fileutil.to_unicode(path)
                 #print "Path for record", record_count, path, "length of data:", len_data
 
                 if data[0] != "{":
@@ -182,7 +182,7 @@ class ReadRawStep(PipeStep):
                     print data
                 else:
                     # Raw JSON, make sure we treat it as unicode.
-                    data = unicode(data, errors="replace")
+                    data = fileutil.to_unicode(data)
 
                 current_bytes = len_path + len_data + fileutil.RECORD_PREAMBLE_LENGTH["v1"]
                 bytes_read += current_bytes

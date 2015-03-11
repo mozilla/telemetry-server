@@ -300,7 +300,7 @@ class ReadRawStep(PipeStep):
                     continue
 
                 submission_date = ts_to_yyyymmdd(unpacked.timestamp)
-                path = unicode(unpacked.path, errors="replace")
+                path = fileutil.to_unicode(unpacked.path)
 
                 if unpacked.data[0] != "{":
                     # Data looks weird, should be JSON.
@@ -309,7 +309,7 @@ class ReadRawStep(PipeStep):
                                  raw_file, path, unpacked.data))
                 else:
                     # Raw JSON, make sure we treat it as unicode.
-                    unpacked.data = unicode(unpacked.data, errors="replace")
+                    unpacked.data = fileutil.to_unicode(unpacked.data)
 
                 path_components = path.split("/")
                 if len(path_components) != self.expected_dim_count:
