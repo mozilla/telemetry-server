@@ -10,8 +10,8 @@ INSTANCE_TYPE      = 'c3.4xlarge'
 # setup bootstrap action depends on it to autotune the cluster.
 MASTER_INSTANCE_TYPE = INSTANCE_TYPE
 SLAVE_INSTANCE_TYPE = INSTANCE_TYPE
-SPARK_VERSION = '1.1.1.e'
-AMI_VERSION = '3.3.1'
+SPARK_VERSION = '1.2.1.a'
+AMI_VERSION = '3.3.2'
 
 # Make sure the ephemeral map matches the instance type above.
 EPHEMERAL_MAP      = { "/dev/xvdb": "ephemeral0", "/dev/xvdc": "ephemeral1" }
