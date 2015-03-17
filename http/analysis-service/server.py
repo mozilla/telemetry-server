@@ -96,6 +96,7 @@ def initialize_db(db):
     #     code_uri              VARCHAR(300) NOT NULL,
     #     commandline           VARCHAR NOT NULL,
     #     data_bucket           VARCHAR(200) NOT NULL,
+    #     num_workers           INT,
     #     output_dir            VARCHAR(100) NOT NULL,
     #     output_visibility     VARCHAR(10) NOT NULL,
     #     schedule_minute       VARCHAR(20) NOT NULL,
