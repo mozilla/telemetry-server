@@ -225,7 +225,8 @@ def build_config(job):
             "code_uri": job['code_uri'],
             "job_name": job['name'],
             "timeout_minutes": job['timeout_minutes'],
-            "data_bucket": job['data_bucket']
+            "data_bucket": job['data_bucket'],
+            "application_tag": app.config["INSTANCE_APP_TAG"]
         }
     else:
         iam_role = "telemetry-{}-analysis-worker".format(job.output_visibility)
