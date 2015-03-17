@@ -25,7 +25,7 @@
     like &quot;{{ username }}-charset-usage&quot;
    {% endcall %}
 
-   {% call macros.make_input('n-workers', 'Cluster Size', value='1') %}
+   {% call macros.make_input('num_workers', 'Cluster Size', value='1') %}
     The number of workers for this cluster. Please keep in mind to use resources
     sparingly. Use a single worker to write and debug your job.
    {% endcall %}

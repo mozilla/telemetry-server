@@ -1,0 +1,165 @@
+{% import 'macros.html' as macros with context %}
+{% extends "base.html" %}
+
+{% block cluster_schedule_active %} class="active" {% endblock %}
+
+{% block title %}
+<h1>Schedule a Spark job</h1>
+<p>
+  <img width="48" src="{{ url_for('static', filename='schedule.png') }}" />
+  Run a Spark analysis on a scheduled basis.
+</p>
+<p>
+  The output of the analysis and the evaluated IPython notebook will be published in Amazon S3.
+  For data that will be used to power a dashboard, be sure to make the output public below.
+</p>
+{% endblock %}
+
+{% block content %}
+{% if jobs %}
+<div class="jobs">
+  <p class="lead">
+    Your currently scheduled jobs:
+  </p>
+  {% for job in jobs %}
+  <div class="row">
+    <div class="col-md-2"><p>Job {{ job.id }}: {{ job.name }}</p></div>
+    <div class="col-md-10">
+      <a href="{{ url_for('cluster_edit_scheduled_job', job_id=job.id) }}">Edit</a>
+      |
+      <a href="{{ url_for('cluster_delete_scheduled_job', job_id=job.id) }}">Delete</a>
+      |
+      <a href="{{ url_for('cluster_view_job_logs', job_id=job.id) }}">View Logs</a>
+      |
+      <a href="{{ url_for('cluster_view_job_data', job_id=job.id) }}">View Data</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<hr/>
+{% endif %}
+
+{% set form_target = url_for('cluster_create_scheduled_job') %}
+{% set is_update = False %}
+<div class="form-label">
+  {% if values and values["job-id"] %}
+  {% set is_update = True %}
+  {% set form_target = url_for('cluster_edit_scheduled_job', job_id=values["job-id"]) %}
+  <p class="lead">
+    Edit job <strong>{{ values["job-id"] }}</strong>:
+    <strong>{{ values["job-name"] }}</strong>
+  </p>
+  {% else %}
+  <p class="lead">Schedule a new job:</p>
+  {% endif %}
+</div>
+<form action="{{ form_target }}" method="POST" enctype="multipart/form-data">
+  {% if is_update %}
+  <input type="hidden" name="job-id" value="{{ values['job-id'] }}" />
+  <input type="hidden" name="job-name" value="{{ values['job-name'] }}" />
+  {% endif %}
+  <table>
+    {% if is_update %}
+
+    {% call macros.make_input('code-uri', 'S3 Code URI', required=False) %}
+    The location of the IPython notebook in S3. Either update this URI or upload a new
+    notebook below, but not both at the same time.
+    {% endcall %}
+
+    {% call macros.make_input('code', 'IPython notebook', type='file', required=False) %}
+    If desired, upload a new IPython notebook. If you don't want to change the
+    notebook, leave this blank.
+    {% endcall %}
+
+    {% else %}
+
+    {% call macros.make_input('job-name', 'Job Name') %}
+    The job name will form part of the location of the code tarball below, as
+    well as part of the path to the data in S3.
+    {% endcall %}
+
+    {% call macros.make_input('code', 'IPython Notebook', type='file') %}
+    This IPython notebook should contain all the code needed to run
+    your job.
+    {% endcall %}
+
+    {% endif %}
+
+    {% call macros.make_input('num_workers', 'Cluster Size', value='1') %}
+    The number of workers for this cluster. Please keep in mind to use resources
+    sparingly.
+    {% endcall %}
+
+    {{ macros.begin_select(errors, 'output-visibility', 'Output Visibility') }}
+    {{ macros.select_option('public',   'Public',  name='output-visibility') }}
+    {{ macros.select_option('private',  'Private', name='output-visibility') }}
+    {{ macros.end_select_options() }}
+    Select <code>Public</code> if you'll be using the output data in a dashboard or
+    want to make it <strong>globally available</strong> on the web. Select <code>Private</code>
+    if the output could contain any sensitive information.
+    {{ macros.end_select() }}
+
+    {{ macros.begin_select(errors, 'schedule-frequency', 'Schedule Frequency') }}
+    {{ macros.select_option('daily',   'Daily', name='schedule-frequency') }}
+    {{ macros.select_option('weekly',  'Weekly', name='schedule-frequency') }}
+    {{ macros.select_option('monthly', 'Monthly', name='schedule-frequency') }}
+    {{ macros.end_select_options() }}
+    The job will be run periodically per this selection.
+    {{ macros.end_select() }}
+
+    {{ macros.begin_select(errors, 'schedule-day-of-week', 'Day of Week') }}
+    {{ macros.select_option('0', 'Sunday', name='schedule-day-of-week') }}
+    {{ macros.select_option('1', 'Monday', name='schedule-day-of-week') }}
+    {{ macros.select_option('2', 'Tuesday', name='schedule-day-of-week') }}
+    {{ macros.select_option('3', 'Wednesday', name='schedule-day-of-week') }}
+    {{ macros.select_option('4', 'Thursday', name='schedule-day-of-week') }}
+    {{ macros.select_option('5', 'Friday', name='schedule-day-of-week') }}
+    {{ macros.select_option('6', 'Saturday', name='schedule-day-of-week') }}
+    {{ macros.end_select_options() }}
+    The job will run weekly on this day.
+    {{ macros.end_select() }}
+
+    {% call macros.make_input('schedule-day-of-month', 'Day of Month', value='1') %}
+    The job will run monthly on this day.
+    {% endcall %}
+
+    {{ macros.begin_select(errors, 'schedule-time-of-day', 'Time of Day (UTC)') }}
+    {{ macros.select_option('0', 'Midnight', name='schedule-time-of-day') }}
+    {{ macros.select_option('1', '1am', name='schedule-time-of-day') }}
+    {{ macros.select_option('2', '2am', name='schedule-time-of-day') }}
+    {{ macros.select_option('3', '3am', name='schedule-time-of-day') }}
+    {{ macros.select_option('4', '4am', name='schedule-time-of-day') }}
+    {{ macros.select_option('5', '5am', name='schedule-time-of-day') }}
+    {{ macros.select_option('6', '6am', name='schedule-time-of-day') }}
+    {{ macros.select_option('7', '7am', name='schedule-time-of-day') }}
+    {{ macros.select_option('8', '8am', name='schedule-time-of-day') }}
+    {{ macros.select_option('9', '9am', name='schedule-time-of-day') }}
+    {{ macros.select_option('10', '10am', name='schedule-time-of-day') }}
+    {{ macros.select_option('11', '11am', name='schedule-time-of-day') }}
+    {{ macros.select_option('12', 'Noon', True, name='schedule-time-of-day') }}
+    {{ macros.select_option('13', '1pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('14', '2pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('15', '3pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('16', '4pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('17', '5pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('18', '6pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('19', '7pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('20', '8pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('21', '9pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('22', '10pm', name='schedule-time-of-day') }}
+    {{ macros.select_option('23', '11pm', name='schedule-time-of-day') }}
+    {{ macros.end_select_options() }}
+    The job will be run at this time. For reference, the UTC time right now
+    is <span id="utcnow"></span>.
+    {{ macros.end_select() }}
+
+    {% call macros.make_input('timeout', 'Job Timeout (minutes)', value='120') %}
+    If the job does not complete within this many minutes, it will
+    automatically be killed.
+    {% endcall %}
+  </table>
+  <div class="button-margin">
+    <input type="submit" class="btn btn-success" name="submit" value="Submit">
+  </div>
+</form>
+{% endblock %}

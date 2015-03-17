@@ -1,0 +1,13 @@
+{% extends "cluster/schedule.html" %}
+{% block title %}
+<h1>Delete a scheduled Spark job</h1>
+{% endblock %}
+{% block content %}
+<p class="lead">
+  Job <code>{{ job.name }}</code> has been deleted (deleted
+  {{ result.rowcount }} record{% if result.rowcount > 1 %}s{% endif %}).
+</p>
+<p>
+  <a class="btn btn btn-success" href="{{ url_for('cluster_schedule_job') }}">Go back</a>
+</p>
+{% endblock %}

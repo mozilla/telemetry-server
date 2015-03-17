@@ -20,6 +20,7 @@ from tempfile import mkstemp
 import crontab
 import json
 import re
+import os.path
 
 # Create flask app
 app = Flask(__name__)
@@ -74,6 +75,7 @@ def initialize_db(db):
         Column("code_uri",              String(300), nullable=False),
         Column("commandline",           String,      nullable=False),
         Column("data_bucket",           String(200), nullable=False),
+        Column("num_workers",           Integer,     nullable=True),
         Column("output_dir",            String(100), nullable=False),
         Column("output_visibility",     String(10),  nullable=False),
         Column("schedule_minute",       String(20),  nullable=False),
@@ -126,15 +128,24 @@ def update_job(job):
     update = table.update().where(table.c.id == job['id']).values(job)
     return db['conn'].execute(update)
 
-def get_jobs(owner=None):
+def get_jobs(owner=None, is_cluster=None):
     db = get_db()
     table = db['metadata'].tables['scheduled_jobs']
+
+    if is_cluster is None:
+        condition = True
+    elif is_cluster:
+        # see http://stackoverflow.com/questions/5602918/postgresql-select-null-values-in-sqlalchemy
+        condition = (table.c.num_workers != None)
+    else:
+        condition = (table.c.num_workers == None)
+
     if owner is None:
         # Get all jobs
         query = select([table]).order_by(table.c.id)
     else:
         # Get jobs for the given owner
-        query = select([table]).where(table.c.owner == owner).order_by(table.c.id)
+        query = select([table]).where(table.c.owner == owner).where(condition).order_by(table.c.id)
     result = db['conn'].execute(query)
     try:
         for row in result:
@@ -199,15 +210,23 @@ def job_exists(name=None, job_id=None):
         return True
     return False
 
-def update_configs(jobs=None):
-    if jobs is None:
-        jobs = []
-        for j in get_jobs():
-            jobs.append(j)
-    for job in jobs:
-        # Should be either:
-        #   telemetry-public-analysis-worker or
-        #   telemetry-private-analysis-worker
+def build_config(job):
+    if job["code_uri"].endswith(".ipynb"):
+        config = {
+            "ssl_key_name": "mozilla_vitillo",
+            "num_workers": job['num_workers'],
+            "master_instance_type": app.config['MASTER_INSTANCE_TYPE'],
+            "slave_instance_type": app.config['SLAVE_INSTANCE_TYPE'],
+            "spark_version": app.config["SPARK_VERSION"],
+            "ami_version": app.config["AMI_VERSION"],
+            "cluster_name": "telemetry-analysis-{0}".format(job['name']),
+            "owner": job['owner'],
+            "code_uri": job['code_uri'],
+            "job_name": job['name'],
+            "timeout_minutes": job['timeout_minutes'],
+            "data_bucket": job['data_bucket']
+        }
+    else:
         iam_role = "telemetry-{}-analysis-worker".format(job.output_visibility)
         config = {
             "ssl_key_name": "mreid",
@@ -221,12 +240,12 @@ def update_configs(jobs=None):
             "shutdown_behavior": "terminate",
             "name": "telemetry-analysis-{0}".format(job['name']),
             "default_tags": {
-              "Owner": "mreid",
-              "Application": "telemetry-server"
+                "Owner": "mreid",
+                "Application": "telemetry-server"
             },
             "ephemeral_map": {
-              "/dev/xvdb": "ephemeral0",
-              "/dev/xvdc": "ephemeral1"
+                "/dev/xvdb": "ephemeral0",
+                "/dev/xvdc": "ephemeral1"
             },
             "skip_ssh": True,
             "skip_bootstrap": True,
@@ -238,8 +257,19 @@ def update_configs(jobs=None):
             "job_data_bucket": job['data_bucket'],
             "job_output_dir": job['output_dir']
         }
-        #FIXME: find a better way than embedding the path all over the place.
-        filename = "/home/ubuntu/telemetry_analysis/jobs/{0}.json".format(job['id'])
+
+    return config
+
+def update_configs(jobs=None):
+    if jobs is None:
+        jobs = []
+        for j in get_jobs():
+            jobs.append(j)
+
+    for job in jobs:
+        config = build_config(job)
+        path = os.path.dirname(os.path.realpath(__file__))
+        filename = "{}/jobs/{}.json".format(path, job['id'])
         if app.config['DEBUG']:
             print "Debug mode, would have written config to", filename
             print json.dumps(config)
@@ -374,29 +404,36 @@ def load_user(email):
 def unauthorized():
     return render_template('index.html')
 
-# Routes
-@app.route('/', methods=["GET"])
-def index():
-    return render_template('index.html')
+def get_tag_value(tags, key):
+    for i in range(len(tags)):
+        tag = tags[i]
+        if key == tag.key:
+            return tag.value
+    return None
 
-@app.route("/schedule", methods=["GET"])
-@login_required
-def schedule_job(errors=None, values=None):
+def _schedule_job(is_cluster, errors=None, values=None):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
 
+    template = "cluster/schedule.html" if is_cluster else "schedule.html"
+
     jobs = []
-    for job in get_jobs(current_user.email):
+    for job in get_jobs(current_user.email, is_cluster=is_cluster):
         jobs.append(job)
 
-    return render_template('schedule.html', jobs=jobs, errors=errors, values=values)
+    return render_template(template, jobs=jobs, errors=errors, values=values)
 
-def validate_job_form(request, is_update=True, old_job=None):
+def _validate_job_form(is_cluster, request, is_update=True, old_job=None):
     errors = {}
     job_meta = {}
-    for f in ['job-name', 'commandline', 'output-dir',
-              'schedule-frequency', 'schedule-time-of-day', 'timeout']:
+
+    if is_cluster:
+        fields = ['job-name', 'num_workers', 'schedule-frequency', 'schedule-time-of-day', 'timeout']
+    else:
+        fields = ['job-name', 'commandline', 'output-dir', 'schedule-frequency', 'schedule-time-of-day', 'timeout']
+
+    for f in fields:
         val = request.form[f]
         if val is None or val.strip() == '':
             errors[f] = "This field is required"
@@ -460,18 +497,22 @@ def validate_job_form(request, is_update=True, old_job=None):
             errors['job-name'] = "Job name cannot contain quote characters or backslashes"
             break
 
-    if request.files['code-tarball']:
-        filename = request.files['code-tarball'].filename
-        if not (filename.endswith(".tar.gz") or filename.endswith(".tgz")):
-            errors['code-tarball'] = "Code file must be in .tar.gz or .tgz format"
+    if request.files['code']:
+        filename = request.files['code'].filename
+        if is_cluster:
+            if not (filename.endswith(".ipynb")):
+                errors['code'] = "File must be a valid IPython notebook."
+        else:
+            if not (filename.endswith(".tar.gz") or filename.endswith(".tgz")):
+                errors['code'] = "Code file must be in .tar.gz or .tgz format"
 
     if is_update:
         # This is an "Update" request:
-        # You may update code-tarball *or* code-uri, but not both. Otherwise, what
+        # You may update code *or* code-uri, but not both. Otherwise, what
         # should we do with the other one?
-        if request.files['code-tarball']:
+        if request.files['code']:
             if request.form['code-uri'] and request.form['code-uri'] != old_job['code_uri']:
-                errors['code-uri'] = "Cannot change code-uri and upload a new Code Tarball at the same time"
+                errors['code-uri'] = "Cannot change code-uri and upload new code at the same time."
         elif request.form['code-uri']:
             if request.form['code-uri'] != old_job['code_uri']:
                 # Check if the Code URI exists within the expected bucket.
@@ -480,16 +521,16 @@ def validate_job_form(request, is_update=True, old_job=None):
                     try:
                         code_key = code_bucket.get_key(code_key_path)
                         if code_key is None or not code_key.exists():
-                            errors['code-uri'] = "Specified Code URI does not exist"
+                            errors['code-uri'] = "Specified code URI does not exist."
                     except Exception, e:
                         errors['code-uri'] = e.message
                 else:
-                    errors['code-uri'] = "Code URI must begin with 's3://{0}/jobs/'".format(app.config['CODE_BUCKET'])
+                    errors['code-uri'] = "Code URI must begin with 's3://{0}/jobs/'.".format(app.config['CODE_BUCKET'])
             job_meta["code_s3path"] = request.form['code-uri']
         else:
             # Also, they can't both be missing, otherwise we have no job code.
-            errors['code-tarball'] = "Code Tarball or S3 Code URI is required (.tar.gz or .tgz)"
-            errors['code-uri'] = errors['code-tarball']
+            errors['code'] = "Code or S3 URI is required."
+            errors['code-uri'] = errors['code']
 
         if request.form['job-name'] != old_job['name']:
             errors['job-name'] = "Don't change the job name, that is confusing. " \
@@ -497,9 +538,9 @@ def validate_job_form(request, is_update=True, old_job=None):
                 "recreate it.".format(old_job['name'])
     else:
         # This is a "Create" request:
-        # Check for code-tarball
-        if not request.files['code-tarball']:
-            errors['code-tarball'] = "File is required (.tar.gz or .tgz)"
+        # Check for code
+        if not request.files['code']:
+            errors['code'] = "File is required."
 
         # Check if job_name is already in use
         if job_exists(name=request.form['job-name']):
@@ -509,7 +550,7 @@ def validate_job_form(request, is_update=True, old_job=None):
     if "code_s3path" not in job_meta:
         job_meta["code_s3path"] = "s3://{0}/jobs/{1}/{2}".format(
             app.config['CODE_BUCKET'], request.form["job-name"],
-            request.files["code-tarball"].filename)
+            request.files["code"].filename)
 
     job_meta["data_s3path"] = "s3://{0}/{1}/data/".format(data_bucket,
         request.form["job-name"])
@@ -517,7 +558,9 @@ def validate_job_form(request, is_update=True, old_job=None):
     # Last bit is the command to execute.
     # This is just a placeholder - the real command is added when we update
     # the crontab.
-    cron_bits.append(request.form['commandline'])
+    if not is_cluster:
+        cron_bits.append(request.form['commandline'])
+
     job_meta["cron_spec"] = " ".join([str(c) for c in cron_bits])
     job_meta["frequency"] = frequency
     job_meta["job_dow"] = display_dow(day_of_week)
@@ -528,9 +571,7 @@ def validate_job_form(request, is_update=True, old_job=None):
         "name": request.form['job-name'],
         "timeout_minutes": timeout,
         "code_uri": job_meta["code_s3path"],
-        "commandline": request.form['commandline'],
         "data_bucket": data_bucket,
-        "output_dir": request.form['output-dir'],
         "output_visibility": visibility,
         "schedule_minute": cron_bits[CRON_IDX_MIN],
         "schedule_hour": cron_bits[CRON_IDX_HOUR],
@@ -539,38 +580,50 @@ def validate_job_form(request, is_update=True, old_job=None):
         "schedule_day_of_week": cron_bits[CRON_IDX_DOW]
     }
 
+    if is_cluster:
+        try:
+            n_workers = int(request.form["num_workers"])
+            if n_workers <= 0 or n_workers > 20:
+                raise Exception
+            job['num_workers'] = n_workers
+        except:
+            errors["num_workers"] = "This field should be a positive number within [1, 20]."
+        job["commandline"] = ""
+        job["output_dir"] = ""
+    else:
+        job["commandline"] = request.form["commandline"]
+        job["output_dir"] = request.form["output-dir"]
+
     if old_job:
         job['id'] = old_job['id']
 
     return job, job_meta, errors
 
-def get_tag_value(tags, key):
-    for i in range(len(tags)):
-        tag = tags[i]
-        if key == tag.key:
-            return tag.value
-    return None
-
-@app.route("/schedule/new", methods=["POST"])
-@login_required
-def create_scheduled_job():
+def _create_scheduled_job(is_cluster):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
 
-    job, job_meta, errors = validate_job_form(request, is_update=False)
+    if is_cluster:
+        schedule = cluster_schedule_job
+        template = 'cluster/schedule_create.html'
+    else:
+        template = 'schedule_create.html'
+        schedule = schedule_job
+
+    job, job_meta, errors = _validate_job_form(is_cluster, request, is_update=False)
 
     # If there were any errors, stop and re-display the form.
     # It's only polite to render the form with the previously-supplied
     # values filled in. Unfortunately doing so for files doesn't seem to be
     # worth the effort.
     if errors:
-        return schedule_job(errors, request.form)
+        return schedule(errors, request.form)
 
-    err = upload_code(request.form["job-name"], request.files["code-tarball"])
+    err = upload_code(request.form["job-name"], request.files["code"])
     if err is not None:
-        errors["code-tarball"] = err
-        return schedule_job(errors, request.form)
+        errors["code"] = err
+        return schedule(errors, request.form)
 
     result = insert_job(job)
     if result.inserted_primary_key > 0:
@@ -581,7 +634,7 @@ def create_scheduled_job():
         update_configs(jobs)
         update_crontab(jobs)
 
-    return render_template('schedule_create.html',
+    return render_template(template,
         result = result,
         code_s3path = job_meta["code_s3path"],
         data_s3path = job_meta["data_s3path"],
@@ -595,12 +648,17 @@ def create_scheduled_job():
         cron_spec = job_meta["cron_spec"]
     )
 
-@app.route("/schedule/edit/<job_id>", methods=["GET","POST"])
-@login_required
-def edit_scheduled_job(job_id):
+def _edit_scheduled_job(is_cluster, job_id):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
+
+    if is_cluster:
+        template = "cluster/schedule.html"
+        template_create = "cluster/schedule_create.html"
+    else:
+        template = "schedule.html"
+        template_create = "schedule_create.html"
 
     if request.method != 'GET' and request.method != 'POST':
         return "Unsupported method: {0}".format(request.method), 405
@@ -613,24 +671,24 @@ def edit_scheduled_job(job_id):
 
     if request.method == 'GET':
         # Show job details.
-        return render_template("schedule.html", values=job_to_form(old_job))
+        return render_template(template, values=job_to_form(old_job))
     # else: request.method == 'POST'
     # update this job's details
     if request.form['job-id'] != job_id:
         return "Mismatched job id", 400
 
-    new_job, job_meta, errors = validate_job_form(request, is_update=True, old_job=old_job)
+    new_job, job_meta, errors = _validate_job_form(is_cluster, request, is_update=True, old_job=old_job)
 
     # If there were any errors, stop and re-display the form.
     if errors:
-        return render_template("schedule.html", values=request.form, errors=errors)
+        return render_template(template, values=request.form, errors=errors)
 
     # Upload code if need be:
-    if request.files['code-tarball']:
-        err = upload_code(request.form["job-name"], request.files["code-tarball"])
+    if request.files['code']:
+        err = upload_code(request.form["job-name"], request.files["code"])
         if err is not None:
-            errors["code-tarball"] = err
-            return render_template("schedule.html", values=request.form, errors=errors)
+            errors["code"] = err
+            return render_template(template, values=request.form, errors=errors)
 
     result = update_job(new_job)
 
@@ -642,7 +700,7 @@ def edit_scheduled_job(job_id):
         update_configs(jobs)
         update_crontab(jobs)
 
-    return render_template('schedule_create.html',
+    return render_template(template_create,
         result = result,
         code_s3path = job_meta["code_s3path"],
         data_s3path = job_meta["data_s3path"],
@@ -656,12 +714,12 @@ def edit_scheduled_job(job_id):
         cron_spec = job_meta["cron_spec"]
     )
 
-@app.route("/schedule/delete/<job_id>", methods=["POST","GET","DELETE"])
-@login_required
-def delete_scheduled_job(job_id):
+def _delete_scheduled_job(is_cluster, job_id):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
+
+    template = "cluster/schedule_delete.html" if is_cluster else "schedule_delete.html"
 
     job = get_job(job_id=job_id)
     if job is None:
@@ -673,15 +731,15 @@ def delete_scheduled_job(job_id):
             # We don't have to update the configs, though maybe we should
             # delete this job's config to clean up.
             update_crontab()
-        return render_template('schedule_delete.html', result=result, job=job)
+        return render_template(template, result=result, job=job)
     return "Can't delete job {0}".format(job_id), 401
 
-@app.route("/schedule/logs/<job_id>", methods=["GET"])
-@login_required
-def view_job_logs(job_id):
+def _view_job_logs(is_cluster, job_id):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
+
+    template = "cluster/schedule_files.html" if is_cluster else "schedule_files.html"
 
     job = get_job(job_id=job_id)
     if job is None:
@@ -692,15 +750,15 @@ def view_job_logs(job_id):
 
         # TODO: Add a "<delete>" link
         #       Add a "<delete all logs>" link
-        return render_template('schedule_files.html', name="log", files=logs, job=job)
+        return render_template(template, name="log", files=logs, job=job)
     return "Can't view logs for job {0}".format(job_id), 401
 
-@app.route("/schedule/data/<job_id>", methods=["GET"])
-@login_required
-def view_job_data(job_id):
+def _view_job_data(is_cluster, job_id):
     # Check that the user logged in is also authorized to do this
     if not current_user.is_authorized():
         return login_manager.unauthorized()
+
+    template = "cluster/schedule_files.html" if is_cluster else "schedule_files.html"
 
     job = get_job(job_id=job_id)
     if job is None:
@@ -708,8 +766,43 @@ def view_job_data(job_id):
     elif job['owner'] == current_user.email:
         # OK, this job is yours. Time to dig up the logs.
         files = get_job_files(job, "data")
-        return render_template('schedule_files.html', name="data", files=files, job=job)
+        return render_template(template, name="data", files=files, job=job)
     return "Can't view data for job {0}".format(job_id), 401
+
+# Routes
+@app.route('/', methods=["GET"])
+def index():
+    return render_template('index.html')
+
+@app.route("/schedule", methods=["GET"])
+@login_required
+def schedule_job(errors=None, values=None):
+    return _schedule_job(is_cluster=False, errors=errors, values=values)
+
+@app.route("/schedule/new", methods=["POST"])
+@login_required
+def create_scheduled_job():
+    return _create_scheduled_job(is_cluster=False)
+
+@app.route("/schedule/edit/<job_id>", methods=["GET","POST"])
+@login_required
+def edit_scheduled_job(job_id):
+    return _edit_scheduled_job(is_cluster=False, job_id=job_id)
+
+@app.route("/schedule/delete/<job_id>", methods=["POST","GET","DELETE"])
+@login_required
+def delete_scheduled_job(job_id):
+    return _delete_scheduled_job(is_cluster=False, job_id=job_id)
+
+@app.route("/schedule/logs/<job_id>", methods=["GET"])
+@login_required
+def view_job_logs(job_id):
+    return _view_job_logs(is_cluster=False, job_id=job_id)
+
+@app.route("/schedule/data/<job_id>", methods=["GET"])
+@login_required
+def view_job_data(job_id):
+    return _view_job_data(is_cluster=False, job_id=job_id)
 
 @app.route("/worker", methods=["GET"])
 @login_required
@@ -737,7 +830,7 @@ def spawn_worker_instance():
 
     # Check required file
     if not request.files['public-ssh-key']:
-        errors['code-tarball'] = "Public key file is required"
+        errors['code'] = "Public key file is required"
 
     # Bug 961200: Check that a proper OpenSSH public key was uploaded.
     # It should start with "ssh-rsa AAAAB3"
@@ -878,21 +971,21 @@ def cluster_spawn():
     errors = {}
 
     # Check required fields
-    for f in ['name', 'token', 'n-workers']:
+    for f in ['name', 'token', 'num_workers']:
         val = request.form[f]
         if val is None or val.strip() == '':
             errors[f] = "This field is required"
 
     try:
-        n_workers = int(request.form["n-workers"])
+        n_workers = int(request.form["num_workers"])
         if n_workers <= 0 or n_workers > 20:
             raise Exception
     except:
-        errors["n-workers"] = "This field should be a positive number within [1, 20]."
+        errors["num_workers"] = "This field should be a positive number within [1, 20]."
 
     # Check required file
     if not request.files['public-ssh-key']:
-        errors['code-tarball'] = "Public key file is required"
+        errors['code'] = "Public key file is required"
 
     # Bug 961200: Check that a proper OpenSSH public key was uploaded.
     # It should start with "ssh-rsa AAAAB3"
@@ -998,6 +1091,36 @@ def cluster_kill(jobflow_id):
         jobflow_state = jobflow.state,
         public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
     )
+
+@app.route("/cluster/schedule", methods=["GET"])
+@login_required
+def cluster_schedule_job(errors=None, values=None):
+    return _schedule_job(is_cluster=True, errors=errors, values=values)
+
+@app.route("/cluster/schedule/new", methods=["POST"])
+@login_required
+def cluster_create_scheduled_job():
+    return _create_scheduled_job(is_cluster=True)
+
+@app.route("/cluster/schedule/edit/<job_id>", methods=["GET","POST"])
+@login_required
+def cluster_edit_scheduled_job(job_id):
+    return _edit_scheduled_job(is_cluster=True, job_id=job_id)
+
+@app.route("/cluster/schedule/delete/<job_id>", methods=["POST","GET","DELETE"])
+@login_required
+def cluster_delete_scheduled_job(job_id):
+    return _delete_scheduled_job(is_cluster=True, job_id=job_id)
+
+@app.route("/cluster/schedule/logs/<job_id>", methods=["GET"])
+@login_required
+def cluster_view_job_logs(job_id):
+    return _view_job_logs(is_cluster=True, job_id=job_id)
+
+@app.route("/cluster/schedule/data/<job_id>", methods=["GET"])
+@login_required
+def cluster_view_job_data(job_id):
+    return _view_job_data(is_cluster=True, job_id=job_id)
 
 @app.route("/status", methods=["GET"])
 def status():
