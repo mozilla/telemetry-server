@@ -195,7 +195,7 @@ Resources:
               "        install $@\n",
               "}\n",
               "install python-pip git python-psycopg2 python-dateutil python-dev nginx jq ntp\n",
-              "pip install --upgrade boto fabric flask flask-login simplejson sqlalchemy uwsgi\n",
+              "pip install --upgrade awscli boto fabric flask flask-login simplejson sqlalchemy uwsgi\n",
               # Forked from https://github.com/garbados/flask-browserid, modded
               # to support X-Forwarded-Proto header (so it can work behind ELB).
               "pip install git+https://github.com/mreid-moz/flask-browserid.git\n",
@@ -212,6 +212,11 @@ Resources:
               "k = b.get_key('v", {Ref: sourcesVersion}, "/telemetry-analysis-service.tar.gz')\n",
               "k.get_contents_to_filename('sources.tar.gz')\n",
               "END\n",
+              "sudo -u ubuntu mkdir -p /home/ubuntu/.aws\n",
+              "if [ ! -f /home/ubuntu/.aws/config ]; then\n",
+              "  sudo -u ubuntu echo \"[default]\" > /home/ubuntu/.aws/config\n",
+              "  sudo -u ubuntu echo \"region = ",  {Ref: 'AWS::Region'}, "\" >> /home/ubuntu/.aws/config\n",
+              "fi\n",
               "sudo -u ubuntu tar -xzf sources.tar.gz\n",
               "echo '42 * * * * ubuntu /home/ubuntu/telemetry_analysis/terminate-expired-instances.py' >> /etc/crontab\n",
               "echo '' >> config.py\n",
