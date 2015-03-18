@@ -10,7 +10,7 @@ if [ ! -f "$JOB_CONFIG" ]; then
     exit 1
 fi
 
-if [ ! -z "$(jq '.num_workers' < $JOB_CONFIG)" ]; then # Spark cluster
+if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cluster
     AMI_VERSION=$(jq -r '.ami_version' < "$JOB_CONFIG")
     SPARK_VERSION=$(jq -r '.spark_version' < "$JOB_CONFIG")
     N_WORKERS=$(jq -r '.num_workers' < "$JOB_CONFIG")
@@ -26,7 +26,7 @@ if [ ! -z "$(jq '.num_workers' < $JOB_CONFIG)" ]; then # Spark cluster
 
     aws emr create-cluster --auto-terminate --name "$CLUSTER_NAME" --ami-version $AMI_VERSION --instance-type $SLAVE_TYPE --instance-count $N_WORKERS --service-role EMR_DefaultRole --ec2-attributes KeyName=$SSH_KEY,InstanceProfile=telemetry-spark-emr --tags "Owner=$OWNER Application=telemetry-server" --bootstrap-actions Path=s3://support.elasticmapreduce/spark/install-spark,Args=\["-v","$SPARK_VERSION"\] Path=s3://telemetry-spark-emr/telemetry.sh,Args=\["--timeout","$TIMEOUT"\] --steps Type=CUSTOM_JAR,Name=CustomJAR,ActionOnFailure=TERMINATE_JOB_FLOW,Jar=s3://us-west-2.elasticmapreduce/libs/script-runner/script-runner.jar,Args=\["s3://telemetry-spark-emr/batch.sh","--job-name","$JOB_NAME","--notebook","$NOTEBOOK","--data-bucket","$DATA_BUCKET"\]
 else
-    cd "$DIR/../../../"
+    cd ~/telemetry-server
     python -m provisioning.aws.launch_worker "$JOB_CONFIG"
     EXIT_CODE=$?
 
