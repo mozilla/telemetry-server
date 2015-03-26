@@ -92,3 +92,11 @@ Version 4
 Version 4 is the "Unified" Telemetry format, and is described by the [Mozilla Source Tree Docs](https://ci.mozilla.org/job/mozilla-central-docs/Tree_Documentation/toolkit/components/telemetry/telemetry/common-ping.html)
 
 Version 4 contains a top-level `version` field rather than `ver`, among many other changes from previous versions.
+
+Version 5
+---------
+
+Version 5 is a Unified (version 4) payload converted to be compatible with version 1 and 2 payloads.
+
+This primarily involves restoring the top-level `info` and `ver` fields, but
+there are several other tweaks in the `convert_saved_session` function of [telemetry/convert.py](https://github.com/mozilla/telemetry-server/blob/master/telemetry/convert.py) as well.
