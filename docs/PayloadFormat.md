@@ -7,11 +7,11 @@ Version 1
 The standard format expected by the server is Version 1.
 
 Schema version 1 is pretty minimal, and means this:
-- top-level contains a "ver" field with a value of 1.
-- top-level contains an "info" sub-object containing at minimum: app version, app name, update channel, build id, reason (using the expected field names).
-- if a top-level object called "histograms" is present, we additionally require a "revision" field in the info object so we know what version of the source to validate against.
+- top-level contains a `ver` field with a value of 1.
+- top-level contains an `info` sub-object containing at minimum: app version, app name, update channel, build id, reason (using the expected field names).
+- if a top-level object called `histograms` is present, we additionally require a `revision` field in the `info` object so we know what version of the source to validate against.
 
-A minimal version 1 payload looks like
+A minimal version 1 payload looks like:
 ```js
 {
   "ver": 1,
@@ -25,7 +25,7 @@ A minimal version 1 payload looks like
 }
 ```
 
-A minimal version 1 payload with histograms looks like
+A minimal version 1 payload with `histograms` looks like:
 
 ```js
 {
@@ -59,12 +59,12 @@ A minimal version 1 payload with histograms looks like
 Version 2
 ---------
 
-Version 2 is the same as version 1, but contains histograms converted to the [server histogram format](StorageFormat.md)
+Version 2 is the same as version 1, but contains `histograms` converted to the [compact histogram format](StorageFormat.md)
 
 Example:
 ```js
 {
-  "ver": 1,
+  "ver": 2,
   "info": {
     "appName": "Firefox",
     "appVersion": "37",
@@ -91,4 +91,4 @@ Version 4
 
 Version 4 is the "Unified" Telemetry format, and is described by the [Mozilla Source Tree Docs](https://ci.mozilla.org/job/mozilla-central-docs/Tree_Documentation/toolkit/components/telemetry/telemetry/common-ping.html)
 
-Version 4 contains a top-level `version` field instead of using `ver`, among many other changes from previous versions.
+Version 4 contains a top-level `version` field rather than `ver`, among many other changes from previous versions.
