@@ -42,12 +42,12 @@
 
   "Mappings": {
     "Region2WebServerAMI": {
-      "us-west-2": { "AMIpv": "ami-57a48667" }
+      "us-west-2": { "AMIpv": "ami-c79aaef7" }
     },
     "Region2ProcessIncomingAMI": {
       "us-west-2": {
-        "AMIpv":  "ami-57a48667",
-        "AMIhvm": "ami-7da4864d"
+        "AMIpv":  "ami-c79aaef7",
+        "AMIhvm": "ami-0f9baf3f"
       }
     }
   },
