@@ -76,16 +76,17 @@ Mappings:
   # We use instance storage to avoid stability issues with EBS also we don't
   # have to pay for IO. We'll initialize these with CloudInit, later.
   # See: http://cloud-images.ubuntu.com/locator/ec2/
-  # Use the 'ubuntu/images/ubuntu-saucy-13.10-amd64-server-20140212' image.
+  # Use the 'ubuntu/images/ubuntu-trusty-14.04-amd64-server-20150417' image.
   regionToAMI:
-    ap-northeast-1:           {AMI: ami-4d04714c}
-    ap-southeast-1:           {AMI: ami-c8cf999a}
-    ap-southeast-2:           {AMI: ami-0329b739}
-    eu-west-1:                {AMI: ami-5a6e9f2d}
-    sa-east-1:                {AMI: ami-41ec4f5c}
-    us-east-1:                {AMI: ami-11dfda78}
-    us-west-1:                {AMI: ami-2491ac61}
-    us-west-2:                {AMI: ami-10a9cb20}
+    ap-northeast-1:           {AMI: ami-5c14d15c}
+    ap-southeast-1:           {AMI: ami-2a5a6778}
+    ap-southeast-2:           {AMI: ami-b5661b8f}
+    eu-central-1:             {AMI: ami-c2d8e4df}
+    eu-west-1:                {AMI: ami-b98cecce}
+    sa-east-1:                {AMI: ami-8db33690}
+    us-east-1:                {AMI: ami-3234315a}
+    us-west-1:                {AMI: ami-47799b03}
+    us-west-2:                {AMI: ami-57516467}
 ################################################################################
 
 Resources:
