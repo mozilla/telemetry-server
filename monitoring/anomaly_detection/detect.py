@@ -53,7 +53,7 @@ def predict(series):
         for ss in subsets:
             if numpy.mean(ss) - mean > 0:
                 tstat = stats.mannwhitneyu(subsets[0], ss)
-                result += tstat[1] < 0.0001
+                result += tstat[1] < 0.00005
 
         return result > (len(subsets) >> 2)
     except ValueError, e:
