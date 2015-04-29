@@ -56,7 +56,7 @@
     "TelemetryServerAutoScaleTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": "telemetry-server-auto-scale-activity",
+        "TopicName": "telemetry-server-auto-scale-activity-v2",
         "Subscription": [ { "Endpoint": { "Ref": "NotificationEmail" }, "Protocol": "email" } ]
       }
     },
