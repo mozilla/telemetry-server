@@ -234,7 +234,7 @@ def build_config(job):
             "ssl_key_name": "mreid",
             "base_dir": "/mnt/telemetry",
             "instance_type": app.config['INSTANCE_TYPE'],
-            "image": "ami-b191df81", # -> telemetry-worker-hvm-20141024 (Ubuntu 14.10)
+            "image": "ami-5d4a7b6d", # -> telemetry-worker-hvm-20150504 (Ubuntu 14.10)
             # TODO: ssh-only security group
             "security_groups": ["telemetry"],
             "iam_role": iam_role,
