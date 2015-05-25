@@ -221,7 +221,7 @@ class Converter:
 
         # WINNT is reported as Windows_NT in the unified ping, and apparently
         # we have some Win95 users
-        if info.get("OS").startswith("Windows_"):
+        if info.get("OS", "Other").startswith("Windows_"):
             info["OS"] = "WINNT"
 
         adapters = None
