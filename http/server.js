@@ -34,8 +34,8 @@ var log_path = config.log_path || "./";
 var log_base = config.log_base || "telemetry.log";
 
 // TODO: URL Validation to ensure we're receiving dimensions
-// ^/submit/telemetry/id/reason/appName/appUpdateChannel/appVersion/appBuildID$
-// See http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetryPing.js#658
+// ^/submit/telemetry/id/reason/appName/appVersion/appUpdateChannel/appBuildID$
+// See http://mxr.mozilla.org/mozilla-central/source/toolkit/components/telemetry/TelemetrySend.jsm#527
 var url_prefix = config.url_prefix || "/submit/telemetry/";
 var url_prefix_len = url_prefix.length;
 var include_ip = false;
