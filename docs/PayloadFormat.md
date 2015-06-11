@@ -93,6 +93,41 @@ Version 4 is the "Unified" Telemetry format, and is described by the [Mozilla So
 
 Version 4 contains a top-level `version` field rather than `ver`, among many other changes from previous versions.
 
+When the server validates a v4 payload, it expects the following:
+- Top level field called "version" with a value of 4
+- Top level field called "type" with a string value
+- Top level field called "application" with an object value
+- Top level field called "payload" with an object value
+- If "type" is `main` or `saved-session`, there are further requirements:
+  - `payload/info` should be present (object)
+  - `payload/histograms` should be present (object)
+  - If "type" is `saved-session`, `payload/environment` should be present (object)
+  - `payload/info/revision` should point to the mercurial revision of the build (and hence Histograms.json)
+  - `payload/histograms` should not contain any invalid histograms per the spec in [Histograms.json](http://hg.mozilla.org/releases/mozilla-release/raw-file/tip/toolkit/components/telemetry/Histograms.json)
+
+Example minimal version 4 payload:
+```js
+{
+  "type": "awesome-data",
+  "id": <generated UUID>,
+  "creationDate": "2015-06-03T13:21:58Z",
+  "version": 4,
+  "application": {
+    architecture: "x86",
+    buildId: "20150610999999",
+    name: "Firefox",
+    version: "41.0a1",
+    vendor: "Mozilla",
+    platformVersion: "41.0a1",
+    xpcomAbi: "x86-msvc",
+    channel: "default"
+  },
+  "payload": {
+    ... awesome data here ...
+  }
+}
+```
+
 Version 5
 ---------
 
