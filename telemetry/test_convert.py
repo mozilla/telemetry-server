@@ -181,6 +181,100 @@ class ConvertTest(unittest.TestCase):
                 },
                 "histograms": self.get_raw_histograms()
             }
+        if desc == "gaia":
+            return {
+              "type": "advancedtelemetry",
+              "id": "88056950-2c43-4454-9c64-cf255b307623",
+              "creationDate": "2015-06-03T13:21:58Z",
+              "version": 4,
+              "application": {
+                "architecture": "x86",
+                "buildId": "20150610999999",
+                "name": "FirefoxOS",
+                "version": "41.0a1",
+                "vendor": "Mozilla",
+                "platformVersion": "41.0a1",
+                "xpcomAbi": "x86-msvc",
+                "channel": "default"
+              },
+              "payload": {
+                "gaiaHistograms": {
+                  "keyboard_uss": {
+                    "bucket_count": 10,
+                    "sum_squares_hi": 0,
+                    "range": [0, 100],
+                    "values": [148, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    "sum": 0,
+                    "histogram_type": 1,
+                    "sum_squares_lo": 1
+                  },
+                  "system_uss": {
+                    "bucket_count": 10,
+                    "sum_squares_hi": 0,
+                    "range": [0, 100],
+                    "values": [0, 0, 0, 0, 0, 148, 0, 0, 0, 0],
+                    "sum": 0,
+                    "histogram_type": 1,
+                    "sum_squares_lo": 1
+                  },
+                  "keyboard_jank": {
+                    "bucket_count": 10,
+                    "sum_squares_hi": 0,
+                    "range": [0, 100],
+                    "values": [7, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    "sum": 0,
+                    "histogram_type": 1,
+                    "sum_squares_lo": 1
+                  },
+                  "callscreen_jank": {
+                    "bucket_count": 10,
+                    "sum_squares_hi": 0,
+                    "range": [0, 100],
+                    "values": [74, 3, 0, 0, 0, 0, 0, 0, 0, 0],
+                    "sum": 0,
+                    "histogram_type": 1,
+                    "sum_squares_lo": 1
+                  },
+                  "callscreen_uss": {
+                    "bucket_count": 10,
+                    "sum_squares_hi": 0,
+                    "range": [0, 100],
+                    "values": [0, 0, 0, 0, 0, 148, 0, 0, 0, 0],
+                    "sum": 0,
+                    "histogram_type": 1,
+                    "sum_squares_lo": 1
+                  },
+                  "verticalhome_jank": {
+                    "bucket_count": 10,
+                    "sum_squares_hi": 0,
+                    "range": [0, 100],
+                    "values": [7, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    "sum": 0,
+                    "histogram_type": 1,
+                    "sum_squares_lo": 1
+                  },
+                  "verticalhome_uss": {
+                    "bucket_count": 10,
+                    "sum_squares_hi": 0,
+                    "range": [0, 100],
+                    "values": [67, 80, 0, 0, 0, 0, 0, 0, 0, 0],
+                    "sum": 0,
+                    "histogram_type": 1,
+                    "sum_squares_lo": 1
+                  },
+                  "system_jank": {
+                    "bucket_count": 10,
+                    "sum_squares_hi": 0,
+                    "range": [0, 100],
+                    "values": [74, 3, 0, 0, 0, 0, 0, 0, 0, 0],
+                    "sum": 0,
+                    "histogram_type": 1,
+                    "sum_squares_lo": 1
+                  }
+                }
+              }
+            }
+
 
     def get_raw_histograms(self):
         return {
@@ -290,6 +384,19 @@ class ConvertTest(unittest.TestCase):
         for h in expected_converted_histograms.keys():
             self.assertEqual(converted["histograms"][h], expected_converted_histograms[h])
         self.assertIs(converted["info"].get("geoCountry"), None)
+
+    def test_gaia(self):
+        raw = self.get_payload("gaia")
+        self.assertEqual(raw["version"], Converter.VERSION_UNIFIED)
+        converted, dimensions = self.convert(raw)
+        # self.assertEqual(dimensions[0], "saved-session")
+        self.assertEqual(raw["version"], Converter.VERSION_UNIFIED)
+        self.assertEqual(converted["version"], Converter.VERSION_UNIFIED_CONVERTED)
+        self.assertTrue("payload" in converted)
+        payload = converted.get("payload", {})
+        self.assertTrue("gaiaHistograms" in payload)
+        gaiaHistograms = payload.get("gaiaHistograms", {})
+        self.assertTrue("system_jank" in gaiaHistograms)
 
     def print_byte_range(self, data, start=None, end=None):
         if start is None:
