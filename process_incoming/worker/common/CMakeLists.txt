@@ -26,6 +26,8 @@ ${CMAKE_THREAD_LIBS_INIT}
 ${LZMA_LIBRARIES}
 -lrt)
 
+INCLUDE(CPack)
+
 configure_file(TelemetryConstants.in.cpp ${CMAKE_CURRENT_BINARY_DIR}/TelemetryConstants.cpp)
 
 add_subdirectory(test)

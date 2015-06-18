@@ -186,9 +186,7 @@ Configuring the converter
 
 Setting up/running the histogram server
 ---
-    cd telemetry
-    ../bin/get_histogram_tools.sh
-    cd ..
+    ./http/get_histogram_tools.sh
     python -m http.histogram_server
 
 Running the converter
