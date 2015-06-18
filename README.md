@@ -186,7 +186,10 @@ Configuring the converter
 
 Setting up/running the histogram server
 ---
-    ./http/get_histogram_tools.sh
+
+    pushd http
+    ./get_histogram_tools.sh
+    popd
     python -m http.histogram_server
 
 Running the converter
