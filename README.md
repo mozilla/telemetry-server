@@ -188,7 +188,7 @@ Setting up/running the histogram server
 ---
 
     pushd http
-    ./get_histogram_tools.sh
+    ../bin/get_histogram_tools.sh
     popd
     python -m http.histogram_server
 
