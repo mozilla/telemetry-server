@@ -29,7 +29,7 @@ help_message = '''
         -h, --help
 '''
 
-SYMBOL_SERVER_URL = "http://symbolapi.mozilla.org:80/"
+SYMBOL_SERVER_URL = "http://symbolapi.mozilla.org:80/chromehangs-daily/"
 
 # We won't bother symbolicating file+offset pairs that occur less than
 # this many times.
