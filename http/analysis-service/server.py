@@ -1009,6 +1009,11 @@ def cluster_spawn():
                                                 's3://telemetry-spark-emr/telemetry.sh',
                                                 ['--public-key', pubkey])
 
+    configure_yarn_bootstrap = BootstrapAction('Configure YARN',
+                                               's3://elasticmapreduce/bootstrap-actions/configure-hadoop',
+                                               ['-y', 'yarn.nodemanager.vmem-check-enabled=false',
+                                                '-y', 'yarn.nodemanager.pmem-check-enabled=false'])
+
     jobflow_id = emr.run_jobflow(name = request.form['token'],
                               ec2_keyname = 'mozilla_vitillo',
                               master_instance_type = app.config['MASTER_INSTANCE_TYPE'],
@@ -1019,7 +1024,9 @@ def cluster_spawn():
                               job_flow_role = 'telemetry-spark-emr',
                               visible_to_all_users = True,
                               keep_alive = True,
-                              bootstrap_actions = [install_spark_bootstrap, setup_telemetry_bootstrap])
+                              bootstrap_actions = [install_spark_bootstrap,
+                                                   setup_telemetry_bootstrap,
+                                                   configure_yarn_bootstrap])
 
     # Associate a few tags
     emr.add_tags(jobflow_id, {
