@@ -146,7 +146,7 @@ class Manager(Thread):
         # TODO multi-process uploaders
         success = False
         while True:
-            val = upload_queue.get(timeout = 30 * 60)
+            val = upload_queue.get(timeout = 90 * 60)
             if type(val) is bool:
                 success = val
                 break
