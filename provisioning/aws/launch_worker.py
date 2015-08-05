@@ -45,14 +45,14 @@ mount /dev/md0 /mnt
         template_str = """#!/bin/bash
 apt-get update
 export DEBIAN_FRONTEND=noninteractive; apt-get --yes install python-pip
-LOG="$BASE/$JOB_NAME.$(date +%Y%m%d%H%M%S).log"
-if [ ! -d "$(dirname $LOG)" ]; then
-  mkdir -p "$(dirname $LOG)"
-fi
 S3_BASE="s3://$DATA_BUCKET/$JOB_NAME"
 $RAID_CONFIGURATION
 pip install --upgrade awscli
 mkdir -p $BASE
+LOG="$BASE/$JOB_NAME.$(date +%Y%m%d%H%M%S).log"
+if [ ! -d "$(dirname $LOG)" ]; then
+  mkdir -p "$(dirname $LOG)"
+fi
 chown -R ubuntu:ubuntu $BASE
 sudo -Hu ubuntu bash <<EOF
 if [ -d "~/telemetry-server" ]; then
