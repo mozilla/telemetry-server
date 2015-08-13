@@ -39,13 +39,17 @@ $(document).ready(function() {
         hours.sort();
         //"2014-06-18T19:00:00"
         var fff = d3.time.format.iso;
+        var cutoffDate = new Date(new Date().getTime() - 60*24*60*60*1000);
+        var cutoff = fff(cutoffDate);
         hours.forEach(function(hour){
+            if (hour >= cutoff) {
             var hourDate = fff.parse(hour);
-            serieses.forEach(function(series){
-                var v = data_in[hour][series];
-                if (!v) v = 0;
-                allData[series].push({ date: hourDate, value: v })
-            });
+                serieses.forEach(function(series){
+                    var v = data_in[hour][series];
+                    if (!v) v = 0;
+                    allData[series].push({ date: hourDate, value: v })
+                });
+            }
         });
 
         moz_chart({
