@@ -58,6 +58,9 @@
   LocalForward 8888 localhost:8888
   Identityfile ~/.ssh/{my-private-key}
 </pre>
+ To upload an existing notebook, use SCP:
+ <p><span class="no-select"><code>$ </code></span><code>scp -i my-private-key some-notebook.ipynb hadoop@{{ public_dns }}:~/analyses</code></p>
+ The notebook will then show up in the IPython files list.
 <p>
   Now you can launch your <a href="http://localhost:8888" target="_blank">
     IPython notebook</a> from Firefox.
