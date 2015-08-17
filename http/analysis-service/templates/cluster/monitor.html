@@ -37,8 +37,13 @@
   <div class="col-md-2"><strong>Terminate it here:</strong></div>
   <div class="col-md-10"><a href="{{ terminate_url }}">{{ terminate_url }}</a></div>
 </div>
+<div class="row">
+ <div class="col-md-2"><strong>Terminates automatically at:</strong></div>
+ <div class="col-md-10">{{ terminate_time }}</div>
+</div>
+
 <div>
-  <h3>Your cluster will be killed in 24 hours! Be sure to save any work!</h3>
+  <h3>Your cluster will be killed within {{ terminate_hours_left }} hours! Be sure to save any work!</h3>
 </div>
 <br>
 <p class="lead">Connecting:</p>

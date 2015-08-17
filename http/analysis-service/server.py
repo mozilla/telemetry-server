@@ -15,6 +15,8 @@ from urlparse import urljoin
 from uuid import uuid4
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.sql import select, func
+from datetime import datetime, timedelta
+from dateutil.parser import parse as parse_date
 from subprocess import check_output, CalledProcessError
 from tempfile import mkstemp
 import crontab
@@ -314,6 +316,10 @@ def get_required_int(request, field, label, min_value=0, max_value=100):
     except ValueError:
         raise ValueError("{0} should be an int between {1} and {2}".format(label, min_value, max_value))
     return value
+
+def get_termination_time(start_time):
+    # Instance gets killed by terminate-expired-instances.py, 1 day after the creation time
+    return parse_date(start_time, ignoretz = True) + timedelta(days = 1)
 
 def hour_to_time(hour):
     return "{0}:00 UTC".format(hour)
@@ -914,13 +920,18 @@ def monitor(instance_id):
     if instance.tags['Owner'] != current_user.email:
         return "No such instance: {}".format(instance_id), 404
 
+    # Get a datetime representing when the cluster will be terminated
+    terminate_time = get_termination_time(instance.launch_time)
+
     # Alright then, let's report status
     return render_template(
         'monitor.html',
         instance_id  = instance_id,
         instance_state  = instance.state,
         public_dns      = instance.public_dns_name,
-        terminate_url   = abs_url_for('kill', instance_id = instance.id)
+        terminate_url   = abs_url_for('kill', instance_id = instance.id),
+        terminate_time = terminate_time.strftime("%Y-%m-%d %H:%M:%S"),
+        terminate_hours_left = max(0, int((datetime.utcnow() - terminate_time).total_seconds()) // 3600)
     )
 
 @app.route("/worker/kill/<instance_id>", methods=["GET"])
@@ -1065,13 +1076,18 @@ def cluster_monitor(jobflow_id):
     if get_tag_value(cluster.tags, "Owner") != current_user.email:
         return "No such cluster: {}".format(jobflow_id), 404
 
+    # Get a datetime representing when the cluster will be terminated
+    terminate_time = get_termination_time(getattr(jobflow, "creationdatetime", datetime.utcnow())):
+
     # Alright then, let's report status
     return render_template(
         'cluster/monitor.html',
         jobflow_id = jobflow_id,
         instance_state = jobflow.state,
         public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
-        terminate_url = abs_url_for('cluster_kill', jobflow_id = jobflow_id)
+        terminate_url = abs_url_for('cluster_kill', jobflow_id = jobflow_id),
+        terminate_time = terminate_time.strftime("%Y-%m-%d %H:%M:%S"),
+        terminate_hours_left = max(0, int((datetime.utcnow() - terminate_time).total_seconds()) // 3600)
     )
 
 @app.route("/cluster/kill/<jobflow_id>", methods=["GET"])
