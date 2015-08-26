@@ -130,3 +130,21 @@ def list_partitions(bucket, prefix='', level=0, schema=None, include_keys=False)
             else:
                 for prefix in list_partitions(bucket, k.name, level + 1, schema, include_keys):
                     yield prefix
+
+
+def list_heka_partitions(bucket, prefix='', level=0, schema=None):
+    delimiter = '/'
+
+    if schema is not None:
+        allowed_values = schema.sanitize_allowed_values()
+
+    for k in bucket.list(prefix=prefix, delimiter=delimiter):
+        partitions = k.name.split("/")
+
+        if schema is None or schema.is_allowed(partitions[level], allowed_values[level]):
+            if level == 8:
+                for f in bucket.list(prefix=k.name):
+                    yield f
+            else:
+                for prefix in list_heka_partitions(bucket, k.name, level + 1, schema):
+                    yield prefix
