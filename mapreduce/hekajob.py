@@ -284,7 +284,7 @@ class Job:
             dirs[:] = [i for i in dirs if self.filter_includes(level, i)]
             for f in files:
                 full_filename = os.path.join(root, f)
-                dims = self._input_filter.get_dimensions(searchdir, full_filename)
+                dims = self._input_filter.get_dimensions(searchdir, full_filename, dirs_only=True)
                 include = True
                 for l in range(level, len(self._allowed_values)):
                     if not self.filter_includes(l, dims[l]):

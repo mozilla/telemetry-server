@@ -168,7 +168,7 @@ def unpack_string(string, **kwargs):
     return unpack(StringIO(string), **kwargs)
 
 
-def unpack(fin, raw=False, verbose=False, strict=False, backtrack=False, try_snappy=False):
+def unpack(fin, raw=False, verbose=False, strict=False, backtrack=False, try_snappy=True):
     record_count = 0
     bad_records = 0
     total_bytes = 0
