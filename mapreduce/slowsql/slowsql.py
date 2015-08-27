@@ -61,7 +61,7 @@ def map(k, v, cx):
             for query, arr in queries.iteritems():
                 cx.write(safe_key([threadType, submission_date, appName, appVersion, appUpdateChannel, query]), arr)
     except Exception as e:
-        cx.write(safe_key(["Error", str(e), traceback.format_exc()] + d), [1,0])
+        cx.write(safe_key(["Error", str(e), traceback.format_exc()]), [1,0])
 
 def setup_reduce(cx):
     cx.field_separator = ","
