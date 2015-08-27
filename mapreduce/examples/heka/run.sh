@@ -6,6 +6,7 @@ cd ../../../
 mkdir -p /tmp/telemetry/work/cache
 
 python -m mapreduce.hekajob $DIR/distribution.py \
+       --delete-data \
        --input-filter $DIR/filter.json \
        --num-mappers 16 \
        --num-reducers 4 \
