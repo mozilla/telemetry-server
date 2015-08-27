@@ -12,8 +12,7 @@ def replace_quoted_values(sql):
     # Replace single- or double-quoted literals:
     return string_literal_pattern.sub(":private", sql)
 
-def sanitize(json_string):
-    parsed = json.loads(json_string)
+def sanitize(parsed):
     if "slowSQL" in parsed:
         if "otherThreads" in parsed["slowSQL"]:
             sanitized = {}
@@ -46,15 +45,17 @@ def safe_key(pieces):
     # remove the trailing EOL chars:
     return unicode(output.getvalue().strip().translate(eol_trans_table))
 
-def map(k, d, v, cx):
-    [reason, appName, appUpdateChannel, appVersion, appBuildID, submission_date] = d
+def map(k, v, cx):
+    submission_date = v["meta"]["submissionDate"]
+    appName = v["application"]["name"]
+    appVersion =v["application"]["version"]
+    appUpdateChannel = v["application"]["channel"]
+
     cx.write(safe_key(["TOTAL", submission_date, appName, appVersion, appUpdateChannel, "ALL_PINGS"]), [1,0])
-    if '"slowSQL":' not in v:
-        return
-    if '"slowSQL":{"mainThread":{},"otherThreads":{}}' in v:
+    if "slowSQL" not in v["payload"]:
         return
     try:
-        j = sanitize(v)
+        j = sanitize(v["payload"])
         slowSQL = j["slowSQL"]
         for threadType, queries in slowSQL.iteritems():
             for query, arr in queries.iteritems():
@@ -80,6 +81,7 @@ def median(v, already_sorted=False):
         return (s[middle] + s[middle-1]) / 2.0
 
 def reduce(k, v, cx):
+    print k
     try:
         counts = []
         durations = []
@@ -178,7 +180,7 @@ if __name__ == "__main__":
   }
 }'''
 
-    sanitized = sanitize(raw)
+    sanitized = sanitize(json.loads(raw))
     sanitized_str = json.dumps(sanitized, sort_keys=True, indent=2, separators=(',', ': '))
     if sanitized_str != expected:
         print "Error sanitizing."
