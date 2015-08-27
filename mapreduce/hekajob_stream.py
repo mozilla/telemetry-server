@@ -19,6 +19,7 @@ from telemetry.telemetry_schema import TelemetrySchema
 from telemetry.util.compress import CompressedFile
 import telemetry.util.s3 as s3util
 import telemetry.util.timer as timer
+import telemetry.util.hekastream as hekastream
 import subprocess
 import csv
 import signal
@@ -33,7 +34,7 @@ except ImportError:
 
 
 class Job:
-    """A class for orchestrating a Telemetry MapReduce job"""
+    """A class for orchestrating a Heka MapReduce job"""
     # 1. read input filter
     # 2. generate filtered list of local input files
     # 2a. generate filtered list of remote input files
@@ -94,17 +95,17 @@ class Job:
 
     def mapreduce(self):
         # Find files matching specified input filter
-        files = set(self.get_filtered_files(self._input_dir))
+        #files = set(self.get_filtered_files(self._input_dir))
         remote_files = self.get_filtered_files_s3()
 
         # If we're using the cache dir as the data dir, we will end up reading
         # each already-downloaded file twice, so we should skip any remote files
         # that exist in the data dir.
-        remote_files = self.dedupe_remotes(remote_files, files)
+        #remote_files = self.dedupe_remotes(remote_files, files)
 
         # Partition files into reasonably equal groups for use by mappers
         print "Partitioning input data..."
-        partitions = self.partition(files, remote_files)
+        partitions = self.partition(remote_files)
         print "Done"
 
         if not any(part for part in partitions):
@@ -115,16 +116,13 @@ class Job:
 
         # Not useful to have more mappers than partitions.
         if len(partitions) < self._num_mappers:
-            print "Filter matched only %d input files (%d local in %s and %d " \
-                  "remote from %s). Reducing number of mappers accordingly." % (
-                  len(partitions), len(files), self._input_dir,
-                  sum(len(part) for part in partitions) - len(files),
-                  self._bucket_name)
+            print "Filter matched only %d input files. Reducing number of mappers accordingly." % (
+                  len(partitions),)
             self._num_mappers = len(partitions)
 
         # Free up our set of names. We want to minimize
         # our memory usage prior to forking map jobs.
-        files = None
+        #files = None
         gc.collect()
 
         def checkExitCode(proc):
@@ -140,14 +138,14 @@ class Job:
         for i in range(self._num_mappers):
             if len(partitions[i]) > 0:
                 # Fetch the files we need for each mapper
-                # if not self._local_only:
-                #     print "Fetching remotes for partition", i
-                #     fetch_result = self.fetch_remotes(partitions[i])
-                #     if fetch_result == 0:
-                #         print "Remote files fetched successfully"
-                #     else:
-                #         print "ERROR: Failed to fetch", fetch_result, "files."
-                #         # TODO: Bail, since results will be unreliable?
+                #if not self._local_only:
+                #    print "Fetching remotes for partition", i
+                #    fetch_result = self.fetch_remotes(partitions[i])
+                #    if fetch_result == 0:
+                #        print "Remote files fetched successfully"
+                #    else:
+                #        print "ERROR: Failed to fetch", fetch_result, "files."
+                #        # TODO: Bail, since results will be unreliable?
                 p = Process(
                         target=Mapper,
                         name=("Mapper-%d" % i),
@@ -211,14 +209,7 @@ class Job:
         ('remote', 'name', 'size', 'dimensions'))
 
     # Split up the input files into groups of approximately-equal on-disk size.
-    def partition(self, files, remote_files):
-        namesize = ( self.MapperInput(
-            remote=False,
-            name=fn,
-            size=os.stat(fn).st_size,
-            dimensions=self._input_filter.get_dimensions(self._input_dir, fn)
-        ) for fn in files )
-
+    def partition(self, remote_files):
         partitions = [[] for i in range(self._num_mappers)]
         sums = [0 for i in range(self._num_mappers)]
         min_idx = 0
@@ -227,16 +218,9 @@ class Job:
             return min(enumerate(stuff), key=lambda x: x[1])[0]
 
         # Greedily assign the largest file to the smallest partition
-        for current in namesize:
-            #print "putting", current, "into partition", min_idx
-            partitions[min_idx].append(current)
-            sums[min_idx] += current.size
-            min_idx = find_min_idx(sums)
-
-        # And now do the same with the remote files.
         for r in remote_files:
             size = r.size
-            dims = self._input_filter.get_dimensions(".", r.name)
+            dims = self._input_filter.get_dimensions(".", r.name, dirs_only=True)
             remote = self.MapperInput(
                 remote=True,
                 name=r.name,
@@ -282,7 +266,7 @@ class Job:
             # Filter input files by partition. If the filter is reasonably
             # selective, this can be much faster than listing all files in the
             # bucket.
-            for f in s3util.list_partitions(bucket, schema=self._input_filter, include_keys=True):
+            for f in s3util.list_partitions(bucket, schema=self._input_filter, include_keys=True, dirs_only=True):
                 count += 1
                 if count == 1 or count % 1000 == 0:
                     print "Listed", count, "so far"
@@ -359,14 +343,12 @@ class Mapper:
         self.work_dir = work_dir
 
         print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs. 0% complete."
-
         bytes_total = sum([f.size for f in inputs])
         bytes_completed = 0
-        next_notice_pct = 10
-
+        next_notice_pct = 5
         start = datetime.now()
-
         loader = None
+
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
@@ -384,32 +366,25 @@ class Mapper:
                 for local, remote, err in loader.get_list([input_file.name]):
                     if err is not None:
                         print "Failed to download", remote, ":", err
-
-            try:
-                handle = self.open_input_file(input_file)
-            except:
-                print "Error opening", input_file.name, "(skipping)"
-                traceback.print_exc(file=sys.stderr)
-                continue
             line_num = 0
-            for line in handle:
-                line_num += 1
-                try:
-                    # Remove the trailing EOL character(s) before passing to
-                    # the map function.
-                    key, value = line.rstrip('\r\n').split("\t", 1)
-                    mapfunc(key, input_file.dimensions, value, context)
-                except ValueError, e:
-                    # TODO: increment "bad line" metrics.
-                    print "Bad line:", input_file.name, ":", line_num, e
-            handle.close()
-            if delete_files:
-                print "Removing", input_file.name
-                os.remove(handle.filename)
+            full_filename = os.path.join(self.work_dir, "cache", input_file.name)
+            try:
+                for r in hekastream.unpack(full_filename):
+                    line_num += 1
+                    try:
+                        mapfunc(r.message.uuid, r.message, context)
+                    except ValueError, e:
+                        # TODO: increment "bad line" metrics.
+                        print "Bad record:", input_file.name, ":", line_num, e
+                if delete_files:
+                    #print "Removing", input_file.name
+                    os.remove(full_filename)
+            except Exception as e:
+                print "Exception processing file:", full_filename, ":", e
             bytes_completed += input_file.size
             completed_pct = (float(bytes_completed) / bytes_total) * 100
             if completed_pct >= next_notice_pct:
-                next_notice_pct += 10
+                next_notice_pct += 5
                 duration_sec = timer.delta_sec(start)
                 completed_mb = float(bytes_completed) / 1024.0 / 1024.0
                 print "Mapper %d: %.2f%% complete. Processed %.2fMB in %.2fs (%.2fMB/s)" % (mapper_id, completed_pct, completed_mb, duration_sec, completed_mb / duration_sec)
