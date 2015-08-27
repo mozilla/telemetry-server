@@ -35,7 +35,7 @@
           },
       {
             "field_name": "buildId",
-            "allowed_values": "20150810122907"
+            "allowed_values": "*"
           }
     ]
 }
