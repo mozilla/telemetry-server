@@ -81,7 +81,6 @@ def median(v, already_sorted=False):
         return (s[middle] + s[middle-1]) / 2.0
 
 def reduce(k, v, cx):
-    print k
     try:
         counts = []
         durations = []
