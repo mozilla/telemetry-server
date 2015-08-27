@@ -91,31 +91,6 @@ class Job:
         for i in range(len(partitions)):
             print "Partition %d contained %d (%+d)" % (i, partitions[i], float(partitions[i]) - avg)
 
-    def fetch_remotes(self, remotes):
-        # TODO: fetch remotes inside Mappers, and process each one as it becomes available.
-        remote_names = ( r.name for r in remotes if r.remote )
-
-        # TODO: check cache first.
-        result = 0
-
-        fetch_cwd = os.path.join(self._work_dir, "cache")
-        if not os.path.isdir(fetch_cwd):
-            os.makedirs(fetch_cwd)
-        loader = s3util.Loader(fetch_cwd, self._bucket_name, aws_key=self._aws_key, aws_secret_key=self._aws_secret_key)
-        start = datetime.now()
-        downloaded_bytes = 0
-        for local, remote, err in loader.get_list(remote_names):
-            if err is None:
-                print "Downloaded", remote
-                downloaded_bytes += os.path.getsize(local)
-            else:
-                print "Failed to download", remote
-                result += 1
-        duration_sec = timer.delta_sec(start)
-        downloaded_mb = float(downloaded_bytes) / 1024.0 / 1024.0
-        print "Downloaded %.2fMB in %.2fs (%.2fMB/s)" % (downloaded_mb, duration_sec, downloaded_mb / duration_sec)
-        return result
-
     def dedupe_remotes(self, remote_files, local_files):
         return ( r for r in remote_files
                    if os.path.join(self._input_dir, r.name) not in local_files )
@@ -164,19 +139,10 @@ class Job:
         mappers = []
         for i in range(self._num_mappers):
             if len(partitions[i]) > 0:
-                # Fetch the files we need for each mapper
-                if not self._local_only:
-                    print "Fetching remotes for partition", i
-                    fetch_result = self.fetch_remotes(partitions[i])
-                    if fetch_result == 0:
-                        print "Remote files fetched successfully"
-                    else:
-                        print "ERROR: Failed to fetch", fetch_result, "files."
-                        # TODO: Bail, since results will be unreliable?
                 p = Process(
                         target=Mapper,
                         name=("Mapper-%d" % i),
-                        args=(i, self._profile, partitions[i], self._work_dir, self._job_module, self._num_reducers, self._delete_data))
+                        args=(i, self._profile, partitions[i], self._work_dir, self._job_module, self._num_reducers, self._delete_data, self._aws_key, self._aws_secret_key, self._bucket_name))
                 mappers.append(p)
                 p.start()
             else:
@@ -220,8 +186,6 @@ class Job:
                     with open(reducer_filename, "r") as reducer_output:
                         out.write(reducer_output.read())
                     os.remove(reducer_filename)
-
-        # TODO: clean up downloaded files?
 
         # Clean up mapper outputs
         for m in range(self._num_mappers):
@@ -368,22 +332,29 @@ class TextContext(Context):
         self._sink.write(self.record_separator)
 
 class Mapper:
-    def __init__(self, mapper_id, do_profile, inputs, work_dir, module, partition_count, delete_files):
+    def __init__(self, mapper_id, do_profile, inputs, work_dir, module, partition_count, delete_files, aws_key, aws_secret_key, s3_bucket):
         if do_profile:
             profile_out = os.path.join(work_dir, "profile_mapper_" + str(mapper_id))
             pr = cProfile.Profile()
             pr.enable()
 
-        self.run_mapper(mapper_id, inputs, work_dir, module, partition_count, delete_files)
+        self.run_mapper(mapper_id, inputs, work_dir, module, partition_count, delete_files, aws_key, aws_secret_key, s3_bucket)
 
         if do_profile:
             pr.disable()
             pr.dump_stats(profile_out)
 
-    def run_mapper(self, mapper_id, inputs, work_dir, module, partition_count, delete_files):
+    def run_mapper(self, mapper_id, inputs, work_dir, module, partition_count, delete_files, aws_key, aws_secret_key, s3_bucket):
         self.work_dir = work_dir
 
-        print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs"
+        print "I am mapper", mapper_id, ", and I'm mapping", len(inputs), "inputs. 0% complete."
+
+        bytes_total = sum([f.size for f in inputs])
+        bytes_completed = 0
+        next_notice_pct = 5
+        start = datetime.now()
+
+        loader = None
         output_file = os.path.join(work_dir, "mapper_" + str(mapper_id))
         mapfunc = getattr(module, 'map', None)
         context = Context(output_file, partition_count)
@@ -392,8 +363,18 @@ class Mapper:
             sys.exit(1)
 
         for input_file in inputs:
+            if input_file.remote:
+                # Lazy load the loader (so we don't do it on "local only" jobs).
+                if loader is None:
+                    loader = s3util.Loader(os.path.join(self.work_dir, "cache"), s3_bucket, aws_key=aws_key, aws_secret_key=aws_secret_key, poolsize=1)
+
+                for local, remote, err in loader.get_list([input_file.name]):
+                    if err is not None:
+                        print "Failed to download", remote, ":", err
             line_num = 0
-            for r, _ in heka_message.unpack_file(os.path.join(self.work_dir, "cache", input_file.name)):
+            full_filename = os.path.join(self.work_dir, "cache", input_file.name)
+
+            for r, _ in heka_message.unpack_file(full_filename):
                 msg = heka_message_parser.parse_heka_record(r)
                 line_num += 1
                 try:
@@ -402,8 +383,16 @@ class Mapper:
                     # TODO: increment "bad line" metrics.
                     print "Bad record:", input_file.name, ":", line_num, e
             if delete_files:
-                print "Removing", input_file.name
-                os.remove(handle.filename)
+                os.remove(full_filename)
+
+            bytes_completed += input_file.size
+            completed_pct = (float(bytes_completed) / bytes_total) * 100
+            if completed_pct >= next_notice_pct:
+                next_notice_pct += 5
+                duration_sec = timer.delta_sec(start)
+                completed_mb = float(bytes_completed) / 1024.0 / 1024.0
+                print "Mapper %d: %.2f%% complete. Processed %.2fMB in %.2fs (%.2fMB/s)" % (mapper_id, completed_pct, completed_mb, duration_sec, completed_mb / duration_sec)
+
         context.finish()
 
     def open_input_file(self, input_file):
