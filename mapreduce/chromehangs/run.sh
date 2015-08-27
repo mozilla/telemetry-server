@@ -34,13 +34,14 @@ COMBINED_DATA_FILE=$BASE/$OUTPUT/chromehangs-common-$TARGET.txt
 
 cd ~/telemetry-server
 echo "Starting the $NAME export for $TARGET"
-python -u -m mapreduce.job $BASE/chromehangs.py \
+python -u -m mapreduce.hekajob $BASE/chromehangs.py \
+  --delete-data \
   --num-mappers 8 \
   --input-filter $BASE/filter.json \
   --data-dir $BASE/data \
   --work-dir $BASE/work \
   --output $RAW_DATA_FILE \
-  --bucket telemetry-published-v2
+  --bucket "net-mozaws-prod-us-west-2-pipeline-data"
 
 echo "Mapreduce job exited with code: $?"
 

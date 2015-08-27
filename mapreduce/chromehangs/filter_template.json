@@ -1,29 +1,41 @@
 {
   "version": 1,
   "dimensions": [
-    {
-      "field_name": "reason",
-      "allowed_values": ["saved-session"]
-    },
-    {
-      "field_name": "appName",
-      "allowed_values": "*"
-    },
-    {
-      "field_name": "appUpdateChannel",
-      "allowed_values": ["nightly"]
-    },
-    {
-      "field_name": "appVersion",
-      "allowed_values": "*"
-    },
-    {
-      "field_name": "appBuildID",
-      "allowed_values": "*"
-    },
-    {
-      "field_name": "submission_date",
-      "allowed_values": ["__TARGET_DATE__"]
-    }
-  ]
+      {
+            "field_name": "prefix",
+            "allowed_values": "telemetry-2"
+          },
+      {
+            "field_name": "submissionDate",
+            "allowed_values": ["__TARGET_DATE__"]
+          },
+      {
+            "field_name": "sourceName",
+            "allowed_values": "telemetry"
+          },
+      {
+            "field_name": "sourceVersion",
+            "allowed_values": "4"
+          },
+      {
+            "field_name": "docType",
+            "allowed_values": "saved_session"
+          },
+      {
+            "field_name": "appName",
+            "allowed_values": "*"
+          },
+      {
+            "field_name": "channel",
+            "allowed_values": "nightly"
+          },
+      {
+            "field_name": "version",
+            "allowed_values": "*"
+          },
+      {
+            "field_name": "buildId",
+            "allowed_values": "20150810122907"
+          }
+    ]
 }
