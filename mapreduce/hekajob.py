@@ -351,7 +351,7 @@ class Mapper:
 
         bytes_total = sum([f.size for f in inputs])
         bytes_completed = 0
-        next_notice_pct = 10
+        next_notice_pct = 5
         start = datetime.now()
 
         loader = None
