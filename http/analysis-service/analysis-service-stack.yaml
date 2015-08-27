@@ -195,7 +195,7 @@ Resources:
               "        -o DPkg::Options::=--force-confold \\\n",
               "        install $@\n",
               "}\n",
-              "install python-pip git python-psycopg2 python-dateutil python-dev nginx jq ntp\n",
+              "install python-pip git python-psycopg2 python-dateutil python-dev nginx jq ntp python-protobuf python-snappy\n",
               "pip install --upgrade awscli boto fabric flask flask-login simplejson sqlalchemy uwsgi\n",
               # Forked from https://github.com/garbados/flask-browserid, modded
               # to support X-Forwarded-Proto header (so it can work behind ELB).
