@@ -11,7 +11,7 @@ install()
         -o DPkg::Options::=--force-confold \
         install $@
 }
-install xz-utils python-pip git python-dev ntp
+install xz-utils python-pip git python-dev ntp python-protobuf python-snappy
 pip install --upgrade boto awscli simplejson
 
 # Get users ssh key
