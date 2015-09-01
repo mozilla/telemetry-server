@@ -26,15 +26,15 @@
       "allowed_values": "*"
     },
     {
-      "field_name": "channel",
+      "field_name": "appUpdateChannel",
       "allowed_values": "*"
     },
     {
-      "field_name": "version",
+      "field_name": "appVersion",
       "allowed_values": "*"
     },
     {
-      "field_name": "buildId",
+      "field_name": "appBuildId",
       "allowed_values": "*"
     }
   ]
