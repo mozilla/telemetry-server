@@ -36,7 +36,7 @@ cd ~/telemetry-server
 echo "Starting the $NAME export for $TARGET"
 python -u -m mapreduce.hekajob $BASE/chromehangs.py \
   --delete-data \
-  --num-mappers 8 \
+  --num-mappers 16 \
   --input-filter $BASE/filter.json \
   --data-dir $BASE/data \
   --work-dir $BASE/work \
