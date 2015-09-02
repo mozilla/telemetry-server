@@ -321,6 +321,9 @@ def get_termination_time(start_time):
     # Instance gets killed by terminate-expired-instances.py, 1 day after the creation time
     return parse_date(start_time, ignoretz = True) + timedelta(days = 1)
 
+def get_hours_remaining(terminate_time):
+    return max(0, int((terminate_time - datetime.utcnow()).total_seconds()) // 3600)
+
 def hour_to_time(hour):
     return "{0}:00 UTC".format(hour)
 
@@ -931,7 +934,7 @@ def monitor(instance_id):
         public_dns      = instance.public_dns_name,
         terminate_url   = abs_url_for('kill', instance_id = instance.id),
         terminate_time = terminate_time.strftime("%Y-%m-%d %H:%M:%S"),
-        terminate_hours_left = max(0, int((datetime.utcnow() - terminate_time).total_seconds()) // 3600)
+        terminate_hours_left = get_hours_remaining(terminate_time)
     )
 
 @app.route("/worker/kill/<instance_id>", methods=["GET"])
@@ -1087,7 +1090,7 @@ def cluster_monitor(jobflow_id):
         public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
         terminate_url = abs_url_for('cluster_kill', jobflow_id = jobflow_id),
         terminate_time = terminate_time.strftime("%Y-%m-%d %H:%M:%S"),
-        terminate_hours_left = max(0, int((datetime.utcnow() - terminate_time).total_seconds()) // 3600)
+        terminate_hours_left = get_hours_remaining(terminate_time)
     )
 
 @app.route("/cluster/kill/<jobflow_id>", methods=["GET"])
