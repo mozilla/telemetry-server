@@ -1077,7 +1077,7 @@ def cluster_monitor(jobflow_id):
         return "No such cluster: {}".format(jobflow_id), 404
 
     # Get a datetime representing when the cluster will be terminated
-    terminate_time = get_termination_time(getattr(jobflow, "creationdatetime", datetime.utcnow())):
+    terminate_time = get_termination_time(getattr(jobflow, "creationdatetime", datetime.utcnow()))
 
     # Alright then, let's report status
     return render_template(
