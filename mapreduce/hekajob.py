@@ -378,7 +378,7 @@ class Mapper:
                 msg = heka_message_parser.parse_heka_record(r)
                 line_num += 1
                 try:
-                    mapfunc(r.message.uuid, msg, context)
+                    mapfunc(msg["meta"]["documentId"], msg, context)
                 except ValueError, e:
                     # TODO: increment "bad line" metrics.
                     print "Bad record:", input_file.name, ":", line_num, e

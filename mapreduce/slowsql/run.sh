@@ -31,14 +31,15 @@ FINAL_DATA_FILE=$BASE/$OUTPUT/slowsql$TARGET.csv
 RAW_DATA_FILE=${FINAL_DATA_FILE}.tmp
 cd ~/telemetry-server
 echo "Starting the slowsql export for $TARGET"
-python -u -m mapreduce.job $BASE/slowsql.py \
+python -u -m mapreduce.hekajob $BASE/slowsql.py \
+  --delete-data \
   --num-mappers 16 \
   --num-reducers 4 \
   --input-filter $BASE/filter.json \
   --data-dir $BASE/data \
   --work-dir $BASE/work \
   --output $RAW_DATA_FILE \
-  --bucket telemetry-published-v2
+  --bucket "net-mozaws-prod-us-west-2-pipeline-data"
 
 echo "Mapreduce job exited with code: $?"
 
