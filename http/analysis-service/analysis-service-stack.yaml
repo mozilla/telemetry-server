@@ -260,6 +260,8 @@ Resources:
       MaxSize:                  1
       LoadBalancerNames:
         - {Ref: LoadBalancer}
+      Tags:
+        - {Key: Name, Value: telemetry-dash.mozilla.org, PropagateAtLaunch: true}
     # Support Rolling updates if/when we roll out changes
     UpdatePolicy:
         AutoScalingRollingUpdate:
