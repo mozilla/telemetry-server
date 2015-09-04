@@ -19,6 +19,7 @@ def map(k, v, cx):
         if check_obj("chromeHangs", o) or check_obj("lateWrites", o):
             # see https://github.com/mozilla/python_moztelemetry/issues/8
             cx.write(k, json.dumps({"chromeHangs": dict(o.get("chromeHangs", {}).items()),
-                                    "lateWrites": dict(o.get("lateWrites", {}).items())}))
+                                    "lateWrites": dict(o.get("lateWrites", {}).items()),
+                                    "meta": v.get("meta", {})}))
     except Exception as e:
         print str(e)

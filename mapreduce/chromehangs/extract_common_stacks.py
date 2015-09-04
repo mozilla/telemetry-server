@@ -101,7 +101,7 @@ def main(argv=None):
         sys_uptimes = hangs.get("systemUptime")
         dims = [submission_date]
         for dim in ["appName", "appVersion", "appUpdateChannel"]:
-            dims.append(payload.get("info", {}).get(dim, "UNKNOWN"))
+            dims.append(payload.get("meta", {}).get(dim, "UNKNOWN"))
         for i in range(len(sigs)):
             sig = sigs[i]
             if sig:
