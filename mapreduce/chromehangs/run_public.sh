@@ -1,7 +1,7 @@
 #!/bin/bash
 
 OUTPUT=output
-NAME=chromehangs_weekly
+NAME=ChromeHangsWeekly
 TODAY=$(date +%Y%m%d)
 if [ ! -d "$OUTPUT" ]; then
     mkdir -p "$OUTPUT"

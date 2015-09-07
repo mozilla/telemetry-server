@@ -8,7 +8,7 @@ if [ -z "$TARGET" ]; then
 fi
 NAME=$2
 if [ -z "$NAME" ]; then
-  NAME=chromehangs_weekly
+  NAME=ChromeHangsWeekly
 fi
 
 OUTPUT=$3
