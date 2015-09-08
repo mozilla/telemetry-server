@@ -36,7 +36,7 @@ SYMBOL_SERVER_URL = "http://symbolapi.mozilla.org:80/chromehangs-daily/"
 MIN_HITS = 0
 
 NUM_RETRIES = 3
-RETRY_DELAY = 5 # seconds
+DUMMY_TIMEOUT = 1800
 
 MAX_FRAMES = 15
 
@@ -132,24 +132,28 @@ def process_request(request_obj):
     response_obj = json.loads(response_json)
     return get_symbol_cache(request_obj, response_obj)
 
+def make_request(requestJson, timeout=600):
+    headers = { "Content-Type": "application/json" }
+    requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
+    response = urllib2.urlopen(requestHandle, timeout=timeout)
+    responseJson = response.read()
+    print responseJson
+    return responseJson
+
 def fetch_symbols(requestJson):
     attempts = 0
     last_exception = None
     for r in range(NUM_RETRIES):
         attempts += 1
         try:
-            # send the request
-            headers = { "Content-Type": "application/json" }
-            requestHandle = urllib2.Request(SYMBOL_SERVER_URL, requestJson, headers)
-            response = urllib2.urlopen(requestHandle, timeout=60)
-            responseJson = response.read()
-            print responseJson
-            return responseJson
+            return make_request(requestJson)
         except Exception as e:
             last_exception = e
-            sys.stderr.write("Request attempt {} failed. Waiting {} seconds " \
-                "to retry. Error was: {}.\n".format(attempts, RETRY_DELAY, e))
-            time.sleep(RETRY_DELAY)
+            sys.stderr.write("Request attempt {} failed. Waiting {} for dummy request to complete. Error was: {}.\n".format(attempts, e))
+            try:
+                make_request('{"memoryMap": [], "version": 3, "stacks": []}"}', timeout=DUMMY_TIMEOUT)
+            except:
+                pass
 
     # We've retried the max number of times.
     raise last_exception
