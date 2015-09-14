@@ -52,9 +52,10 @@ def map(k, v, cx):
     appUpdateChannel = v["application"]["channel"]
 
     cx.write(safe_key(["TOTAL", submission_date, appName, appVersion, appUpdateChannel, "ALL_PINGS"]), [1,0])
-    if "slowSQL" not in v["payload"]:
-        return
     try:
+        if "slowSQL" not in v["payload"]:
+            return
+
         j = sanitize(v["payload"])
         slowSQL = j["slowSQL"]
         for threadType, queries in slowSQL.iteritems():
