@@ -1,6 +1,6 @@
 #!/bin/bash
 VERSION=0.3
-NAME=slowsql
+NAME=SlowSQL
 TARBALL=${NAME}-$VERSION.tar.gz
 if [ ! -d "combine.py" ]; then
     echo "Fetching 'combine.py' from github..."
