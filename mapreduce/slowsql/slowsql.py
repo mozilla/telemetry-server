@@ -46,10 +46,13 @@ def safe_key(pieces):
     return unicode(output.getvalue().strip().translate(eol_trans_table))
 
 def map(k, v, cx):
-    submission_date = v["meta"]["submissionDate"]
-    appName = v["application"]["name"]
-    appVersion =v["application"]["version"]
-    appUpdateChannel = v["application"]["channel"]
+    submission_date = v["meta"].get("submissionDate", None)
+    appName = v["application"].get("name", None)
+    appVersion = v["application"].get("version", None)
+    appUpdateChannel = v["application"].get("channel", None)
+
+    if submission_date is None or appName is None or appVersion is None or appUpdateChannel is None:
+        return
 
     cx.write(safe_key(["TOTAL", submission_date, appName, appVersion, appUpdateChannel, "ALL_PINGS"]), [1,0])
     try:
