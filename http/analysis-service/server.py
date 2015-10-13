@@ -873,7 +873,7 @@ def spawn_worker_instance():
 
     # Create EC2 instance
     reservation = ec2.run_instances(
-        image_id                                = 'ami-eb4608db', # ubuntu/images/hvm/ubuntu-utopic-14.10-amd64-server-20141022.3
+        image_id                                = 'ami-2cfe1a1f', # ubuntu/images/hvm/ubuntu-vivid-15.04-amd64-server-20151006
         security_groups                         = app.config['SECURITY_GROUPS'],
         user_data                               = boot_script,
         block_device_map                        = mapping,
