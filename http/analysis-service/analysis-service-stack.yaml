@@ -234,7 +234,7 @@ Resources:
               "echo \"PUBLIC_DATA_BUCKET = '", {Ref: AnalysisPublicDataBucket} , "'\" >> config.py\n",
               "echo \"PRIVATE_DATA_BUCKET = '", {Ref: AnalysisPrivateDataBucket} , "'\" >> config.py\n",
               "echo \"DB_URL = '", {Ref: AnalysisDatabaseURL} , "'\" >> config.py\n",
-              "echo \"DEBUG = True\" >> config.py\n",
+              "echo \"DEBUG = False\" >> config.py\n",
               "echo 'server {' > /etc/nginx/sites-enabled/default\n",
               "echo '        listen 80;' >> /etc/nginx/sites-enabled/default\n",
               "echo '        server_name analysisservice;' >> /etc/nginx/sites-enabled/default\n",
