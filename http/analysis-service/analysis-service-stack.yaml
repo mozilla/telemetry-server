@@ -174,7 +174,6 @@ Resources:
     DependsOn:
       - serverInstanceProfile
       - serverSecurityGroup
-      - workerInstanceProfile
       - workerInstanceSecurityGroup
     Metadata:
       Comment:                telemetry-analysis-service
@@ -227,8 +226,9 @@ Resources:
               "echo \"WORKER_AMI = '", {Ref: WorkerAMI} , "'\" >> config.py\n",
               "echo \"WORKER_PRIVATE_ROLE = '", {Ref: AnalysisPrivateWorkerRole} , "'\" >> config.py\n",
               "echo \"WORKER_PUBLIC_ROLE = '", {Ref: AnalysisPublicWorkerRole} , "'\" >> config.py\n",
-              "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , ",", {Ref: AnalysisDBSecurityGroup}, "']\" >> config.py\n",
-              "echo \"INSTANCE_PROFILE = '", {Ref: workerInstanceProfile} , "'\" >> config.py\n",
+              "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , "','", {Ref: AnalysisDBSecurityGroup}, "']\" >> config.py\n",
+              # Workers get "Public" permissions by default
+              "echo \"INSTANCE_PROFILE = '", {Ref: AnalysisPublicWorkerRole} , "'\" >> config.py\n",
               "echo \"TEMPORARY_BUCKET = '", {Ref: AnalysisTemporaryBucket} , "'\" >> config.py\n",
               "echo \"CODE_BUCKET = '", {Ref: AnalysisSourcesBucket} , "'\" >> config.py\n",
               "echo \"PUBLIC_DATA_BUCKET = '", {Ref: AnalysisPublicDataBucket} , "'\" >> config.py\n",
@@ -282,51 +282,3 @@ Resources:
       GroupDescription:       telemetry-analysis worker instance security group
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
-
-  # IAM role for analysis worker instances
-  workerInstanceIAMRole:
-    Type:                     AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect:           Allow
-            Principal:
-              Service:
-                - ec2.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      Path:                   /telemetry/analysis/worker-instance/
-      Policies:
-        # Grant read access to telemetry-published-v2
-        - PolicyName:         telemetryPublishedWorkerAccess
-          PolicyDocument:
-            Statement:
-              - Effect:       Allow
-                Action:
-                  - 's3:ListBucket'
-                  - 's3:GetObject'
-                Resource:
-                  - 'arn:aws:s3:::telemetry-published-v2'
-                  - 'arn:aws:s3:::telemetry-published-v2/*'
-        # Grant access to read from temporary bucket, we store SSH keys here
-        - PolicyName:         getObjectTemporaryBucketPolicy
-          PolicyDocument:
-            Statement:
-              - Effect:       Allow
-                Action:
-                  - 's3:GetObject'
-                Resource:     {'Fn::Join': ["", [
-                                'arn:aws:s3:::',
-                                {Ref: AnalysisTemporaryBucket},
-                                '/*'
-                              ]]}
-
-  # IAM instance profile granting workerInstanceIAMRole to worker instances
-  workerInstanceProfile:
-    Type:                     AWS::IAM::InstanceProfile
-    DependsOn:
-      - workerInstanceIAMRole
-    Properties:
-      Path:                   /telemetry/analysis/worker-instance/
-      Roles:
-        - {Ref: workerInstanceIAMRole}
