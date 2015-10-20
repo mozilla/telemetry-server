@@ -32,7 +32,7 @@ app.config.from_object('config')
 # Connect to AWS
 emr  = emr_connect(app.config['AWS_REGION'])
 ec2 = ec2_connect(app.config['AWS_REGION'])
-ses = ses_connect('us-east-1') # only supported region!
+ses = ses_connect(app.config['AWS_REGION'])
 s3  = s3_connect(app.config['AWS_REGION'])
 bucket = s3.get_bucket(app.config['TEMPORARY_BUCKET'], validate = False)
 code_bucket = s3.get_bucket(app.config['CODE_BUCKET'], validate = False)
