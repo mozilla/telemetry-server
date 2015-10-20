@@ -243,13 +243,13 @@ def build_config(job):
             "image": app.config['WORKER_AMI'],
 
             # TODO: ssh-only security group
-            "security_groups": ["telemetry"],
+            "security_groups": app.config['SECURITY_GROUPS'],
             "iam_role": iam_role,
             "region": app.config['AWS_REGION'],
             "shutdown_behavior": "terminate",
             "name": "telemetry-analysis-{0}".format(job['name']),
             "default_tags": {
-                "Owner": "mreid",
+                "Owner": "mreid@mozilla.com",
                 "Application": "telemetry-server"
             },
             "ephemeral_map": {

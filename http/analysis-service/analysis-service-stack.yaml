@@ -9,7 +9,7 @@ Description: >
 
 Parameters:
 
-  serverInstanceType:
+  ServerInstanceType:
     Description:              Server instance type
     Type:                     String
     Default:                  m1.small
@@ -29,51 +29,61 @@ Parameters:
 
   # Currently, we just setup to consume from load balancer configured with
   # SSL certificate and DNS else where...telemetry-dash-lb
-  LoadBalancer:
+  AnalysisLoadBalancer:
     Description:              Load balancer setup with the correct DNS
     Type:                     String
     Default:                  telemetry-dash-lb
 
-  #REMARK: We should consider removing keyName as it shouldn't be possible to
+  #REMARK: We should consider removing KeyName as it shouldn't be possible to
   #        ssh in to the server instance
-  keyName:
+  KeyName:
     Description:              Name of key pair for SSH
     Type:                     String
     Default:                  mreid
 
-  serverSecret:
+  ServerSecret:
     Description:              Secret key for signing cookies on the server
     Type:                     String
 
-  sourcesBucket:
+  AnalysisSourcesBucket:
     Description:              Bucket containing sources and templates
     Type:                     String
     Default:                  telemetry-analysis-code
 
-  sourcesVersion:
+  SourcesVersion:
     Description:              Version of sources to load from sources bucket
     Type:                     String
     Default:                  '2'
 
-  publicDataBucket:
+  AnalysisTemporaryBucket:
+    Description:              Location where SSH Keys will be stored
+    Type:                     String
+    Default:                  telemetry-analysis-temp
+
+  AnalysisPublicDataBucket:
     Description:              Bucket in which to publish public analysis results
     Type:                     String
     Default:                  telemetry-public-analysis
 
-  privateDataBucket:
+  AnalysisPrivateDataBucket:
     Description:              Bucket in which to publish private analysis results
     Type:                     String
     Default:                  telemetry-private-analysis
 
-  databaseURL:
+  AnalysisDatabaseURL:
     Description:              Database Connection URL
     Type:                     String
     Default:                  sqlite:///telemetry_analysis.db
 
-  workerAMI:
+  WorkerAMI:
     Description:              AMI to use for launching scheduled worker instances
     Type:                     String
     Default:                  ami-0057b733
+
+  AnalysisDBSecurityGroup:
+    Description:              EC2 Security group for connecting to Analysis Database
+    Type:                     String
+    Default:                  telemetry-analysis-db-sg
 
 ################################################################################
 
@@ -97,13 +107,6 @@ Mappings:
 ################################################################################
 
 Resources:
-
-  temporaryBucket:
-    Type:                     AWS::S3::Bucket
-    DeletionPolicy:           Delete
-    Properties:
-      AccessControl:          Private
-
   # Security group for service server, http and ssh (well, disable ssh later)
   serverSecurityGroup:
     Type:                     AWS::EC2::SecurityGroup
@@ -116,8 +119,6 @@ Resources:
   # IAM role for service server
   serverInstanceIAMRole:
     Type:                     AWS::IAM::Role
-    DependsOn:
-      - temporaryBucket
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -146,7 +147,7 @@ Resources:
                 Action:
                   - 's3:PutObject'
                 Resource:
-                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: temporaryBucket}, '/*']]}
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisTemporaryBucket}, '/*']]}
         - PolicyName:         getObjectSourcesBucketPolicy
           PolicyDocument:
             Statement:
@@ -156,8 +157,8 @@ Resources:
                 Resource:
                   - {'Fn::Join': ["", [
                       'arn:aws:s3:::',
-                      {Ref: sourcesBucket},
-                      '/v', {Ref: sourcesVersion}, '/telemetry-analysis-service.tar.gz'
+                      {Ref: AnalysisSourcesBucket},
+                      '/v', {Ref: SourcesVersion}, '/telemetry-analysis-service.tar.gz'
                     ]]}
 
   # IAM instance profile granting serverInstanceIAMRole to service server
@@ -180,18 +181,17 @@ Resources:
     Metadata:
       Comment:                telemetry-analysis-service
     Properties:
-      KeyName:                {Ref: keyName}
+      KeyName:                {Ref: KeyName}
       ImageId:                {'Fn::FindInMap': [
                                     'regionToAMI',
                                     {Ref: 'AWS::Region'},
                                     'AMI'
                               ]}
-      InstanceType:           {Ref: serverInstanceType}
+      InstanceType:           {Ref: ServerInstanceType}
       IamInstanceProfile:     {Ref: serverInstanceProfile}
       SecurityGroups:
         - {Ref: serverSecurityGroup}
-        # We need the "telemetry" group to have access to the RDS database.
-        - "telemetry"
+        - {Ref: AnalysisDBSecurityGroup}
       UserData:               {'Fn::Base64': {'Fn::Join': ['', [
               "#!/bin/bash\n",
               "install()\n",
@@ -216,8 +216,8 @@ Resources:
               "sudo -u ubuntu python - << END\n",
               "from boto.s3 import connect_to_region\n",
               "s3 = connect_to_region('", {Ref: 'AWS::Region'} ,"')\n",
-              "b = s3.get_bucket('", {Ref: sourcesBucket}, "', validate = False)\n",
-              "k = b.get_key('v", {Ref: sourcesVersion}, "/telemetry-analysis-service.tar.gz')\n",
+              "b = s3.get_bucket('", {Ref: AnalysisSourcesBucket}, "', validate = False)\n",
+              "k = b.get_key('v", {Ref: SourcesVersion}, "/telemetry-analysis-service.tar.gz')\n",
               "k.get_contents_to_filename('sources.tar.gz')\n",
               "END\n",
               "sudo -u ubuntu mkdir -p /home/ubuntu/.aws\n",
@@ -228,16 +228,16 @@ Resources:
               "sudo -u ubuntu tar -xzf sources.tar.gz\n",
               "echo '42 * * * * ubuntu /home/ubuntu/telemetry_analysis/terminate-expired-instances.py' >> /etc/crontab\n",
               "echo '' >> config.py\n",
-              "echo \"SECRET_KEY = '", {Ref: serverSecret} , "'\" >> config.py\n",
+              "echo \"SECRET_KEY = '", {Ref: ServerSecret} , "'\" >> config.py\n",
               "echo \"AWS_REGION = '", {Ref: 'AWS::Region'} , "'\" >> config.py\n",
-              "echo \"WORKER_AMI = '", {Ref: workerAMI} , "'\" >> config.py\n",
-              "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , "']\" >> config.py\n",
+              "echo \"WORKER_AMI = '", {Ref: WorkerAMI} , "'\" >> config.py\n",
+              "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , ",", {Ref: AnalysisDBSecurityGroup} "']\" >> config.py\n",
               "echo \"INSTANCE_PROFILE = '", {Ref: workerInstanceProfile} , "'\" >> config.py\n",
-              "echo \"TEMPORARY_BUCKET = '", {Ref: temporaryBucket} , "'\" >> config.py\n",
-              "echo \"CODE_BUCKET = '", {Ref: sourcesBucket} , "'\" >> config.py\n",
-              "echo \"PUBLIC_DATA_BUCKET = '", {Ref: publicDataBucket} , "'\" >> config.py\n",
-              "echo \"PRIVATE_DATA_BUCKET = '", {Ref: privateDataBucket} , "'\" >> config.py\n",
-              "echo \"DB_URL = '", {Ref: databaseURL} , "'\" >> config.py\n",
+              "echo \"TEMPORARY_BUCKET = '", {Ref: AnalysisTemporaryBucket} , "'\" >> config.py\n",
+              "echo \"CODE_BUCKET = '", {Ref: AnalysisSourcesBucket} , "'\" >> config.py\n",
+              "echo \"PUBLIC_DATA_BUCKET = '", {Ref: AnalysisPublicDataBucket} , "'\" >> config.py\n",
+              "echo \"PRIVATE_DATA_BUCKET = '", {Ref: AnalysisPrivateDataBucket} , "'\" >> config.py\n",
+              "echo \"DB_URL = '", {Ref: AnalysisDatabaseURL} , "'\" >> config.py\n",
               "echo \"DEBUG = False\" >> config.py\n",
               "echo 'server {' > /etc/nginx/sites-enabled/default\n",
               "echo '        listen 80;' >> /etc/nginx/sites-enabled/default\n",
@@ -267,7 +267,7 @@ Resources:
       # if we have multiple servers, each job will be run multiple times.
       MaxSize:                  1
       LoadBalancerNames:
-        - {Ref: LoadBalancer}
+        - {Ref: AnalysisLoadBalancer}
       Tags:
         - {Key: Name, Value: telemetry-dash.mozilla.org, PropagateAtLaunch: true}
     # Support Rolling updates if/when we roll out changes
