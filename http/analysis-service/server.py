@@ -15,6 +15,7 @@ from urlparse import urljoin
 from uuid import uuid4
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.sql import select, func
+from sqlalchemy import DDL
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 from subprocess import check_output, CalledProcessError
@@ -108,8 +109,11 @@ def initialize_db(db):
     #     schedule_day_of_week  VARCHAR(20) NOT NULL
     # );
     # -- Make job id start from 1000
-    # ALTER SEQUENCE scheduled_jobs_id_seq RESTART WITH 1000;
-    # CREATE INDEX scheduled_jobs_owner_idx on scheduled_jobs(owner);
+    seq = DDL("ALTER SEQUENCE scheduled_jobs_id_seq RESTART WITH 1000;")
+    seq.execute_if(dialect='postgresql')
+
+    idx = DDL("CREATE INDEX scheduled_jobs_owner_idx on scheduled_jobs(owner);")
+    idx.execute_if(dialect='postgresql')
 
 def get_db():
     """Opens a new database connection if there is none yet for the
