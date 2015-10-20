@@ -4,6 +4,7 @@ SECRET_KEY         = 'Overwrite with a secret on deployment'
 # AWS EC2 configuration
 AWS_REGION         = 'us-west-2'
 INSTANCE_TYPE      = 'c3.4xlarge'
+WORKER_AMI         = 'ami-0057b733' # -> telemetry-worker-hvm-20151019 (Ubuntu 15.04)
 
 # EMR configuration
 # Master and slave instance types should be the same as the telemetry

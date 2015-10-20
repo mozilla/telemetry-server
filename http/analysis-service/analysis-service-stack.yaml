@@ -48,7 +48,7 @@ Parameters:
   sourcesBucket:
     Description:              Bucket containing sources and templates
     Type:                     String
-    Default:                   telemetry-analysis-code
+    Default:                  telemetry-analysis-code
 
   sourcesVersion:
     Description:              Version of sources to load from sources bucket
@@ -58,17 +58,22 @@ Parameters:
   publicDataBucket:
     Description:              Bucket in which to publish public analysis results
     Type:                     String
-    Default:                   telemetry-public-analysis
+    Default:                  telemetry-public-analysis
 
   privateDataBucket:
     Description:              Bucket in which to publish private analysis results
     Type:                     String
-    Default:                   telemetry-private-analysis
+    Default:                  telemetry-private-analysis
 
   databaseURL:
     Description:              Database Connection URL
     Type:                     String
-    Default:                   sqlite:///telemetry_analysis.db
+    Default:                  sqlite:///telemetry_analysis.db
+
+  workerAMI:
+    Description:              AMI to use for launching scheduled worker instances
+    Type:                     String
+    Default:                  ami-0057b733
 
 ################################################################################
 
@@ -225,6 +230,7 @@ Resources:
               "echo '' >> config.py\n",
               "echo \"SECRET_KEY = '", {Ref: serverSecret} , "'\" >> config.py\n",
               "echo \"AWS_REGION = '", {Ref: 'AWS::Region'} , "'\" >> config.py\n",
+              "echo \"WORKER_AMI = '", {Ref: workerAMI} , "'\" >> config.py\n",
               "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , "']\" >> config.py\n",
               "echo \"INSTANCE_PROFILE = '", {Ref: workerInstanceProfile} , "'\" >> config.py\n",
               "echo \"TEMPORARY_BUCKET = '", {Ref: temporaryBucket} , "'\" >> config.py\n",
