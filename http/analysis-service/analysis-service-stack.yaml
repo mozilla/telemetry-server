@@ -92,13 +92,13 @@ Parameters:
     Type:                     String
     Default:                  telemetry-analysis-db-sg
 
-  AnalysisPrivateWorkerRole:
-    Description:              IAM Role for private workers
+  AnalysisPrivateWorkerProfile:
+    Description:              IAM Profile for private workers
     Type:                     String
     Default:                  telemetry-private-analysis-worker
 
-  AnalysisPublicWorkerRole:
-    Description:              IAM Role for public workers
+  AnalysisPublicWorkerProfile:
+    Description:              IAM Profile for public workers
     Type:                     String
     Default:                  telemetry-public-analysis-worker
 
@@ -224,11 +224,11 @@ Resources:
               "echo \"SECRET_KEY = '", {Ref: ServerSecret} , "'\" >> config.py\n",
               "echo \"AWS_REGION = '", {Ref: 'AWS::Region'} , "'\" >> config.py\n",
               "echo \"WORKER_AMI = '", {Ref: WorkerAMI} , "'\" >> config.py\n",
-              "echo \"WORKER_PRIVATE_ROLE = '", {Ref: AnalysisPrivateWorkerRole} , "'\" >> config.py\n",
-              "echo \"WORKER_PUBLIC_ROLE = '", {Ref: AnalysisPublicWorkerRole} , "'\" >> config.py\n",
+              "echo \"WORKER_PRIVATE_PROFILE = '", {Ref: AnalysisPrivateWorkerProfile} , "'\" >> config.py\n",
+              "echo \"WORKER_PUBLIC_PROFILE = '", {Ref: AnalysisPublicWorkerProfile} , "'\" >> config.py\n",
               "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , "','", {Ref: AnalysisDBSecurityGroup}, "']\" >> config.py\n",
               # Workers get "Public" permissions by default
-              "echo \"INSTANCE_PROFILE = '", {Ref: AnalysisPublicWorkerRole} , "'\" >> config.py\n",
+              "echo \"INSTANCE_PROFILE = '", {Ref: AnalysisPublicWorkerProfile} , "'\" >> config.py\n",
               "echo \"TEMPORARY_BUCKET = '", {Ref: AnalysisTemporaryBucket} , "'\" >> config.py\n",
               "echo \"CODE_BUCKET = '", {Ref: AnalysisSourcesBucket} , "'\" >> config.py\n",
               "echo \"PUBLIC_DATA_BUCKET = '", {Ref: AnalysisPublicDataBucket} , "'\" >> config.py\n",
