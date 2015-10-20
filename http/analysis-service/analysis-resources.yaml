@@ -10,7 +10,13 @@ Parameters:
     Description:                SSL Certificate to use on the load balancer
     Type:                       String
     Default:                    arn:aws:iam::927034868273:server-certificate/exp20180829_star_telemetry_mozilla_org
-    ConstraintDescription:      must be a valid SSL Cert ID
+    ConstraintDescription:      Must be a valid SSL Cert ID
+
+  AnalysisDatabasePassword:
+    Description:                Password for connecting to AnalysisDatabase
+    Type:                       String
+    Default:                    Big Secret. Highly secure.
+
 ##############################################################################
 
 Resources:
@@ -29,8 +35,8 @@ Resources:
       AvailabilityZone:         us-west-2c
       DBName:                   telemetry
       MasterUsername:           telemetry
-      MasterUserPassword:       FIXME
-      Port: 5432
+      MasterUserPassword:       {Ref: AnalysisDatabasePassword}
+      Port:                     5432
       PubliclyAccessible:       false
       Tags:
         - {Key: Name,    Value: telemetry-analysis-db}
@@ -131,7 +137,7 @@ Resources:
 
   # EC2 Security group that gives accesss to the Analysis DB
   AnalysisDBSecurityGroup:
-    Type:                       AWS::EC2::SecurityGroup
+    Type:                         AWS::EC2::SecurityGroup
     Properties:
       GroupDescription:           Access to Telemetry Analysis DB
       Tags:
@@ -144,7 +150,7 @@ Resources:
 
   # IAM Role for public workers
   AnalysisPublicWorkerRole:
-    Type:                     AWS::IAM::Role
+    Type:                         AWS::IAM::Role
     DependsOn:
       - AnalysisSourcesBucket
       - AnalysisPublicDataBucket
@@ -152,19 +158,19 @@ Resources:
     Properties:
       AssumeRolePolicyDocument:
         Statement:
-          - Effect:           Allow
+          - Effect:               Allow
             Principal:
               Service:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Path:                   /telemetry/analysis/public-worker-instance/
+      Path:                       /telemetry/analysis/public-worker-instance/
       Policies:
         # Grant read access to required source data buckets
-        - PolicyName:         TelemetryPublicWorkerPublishedDataAccess
+        - PolicyName:             TelemetryPublicWorkerPublishedDataAccess
           PolicyDocument:
             Statement:
-              - Effect:       Allow
+              - Effect:           Allow
                 Action:
                   - 's3:Get*'
                   - 's3:List*'
@@ -185,10 +191,10 @@ Resources:
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisTemporaryBucket}, '/*']]}
 
         # Grant read/write access to public data bucket and common analysis bucket
-        - PolicyName:         TelemetryPublicWorkerWriteData
+        - PolicyName:             TelemetryPublicWorkerWriteData
           PolicyDocument:
             Statement:
-              - Effect:       Allow
+              - Effect:           Allow
                 Action:
                   - 's3:Get*'
                   - 's3:List*'
@@ -202,10 +208,10 @@ Resources:
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPublicDataBucket}]]}
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPublicDataBucket}, '/*']]}
         # Grant access to send alert emails
-        - PolicyName:         TelemetryPublicWorkerSendEmail
+        - PolicyName:             TelemetryPublicWorkerSendEmail
           PolicyDocument:
             Statement:
-              Effect:         Allow
+              Effect:             Allow
               Action:
                 - 'ses:SendEmail'
                 - 'ses:SendRawEmail'
@@ -214,7 +220,7 @@ Resources:
 
   # IAM Role for private workers
   AnalysisPrivateWorkerRole:
-    Type:                     AWS::IAM::Role
+    Type:                         AWS::IAM::Role
     DependsOn:
       - AnalysisSourcesBucket
       - AnalysisPrivateDataBucket
@@ -222,19 +228,19 @@ Resources:
     Properties:
       AssumeRolePolicyDocument:
         Statement:
-          - Effect:           Allow
+          - Effect:               Allow
             Principal:
               Service:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Path:                   /telemetry/analysis/private-worker-instance/
+      Path:                       /telemetry/analysis/private-worker-instance/
       Policies:
         # Grant read access to required source data buckets
-        - PolicyName:         TelemetryPrivateWorkerPublishedDataAccess
+        - PolicyName:             TelemetryPrivateWorkerPublishedDataAccess
           PolicyDocument:
             Statement:
-              - Effect:       Allow
+              - Effect:           Allow
                 Action:
                   - 's3:Get*'
                   - 's3:List*'
@@ -255,10 +261,10 @@ Resources:
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisTemporaryBucket}, '/*']]}
 
         # Grant read/write access to private data bucket
-        - PolicyName:         TelemetryPrivateWorkerWriteData
+        - PolicyName:             TelemetryPrivateWorkerWriteData
           PolicyDocument:
             Statement:
-              - Effect:       Allow
+              - Effect:           Allow
                 Action:
                   - 's3:Get*'
                   - 's3:List*'
@@ -272,10 +278,10 @@ Resources:
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPrivateDataBucket}]]}
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPrivateDataBucket}, '/*']]}
         # Grant access to send alert emails
-        - PolicyName:         TelemetryPrivateWorkerSendEmail
+        - PolicyName:             TelemetryPrivateWorkerSendEmail
           PolicyDocument:
             Statement:
-              Effect:         Allow
+              Effect:             Allow
               Action:
                 - 'ses:SendEmail'
                 - 'ses:SendRawEmail'
@@ -284,27 +290,27 @@ Resources:
 
   # Instance profiles for applying Roles to EC2 instances
   AnalysisPublicWorkerProfile:
-    Type:                     AWS::IAM::InstanceProfile
+    Type:                         AWS::IAM::InstanceProfile
     DependsOn:
       - AnalysisPublicWorkerRole
     Properties:
-      Path:                   /telemetry/analysis/public-worker-instance/
+      Path:                       /telemetry/analysis/public-worker-instance/
       Roles:
         - {Ref: AnalysisPublicWorkerRole}
 
   AnalysisPrivateWorkerProfile:
-    Type:                     AWS::IAM::InstanceProfile
+    Type:                         AWS::IAM::InstanceProfile
     DependsOn:
       - AnalysisPrivateWorkerRole
     Properties:
-      Path:                   /telemetry/analysis/private-worker-instance/
+      Path:                       /telemetry/analysis/private-worker-instance/
       Roles:
         - {Ref: AnalysisPrivateWorkerRole}
 
 Outputs:
   AnalysisDatabase:
     Description: Database containing scheduled job metadata
-    Value:  {Ref: AnalysisDatabase}
+    Value: {Ref: AnalysisDatabase}
 
   AnalysisSourcesBucket:
     Description: Bucket containing analysis job code and templates
@@ -325,6 +331,15 @@ Outputs:
   AnalysisLoadBalancer:
     Description: Load balancer to front the analysis service
     Value: {Ref: AnalysisLoadBalancer}
+  AnalysisLoadBalancerZone:
+    Description: Load balancer to front the analysis service
+    Value: {'Fn::GetAtt': [ "AnalysisLoadBalancer", "CanonicalHostedZoneName" ] }
+  AnalysisLoadBalancerZoneID:
+    Description: Load balancer to front the analysis service
+    Value: {'Fn::GetAtt': [ "AnalysisLoadBalancer", "CanonicalHostedZoneNameID" ] }
+  AnalysisLoadBalancerDNSName:
+    Description: Load balancer to front the analysis service
+    Value: {'Fn::GetAtt': [ "AnalysisLoadBalancer", "DNSName" ] }
 
   AnalysisDBSecurityByEC2SecurityGroup:
     Description: DB Security group that uses an EC2 security group
@@ -349,3 +364,14 @@ Outputs:
   AnalysisPrivateWorkerProfile:
     Description: IAM Profile for private workers
     Value: {Ref: AnalysisPrivateWorkerProfile}
+
+  AnalysisDatabaseURL:
+    Description: URL String for connecting to the Analysis Database
+    Value: {'Fn::Join': ['', [
+      'postgresql://telemetry:',
+      {Ref: AnalysisDatabasePassword},
+      '@',
+      {'Fn::GetAtt': [ "AnalysisDatabase", "Endpoint.Address" ] },
+      ':'
+      {'Fn::GetAtt': [ "AnalysisDatabase", "Endpoint.Port" ] },
+      '/telemetry' ] ] }
