@@ -235,7 +235,9 @@ def build_config(job):
             "application_tag": app.config["INSTANCE_APP_TAG"]
         }
     else:
-        iam_role = "telemetry-{}-analysis-worker".format(job.output_visibility)
+        iam_role = app.config['WORKER_PRIVATE_ROLE']
+        if job.output_visibility == 'public':
+            iam_role = app.config['WORKER_PUBLIC_ROLE']
         config = {
             "ssl_key_name": "mreid",
             "base_dir": "/mnt/telemetry",
