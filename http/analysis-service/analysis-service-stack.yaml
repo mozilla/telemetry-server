@@ -25,7 +25,13 @@ Parameters:
       - m2.4xlarge
       - c1.medium
       - c1.xlarge
-    ConstraintDescription:    must be a valid EC2 instance type.
+    ConstraintDescription:    Must be a valid EC2 instance type.
+
+  ServerAMI:
+    Description:              AMI for the server web head instance.
+    Type:                     String
+    Default:                  ami-a40bea97
+    ConstraintDescription:    Must be a valid AMI in the current region.
 
   # Currently, we just setup to consume from load balancer configured with
   # SSL certificate and DNS else where...telemetry-dash-lb
@@ -95,26 +101,6 @@ Parameters:
     Type:                     String
     Default:                  telemetry-public-analysis-worker
 
-
-################################################################################
-
-Mappings:
-
-  # A map from region to 64 bit Ubuntu 13.10 backed by instance storage
-  # We use instance storage to avoid stability issues with EBS also we don't
-  # have to pay for IO. We'll initialize these with CloudInit, later.
-  # See: http://cloud-images.ubuntu.com/locator/ec2/
-  # Use the 'ubuntu/images/ubuntu-trusty-14.04-amd64-server-20150417' image.
-  regionToAMI:
-    ap-northeast-1:           {AMI: ami-5c14d15c}
-    ap-southeast-1:           {AMI: ami-2a5a6778}
-    ap-southeast-2:           {AMI: ami-b5661b8f}
-    eu-central-1:             {AMI: ami-c2d8e4df}
-    eu-west-1:                {AMI: ami-b98cecce}
-    sa-east-1:                {AMI: ami-8db33690}
-    us-east-1:                {AMI: ami-3234315a}
-    us-west-1:                {AMI: ami-47799b03}
-    us-west-2:                {AMI: ami-57516467}
 ################################################################################
 
 Resources:
@@ -193,11 +179,7 @@ Resources:
       Comment:                telemetry-analysis-service
     Properties:
       KeyName:                {Ref: KeyName}
-      ImageId:                {'Fn::FindInMap': [
-                                    'regionToAMI',
-                                    {Ref: 'AWS::Region'},
-                                    'AMI'
-                              ]}
+      ImageId:                {Ref: ServerAMI}
       InstanceType:           {Ref: ServerInstanceType}
       IamInstanceProfile:     {Ref: serverInstanceProfile}
       SecurityGroups:
