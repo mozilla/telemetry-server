@@ -205,6 +205,8 @@ def build_config(job):
             "master_instance_type": app.config['MASTER_INSTANCE_TYPE'],
             "slave_instance_type": app.config['SLAVE_INSTANCE_TYPE'],
             "spark_version": app.config["SPARK_VERSION"],
+            "spark_instance_profile": app.config["SPARK_INSTANCE_PROFILE"],
+            "spark_emr_bucket": app.config["SPARK_EMR_BUCKET"],
             "ami_version": app.config["AMI_VERSION"],
             "cluster_name": "telemetry-analysis-{0}".format(job['name']),
             "owner": job['owner'],
@@ -1007,7 +1009,7 @@ def cluster_spawn():
                                               ['-v', app.config['SPARK_VERSION']])
 
     setup_telemetry_bootstrap = BootstrapAction('Setup Telemetry',
-                                                's3://telemetry-spark-emr/telemetry.sh',
+                                                's3://{}/telemetry.sh'.format(app.config['SPARK_EMR_BUCKET']),
                                                 ['--public-key', pubkey])
 
     configure_yarn_bootstrap = BootstrapAction('Configure YARN',
@@ -1022,7 +1024,7 @@ def cluster_spawn():
                               num_instances = n_instances,
                               ami_version = app.config['AMI_VERSION'],
                               service_role = 'EMR_DefaultRole',
-                              job_flow_role = 'telemetry-spark-emr',
+                              job_flow_role = app.config['SPARK_INSTANCE_PROFILE'],
                               visible_to_all_users = True,
                               keep_alive = True,
                               bootstrap_actions = [install_spark_bootstrap,

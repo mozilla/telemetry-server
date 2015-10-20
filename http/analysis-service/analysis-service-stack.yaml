@@ -25,13 +25,13 @@ Parameters:
       - m2.4xlarge
       - c1.medium
       - c1.xlarge
-    ConstraintDescription:    Must be a valid EC2 instance type.
+    ConstraintDescription:    Must be a valid EC2 instance type
 
   ServerAMI:
-    Description:              AMI for the server web head instance.
+    Description:              AMI for the server web head instance
     Type:                     String
     Default:                  ami-a40bea97
-    ConstraintDescription:    Must be a valid AMI in the current region.
+    ConstraintDescription:    Must be a valid AMI in the current region
 
   # Currently, we just setup to consume from load balancer configured with
   # SSL certificate and DNS else where...telemetry-dash-lb
@@ -60,7 +60,7 @@ Parameters:
     Description:              Version of sources to load from sources bucket
     Type:                     String
     MinLength:                1
-    ConstraintDescription:    Must not be empty.
+    ConstraintDescription:    Must not be empty
 
   AnalysisTemporaryBucket:
     Description:              Location where SSH Keys will be stored
@@ -101,6 +101,18 @@ Parameters:
     Description:              IAM Profile for public workers
     Type:                     String
     Default:                  telemetry-public-analysis-worker
+
+  SparkEMRBucket:
+    Description:              S3 Bucket containing Spark bootstrap resources
+    Type:                     String
+    MinLength:                1
+    ConstraintDescription:    Must not be empty
+
+  SparkInstanceProfile:
+    Description:              IAM Profile for Spark workers
+    Type:                     String
+    MinLength:                1
+    ConstraintDescription:    Must not be empty
 
 ################################################################################
 
@@ -226,6 +238,8 @@ Resources:
               "echo \"WORKER_AMI = '", {Ref: WorkerAMI} , "'\" >> config.py\n",
               "echo \"WORKER_PRIVATE_PROFILE = '", {Ref: AnalysisPrivateWorkerProfile} , "'\" >> config.py\n",
               "echo \"WORKER_PUBLIC_PROFILE = '", {Ref: AnalysisPublicWorkerProfile} , "'\" >> config.py\n",
+              "echo \"SPARK_INSTANCE_PROFILE = '", {Ref: SparkInstanceProfile} , "'\" >> config.py\n",
+              "echo \"SPARK_EMR_BUCKET = '", {Ref: SparkEMRBucket} , "'\" >> config.py\n",
               "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , "','", {Ref: AnalysisDBSecurityGroup}, "']\" >> config.py\n",
               # Workers get "Public" permissions by default
               "echo \"INSTANCE_PROFILE = '", {Ref: AnalysisPublicWorkerProfile} , "'\" >> config.py\n",

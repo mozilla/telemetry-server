@@ -24,6 +24,8 @@ if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cl
     SSH_KEY=$(jq -r '.ssl_key_name' < "$JOB_CONFIG")
     OWNER=$(jq -r '.owner' < "$JOB_CONFIG")
     APP_TAG=$(jq -r '.application_tag' < "$JOB_CONFIG")
+    INSTANCE_PROFILE=$(jq -r '.spark_instance_profile' < "$JOB_CONFIG")
+    EMR_BUCKET=$(jq -r '.spark_emr_bucket' < "$JOB_CONFIG")
 
     aws emr create-cluster \
         --auto-terminate \
@@ -32,12 +34,12 @@ if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cl
         --instance-type $SLAVE_TYPE \
         --instance-count $N_WORKERS \
         --service-role EMR_DefaultRole \
-        --ec2-attributes KeyName=$SSH_KEY,InstanceProfile=telemetry-spark-emr \
+        --ec2-attributes KeyName=$SSH_KEY,InstanceProfile=$INSTANCE_PROFILE \
         --tags "Owner=$OWNER Application=$APP_TAG" \
         --bootstrap-actions Path=s3://support.elasticmapreduce/spark/install-spark,Args=\["-v","$SPARK_VERSION"\] \
-                            Path=s3://telemetry-spark-emr/telemetry.sh,Args=\["--timeout","$TIMEOUT"\] \
+                            Path=s3://${EMR_BUCKET}/telemetry.sh,Args=\["--timeout","$TIMEOUT"\] \
                             Path=s3://elasticmapreduce/bootstrap-actions/configure-hadoop,Args=\["-y","yarn.nodemanager.vmem-check-enabled=false","-y","yarn.nodemanager.pmem-check-enabled=false"\] \
-        --steps Type=CUSTOM_JAR,Name=CustomJAR,ActionOnFailure=TERMINATE_JOB_FLOW,Jar=s3://us-west-2.elasticmapreduce/libs/script-runner/script-runner.jar,Args=\["s3://telemetry-spark-emr/batch.sh","--job-name","$JOB_NAME","--notebook","$NOTEBOOK","--data-bucket","$DATA_BUCKET"\]
+        --steps Type=CUSTOM_JAR,Name=CustomJAR,ActionOnFailure=TERMINATE_JOB_FLOW,Jar=s3://us-west-2.elasticmapreduce/libs/script-runner/script-runner.jar,Args=\["s3://${EMR_BUCKET}/batch.sh","--job-name","$JOB_NAME","--notebook","$NOTEBOOK","--data-bucket","$DATA_BUCKET"\]
 else
     cd ~/telemetry-server
     python -m provisioning.aws.launch_worker "$JOB_CONFIG"
