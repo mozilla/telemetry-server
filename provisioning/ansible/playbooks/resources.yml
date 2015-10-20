@@ -1,0 +1,27 @@
+---
+- hosts: localhost
+  connection: local
+  tasks:
+    - include_vars: ../envs/dev_secrets.yml
+
+    - name: get top level git dir
+      command: 'git rev-parse --show-toplevel'
+      register: top_level_dir
+
+    - name: make resources template
+      command: make analysis-resources.json
+      args:
+        chdir: "{{ top_level_dir.stdout }}/http/analysis-service"
+
+    - name: create resources CFN
+      cloudformation: stack_name="{{stack_name}}-resources" region={{region}} state=present
+      args:
+        template: "{{ top_level_dir.stdout }}/http/analysis-service/analysis-resources.json"
+        tags:
+          App: "telemetry"
+          Env: "{{env}}"
+          Stack: "{{stack_name}}"
+        template_parameters:
+          SSLCert: "{{ ssl_cert_arn }}"
+          AnalysisDatabasePassword : "{{ database_password }}"
+      register: resources_cfn

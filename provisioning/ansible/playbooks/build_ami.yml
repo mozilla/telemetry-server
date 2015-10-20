@@ -1,0 +1,14 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+  - name: get top level git dir
+    command: 'git rev-parse --show-toplevel'
+    register: top_level_dir
+
+  - name: build telemetry AMI
+    command: 'time python -u -m provisioning.aws.create_telemetry_worker_ami provisioning/aws/telemetry_worker.hvm.json'
+    args:
+      chdir: '{{ top_level_dir.stdout }}'

@@ -1,0 +1,24 @@
+---
+- include: resources.yml
+
+- hosts: localhost
+  connection: local
+  tasks:
+    - name: promote stack
+      cloudformation: stack_name="{{stack_name}}-route53" region={{region}} state=present
+      args:
+        template: ../templates/route53.json
+        template_parameters:
+          DNSName: "{{dns_name}}"
+          DNSZoneName: "{{dns_zone_name}}"
+          ELBDNSName: "{{resources_cfn.stack_outputs.AnalysisLoadBalancerDNSName}}"
+          ELBZoneNameID: "{{resources_cfn.stack_outputs.AnalysisLoadBalancerZoneID}}"
+          Environment: "{{env}}"
+          Region: "{{region}}"
+        tags:
+          App: "telemetry"
+          Env: "{{env}}"
+          Stack: "{{stack_name}}"
+      register: promote
+
+    - debug: var=promote

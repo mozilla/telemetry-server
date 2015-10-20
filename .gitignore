@@ -18,3 +18,4 @@ htmlcov/
 histogram_tools.py
 .DS_Store
 CMakeFiles
+provisioning/ansible/envs/dev_secrets.yml
