@@ -14,6 +14,8 @@ Parameters:
     Type:                     String
     Default:                  m1.small
     AllowedValues:
+      - t2.micro
+      - t2.medium
       - m1.small
       - m1.medium
       - m1.large
