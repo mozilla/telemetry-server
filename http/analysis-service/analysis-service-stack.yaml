@@ -269,7 +269,7 @@ Resources:
       LoadBalancerNames:
         - {Ref: AnalysisLoadBalancer}
       Tags:
-        - {Key: Name, Value: telemetry-dash.mozilla.org, PropagateAtLaunch: true}
+        - {Key: Name, Value: analysis.telemetry.mozilla.org, PropagateAtLaunch: true}
     # Support Rolling updates if/when we roll out changes
     UpdatePolicy:
         AutoScalingRollingUpdate:
