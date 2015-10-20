@@ -17,3 +17,4 @@ server_ami_id: ami-a40bea97
 worker_ami_id: ami-0057b733
 
 spark_instance_profile: telemetry-spark-cloudformation-TelemetrySparkInstanceProfile-1SATUBVEXG7E3
+spark_emr_bucket: telemetry-spark-emr-2

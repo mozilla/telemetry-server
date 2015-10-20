@@ -102,6 +102,18 @@ Parameters:
     Type:                     String
     Default:                  telemetry-public-analysis-worker
 
+  SparkEMRBucket:
+    Description:              S3 Bucket containing Spark bootstrap resources.
+    Type:                     String
+    MinLength:                1
+    ConstraintDescription:    Must not be empty.
+
+  SparkInstanceProfile:
+    Description:              IAM Profile for Spark workers
+    Type:                     String
+    MinLength:                1
+    ConstraintDescription:    Must not be empty.
+
 ################################################################################
 
 Resources:
@@ -226,6 +238,8 @@ Resources:
               "echo \"WORKER_AMI = '", {Ref: WorkerAMI} , "'\" >> config.py\n",
               "echo \"WORKER_PRIVATE_PROFILE = '", {Ref: AnalysisPrivateWorkerProfile} , "'\" >> config.py\n",
               "echo \"WORKER_PUBLIC_PROFILE = '", {Ref: AnalysisPublicWorkerProfile} , "'\" >> config.py\n",
+              "echo \"SPARK_INSTANCE_PROFILE = '", {Ref: SparkInstanceProfile} , "'\" >> config.py\n",
+              "echo \"SPARK_EMR_BUCKET = '", {Ref: SparkEMRBucket} , "'\" >> config.py\n",
               "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , "','", {Ref: AnalysisDBSecurityGroup}, "']\" >> config.py\n",
               # Workers get "Public" permissions by default
               "echo \"INSTANCE_PROFILE = '", {Ref: AnalysisPublicWorkerProfile} , "'\" >> config.py\n",
