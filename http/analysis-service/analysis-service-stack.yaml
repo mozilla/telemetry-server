@@ -244,7 +244,7 @@ Resources:
               "echo \"WORKER_AMI = '", {Ref: WorkerAMI} , "'\" >> config.py\n",
               "echo \"WORKER_PRIVATE_ROLE = '", {Ref: AnalysisPrivateWorkerRole} , "'\" >> config.py\n",
               "echo \"WORKER_PUBLIC_ROLE = '", {Ref: AnalysisPublicWorkerRole} , "'\" >> config.py\n",
-              "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , ",", {Ref: AnalysisDBSecurityGroup} "']\" >> config.py\n",
+              "echo \"SECURITY_GROUPS = ['", {Ref: workerInstanceSecurityGroup} , ",", {Ref: AnalysisDBSecurityGroup}, "']\" >> config.py\n",
               "echo \"INSTANCE_PROFILE = '", {Ref: workerInstanceProfile} , "'\" >> config.py\n",
               "echo \"TEMPORARY_BUCKET = '", {Ref: AnalysisTemporaryBucket} , "'\" >> config.py\n",
               "echo \"CODE_BUCKET = '", {Ref: AnalysisSourcesBucket} , "'\" >> config.py\n",
@@ -303,8 +303,6 @@ Resources:
   # IAM role for analysis worker instances
   workerInstanceIAMRole:
     Type:                     AWS::IAM::Role
-    DependsOn:
-      - temporaryBucket
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -336,7 +334,7 @@ Resources:
                   - 's3:GetObject'
                 Resource:     {'Fn::Join': ["", [
                                 'arn:aws:s3:::',
-                                {Ref: temporaryBucket},
+                                {Ref: AnalysisTemporaryBucket},
                                 '/*'
                               ]]}
 
