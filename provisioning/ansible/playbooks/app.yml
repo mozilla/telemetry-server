@@ -1,0 +1,43 @@
+---
+- include: resources.yml
+
+- hosts: localhost
+  connection: local
+  tasks:
+
+    - name: get top level git dir
+      command: 'git rev-parse --show-toplevel'
+      register: top_level_dir
+
+    - name: make resources template
+      command: make analysis-service-stack.json
+      args:
+        chdir: "{{ top_level_dir.stdout }}/http/analysis-service"
+
+    - name: resources
+      cloudformation: stack_name="{{stack_name}}-app" region={{region}} state=present
+      args:
+        template: "{{ top_level_dir.stdout }}/http/analysis-service/analysis-service-stack.json"
+        tags:
+          App: "telemetry"
+          Env: "{{env}}"
+          Stack: "{{stack_name}}"
+        template_parameters:
+          ServerInstanceType: "{{instance_type}}"
+          AnalysisSourcesBucket: "{{resources_cfn.stack_outputs.AnalysisSourcesBucket}}"
+          AnalysisPrivateDataBucket: "{{resources_cfn.stack_outputs.AnalysisPrivateDataBucket}}"
+          AnalysisDBSecurityGroup: "{{resources_cfn.stack_outputs.AnalysisDBSecurityGroup}}"
+          AnalysisDatabaseURL: "{{resources_cfn.stack_outputs.AnalysisDatabaseURL}}"
+          AnalysisPublicDataBucket: "{{resources_cfn.stack_outputs.AnalysisPublicDataBucket}}"
+          AnalysisTemporaryBucket: "{{resources_cfn.stack_outputs.AnalysisTemporaryBucket}}"
+          AnalysisLoadBalancer: "{{resources_cfn.stack_outputs.AnalysisLoadBalancer}}"
+          ServerSecret: "{{server_secret}}"
+          KeyName: "{{ key_name }}"
+          WorkerAMI: "{{worker_ami_id}}"
+          ServerAMI: "{{server_ami_id}}"
+          SourcesVersion: "{{ sources_version }}"
+          AnalysisPublicWorkerProfile: "{{resources_cfn.stack_outputs.AnalysisPublicWorkerProfile}}"
+          AnalysisPrivateWorkerProfile: "{{resources_cfn.stack_outputs.AnalysisPrivateWorkerProfile}}"
+          # ignore roles
+          # AnalysisPublicWorkerRole: "{{resources_cfn.stack_outputs.AnalysisPublicWorkerRole}}"
+          # AnalysisPrivateWorkerRole: "{{resources_cfn.stack_outputs.AnalysisPrivateWorkerRole}}"
