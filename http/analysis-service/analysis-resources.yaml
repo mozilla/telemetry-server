@@ -372,6 +372,6 @@ Outputs:
       {Ref: AnalysisDatabasePassword},
       '@',
       {'Fn::GetAtt': [ "AnalysisDatabase", "Endpoint.Address" ] },
-      ':'
+      ':',
       {'Fn::GetAtt': [ "AnalysisDatabase", "Endpoint.Port" ] },
       '/telemetry' ] ] }
