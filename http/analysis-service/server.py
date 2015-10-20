@@ -15,7 +15,7 @@ from urlparse import urljoin
 from uuid import uuid4
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.sql import select, func
-from sqlalchemy import DDL
+from sqlalchemy import event, DDL
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 from subprocess import check_output, CalledProcessError
@@ -87,33 +87,13 @@ def initialize_db(db):
         Column("schedule_month",        String(20),  nullable=False),
         Column("schedule_day_of_week",  String(20),  nullable=False)
     )
+
+    # Postgres-specific stuff
+    seq_default = DDL("ALTER TABLE scheduled_jobs ALTER COLUMN id SET DEFAULT nextval('scheduled_jobs_id_seq');")
+    event.listen(scheduled_jobs, "after_create", seq_default.execute_if(dialect='postgresql'))
+
     # Create the table
     db['metadata'].create_all(tables=[scheduled_jobs])
-    # TODO: The above does not create the serial column properly in PostgreSQL.
-    #       Use this SQL:
-    # CREATE TABLE scheduled_jobs (
-    #     id                    SERIAL PRIMARY KEY,
-    #     owner                 VARCHAR(50) NOT NULL,
-    #     name                  VARCHAR(100) UNIQUE NOT NULL,
-    #     timeout_minutes       INT NOT NULL,
-    #     code_uri              VARCHAR(300) NOT NULL,
-    #     commandline           VARCHAR NOT NULL,
-    #     data_bucket           VARCHAR(200) NOT NULL,
-    #     num_workers           INT,
-    #     output_dir            VARCHAR(100) NOT NULL,
-    #     output_visibility     VARCHAR(10) NOT NULL,
-    #     schedule_minute       VARCHAR(20) NOT NULL,
-    #     schedule_hour         VARCHAR(20) NOT NULL,
-    #     schedule_day_of_month VARCHAR(20) NOT NULL,
-    #     schedule_month        VARCHAR(20) NOT NULL,
-    #     schedule_day_of_week  VARCHAR(20) NOT NULL
-    # );
-    # -- Make job id start from 1000
-    seq = DDL("ALTER SEQUENCE scheduled_jobs_id_seq RESTART WITH 1000;")
-    seq.execute_if(dialect='postgresql')
-
-    idx = DDL("CREATE INDEX scheduled_jobs_owner_idx on scheduled_jobs(owner);")
-    idx.execute_if(dialect='postgresql')
 
 def get_db():
     """Opens a new database connection if there is none yet for the
