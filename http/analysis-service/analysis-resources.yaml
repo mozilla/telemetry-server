@@ -84,7 +84,7 @@ Resources:
     DeletionPolicy:             Retain
     Properties:
       BucketName:               telemetry-public-analysis-2
-      AccessControl:            PublicRead
+      AccessControl:            Private
       CorsConfiguration:
         CorsRules:
           -
@@ -99,6 +99,18 @@ Resources:
         - {Key: Name,    Value: telemetry-public-analysis}
         - {Key: App,     Value: telemetry}
         - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # Grant everyone GET access (so web stuff works)
+  AnalysisPublicDataBucketPolicy:
+    Type:                       AWS::S3::BucketPolicy
+    Properties:
+      Bucket: {Ref: AnalysisPublicDataBucket}
+      PolicyDocument:
+        Statement:
+         - Action: ["s3:GetObject"]
+           Effect: Allow
+           Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "AnalysisPublicDataBucket" } , "/*" ]]}
+           Principal: "*"
 
   # Location where private analysis results will be stored
   AnalysisPrivateDataBucket:
