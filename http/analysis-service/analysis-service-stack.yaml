@@ -59,7 +59,8 @@ Parameters:
   SourcesVersion:
     Description:              Version of sources to load from sources bucket
     Type:                     String
-    Default:                  '2'
+    MinLength:                1
+    ConstraintDescription:    Must not be empty.
 
   AnalysisTemporaryBucket:
     Description:              Location where SSH Keys will be stored

@@ -43,7 +43,7 @@
      <a class="navbar-brand" href="/">Telemetry Self-Serve Data Analysis</a>
     </div>
     <div class="navbar-collapse collapse">
-     {% if current_user.is_authenticated() %}
+     {% if current_user.is_authenticated %}
       <ul class="nav navbar-nav">
        <li {% block home_active %} {% endblock %}><a href="/">Home</a></li>
        <li {% block cluster_active %} {% endblock %} >
@@ -84,7 +84,7 @@
     {% block title %}
      <h1>Self-Serve Data Analysis</h1>
      <p class="lead"> Your one stop shop when the dashboards just don't cut it </p>
-     {% if not current_user.is_authenticated() %}
+     {% if not current_user.is_authenticated %}
       <p>
        For Ad-hoc data analysis and for scheduling analysis tasks,
        please <strong>sign in</strong> above with an <em>@mozilla.com</em>
@@ -111,7 +111,7 @@
    </div>
   </div>
   <div class="container">
-  {% if current_user.is_authenticated() and current_user.is_authorized() %}
+  {% if current_user.is_authenticated and current_user.is_authorized() %}
    {% block content %}
    {% endblock %}
   {% endif %}
