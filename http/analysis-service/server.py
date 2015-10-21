@@ -1060,23 +1060,23 @@ def cluster_monitor(jobflow_id):
         return login_manager.unauthorized()
 
     try:
-        jobflow = emr.describe_jobflow(jobflow_id)
         cluster = emr.describe_cluster(jobflow_id)
-    except:
-        return "No such cluster: {}".format(jobflow_id), 404
+    except Exception as e:
+        return "No such cluster: {} -- error: {}".format(jobflow_id, e), 404
 
     if get_tag_value(cluster.tags, "Owner") != current_user.email:
         return "No such cluster: {}".format(jobflow_id), 404
 
     # Get a datetime representing when the cluster will be terminated
-    terminate_time = get_termination_time(getattr(jobflow, "creationdatetime", datetime.utcnow()))
+    creation_time = getattr(cluster.status.timeline, "creationdatetime", datetime.utcnow())
+    terminate_time = get_termination_time(creation_time)
 
     # Alright then, let's report status
     return render_template(
         'cluster/monitor.html',
         jobflow_id = jobflow_id,
-        instance_state = jobflow.state,
-        public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
+        instance_state = cluster.status.state,
+        public_dns = cluster.masterpublicdnsname if hasattr(cluster, "masterpublicdnsname") else None,
         terminate_url = abs_url_for('cluster_kill', jobflow_id = jobflow_id),
         terminate_time = terminate_time.strftime("%Y-%m-%d %H:%M:%S"),
         terminate_hours_left = get_hours_remaining(terminate_time)
