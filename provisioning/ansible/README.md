@@ -8,40 +8,42 @@ Deploying telemetry-analysis
 2. Make sure cross IAM S3 permissions are set up if cross-IAM access is required. Edit bucket policies for relevant buckets to look something like this:
 
 ```json
-    {
-        "Version": "2008-10-17",
-        "Statement": [
-            {
-                "Sid": "ListAccess",
-                "Effect": "Allow",
-                "Principal": {
-                    "AWS": [
-                        "arn:aws:iam::XXXXXXXXXXXX:root"
-                    ]
-                },
-                "Action": "S3:ListBucket",
-                "Resource": "arn:aws:s3:::telemetry-published-v2"
+{
+    "Version": "2008-10-17",
+    "Statement": [
+        {
+            "Sid": "ListAccess",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::XXXXXXXXXXXX:root"
+                ]
             },
-            {
-                "Sid": "GetAccess",
-                "Effect": "Allow",
-                "Principal": {
-                    "AWS": [
-                        "arn:aws:iam::XXXXXXXXXXXX:root"
-                    ]
-                },
-                "Action": "S3:GetObject",
-                "Resource": "arn:aws:s3:::telemetry-published-v2/*"
-            }
-        ]
-    }
+            "Action": "S3:ListBucket",
+            "Resource": "arn:aws:s3:::telemetry-published-v2"
+        },
+        {
+            "Sid": "GetAccess",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::XXXXXXXXXXXX:root"
+                ]
+            },
+            "Action": "S3:GetObject",
+            "Resource": "arn:aws:s3:::telemetry-published-v2/*"
+        }
+    ]
+}
 ```
 
 ## Automated deployment tasks:
 
 1. Build an AMI for telemetry workers:
 
-    ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" playbooks/build_ami.yml
+```bash
+ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" playbooks/build_ami.yml
+```
 
 2. Set `worker_ami_id` in [`envs/dev.yml`](envs/dev.yml) to the value output by (1). This a git-managed file.
 
@@ -49,18 +51,26 @@ Deploying telemetry-analysis
 
 4. Create the static resources Cloudformation template (only needs to be run once):
 
-    ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" --extra-vars "@envs/dev_secrets.yml" playbooks/resources.yml
+```bash
+ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" --extra-vars "@envs/dev_secrets.yml" playbooks/resources.yml
+```
 
 ## To update / deploy the application servers:
 
 5. Create a new code package to use by updating `sources_version` in [`envs/dev.yml`](envs/dev.yml) and running:
 
-    ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" playbooks/make_code_package.yml
+```bash
+ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" playbooks/make_code_package.yml
+```
 
 6. Deploy the CloudFormation template by running:
 
-    ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" playbooks/app.yml
+```bash
+ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" playbooks/app.yml
+```
 
 7. Deploy user-facing DNS with (only needs to be run once):
 
-    ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" playbooks/route53.yaml
+```bash
+ansible-playbook -i hosts -v --extra-vars "@envs/dev.yml" playbooks/route53.yaml
+```
