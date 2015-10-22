@@ -1,53 +1,91 @@
 {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Telemetry analysis Route53",
-    "Parameters": {
-        "DNSName": {
-            "Type": "String"
-        },
-        "DNSZoneName": {
-            "Default": "dev.mozaws.net.",
-            "Type": "String"
-        },
-        "ELBZoneNameID": {
-            "Description": "From app stack.",
-            "Type": "String"
-        },
-        "ELBDNSName": {
-            "Description": "From app stack.",
-            "Type": "String"
-        },
-        "Environment": {
-            "Description": "Environment",
-            "Type": "String",
-            "Default": "dev"
-        },
-        "Region": {
-            "Description": "Environment",
-            "Type": "String",
-            "Default": "us-west-2"
-        }
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Telemetry analysis Route53",
+  "Parameters": {
+    "DNSName": {
+      "Type": "String"
     },
-    "Resources": {
-        "R53AliasRecord" : {
-            "Type":"AWS::Route53::RecordSet",
-            "Properties" : {
-                "HostedZoneName": {"Ref": "DNSZoneName"},
-                "Name": {"Ref": "DNSName"},
-                "Type":"A",
-                "Region": {"Ref": "Region"},
-                "AliasTarget" : {
-                    "EvaluateTargetHealth": true,
-                    "HostedZoneId": {"Ref": "ELBZoneNameID"},
-                    "DNSName": {"Ref": "ELBDNSName"}
-                },
-                "SetIdentifier": {"Ref": "Region"}
-            }
-        }
+    "DNSZoneName": {
+      "Default": "dev.mozaws.net.",
+      "Type": "String"
     },
-    "Outputs": {
-        "Domain": {
-            "Value": {"Ref": "R53AliasRecord"}
-        }
+    "ELBZoneNameID": {
+      "Description": "From app stack.",
+      "Type": "String"
+    },
+    "ELBDNSName": {
+      "Description": "From app stack.",
+      "Type": "String"
+    },
+    "Environment": {
+      "Description": "Environment",
+      "Type": "String",
+      "Default": "dev"
+    },
+    "Region": {
+      "Description": "Environment",
+      "Type": "String",
+      "Default": "us-west-2"
+    },
+    "AnalysisPublicCDNDomainName": {
+      "Type": "String"
+    },
+    "AnalysisPublicDomainName": {
+      "Type": "String"
     }
+  },
+  "Resources": {
+    "R53AliasRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneName": {
+          "Ref": "DNSZoneName"
+        },
+        "Name": {
+          "Ref": "DNSName"
+        },
+        "Type": "A",
+        "Region": {
+          "Ref": "Region"
+        },
+        "AliasTarget": {
+          "EvaluateTargetHealth": true,
+          "HostedZoneId": {
+            "Ref": "ELBZoneNameID"
+          },
+          "DNSName": {
+            "Ref": "ELBDNSName"
+          }
+        },
+        "SetIdentifier": {
+          "Ref": "Region"
+        }
+      }
+    },
+    "PublicBucketR53Record": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneName": {
+          "Ref": "DNSZoneName"
+        },
+        "Name": {
+          "Ref": "AnalysisPublicDomainName"
+        },
+        "Type": "CNAME",
+        "ResourceRecords": [
+          {
+            "Ref": "AnalysisPublicCDNDomainName"
+          }
+        ],
+        "TTL": 60
+      }
+    }
+  },
+  "Outputs": {
+    "Domain": {
+      "Value": {
+        "Ref": "PublicBucketR53Record"
+      }
+    }
+  }
 }

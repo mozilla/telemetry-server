@@ -9,6 +9,7 @@ sources_version: 26
 
 dns_name: "telemetry-analysis.dev.mozaws.net"
 dns_zone_name: "dev.mozaws.net."
+public_analysis_dns_name: "telemetry-analysis-output.dev.mozaws.net"
 
 instance_type: t2.micro
 server_ami_id: ami-a40bea97
