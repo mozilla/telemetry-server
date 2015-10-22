@@ -25,8 +25,8 @@ Parameters:
 
   AnalysisPublicCDNAliases:
     Description:                DNS Names for the public analysis cdn
-      Default:                  analysis-output.telemetry.mozilla.org
-      Type:                     CommaDelimitedList
+    Default:                    analysis-output.telemetry.mozilla.org
+    Type:                       CommaDelimitedList
 
 ##############################################################################
 
