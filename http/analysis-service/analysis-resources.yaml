@@ -6,16 +6,27 @@ Description: >
 ################################################################################
 
 Parameters:
-  SSLCert:
-    Description:                SSL Certificate to use on the load balancer
+  ELBSSLCertARN:
+    Description:                SSL Certificate ARN to use on the Load Balancer
     Type:                       String
     Default:                    arn:aws:iam::927034868273:server-certificate/exp20180829_star_telemetry_mozilla_org
+    ConstraintDescription:      Must be a valid SSL Cert ARN
+
+  CDNSSLCertID:
+    Description:                SSL Certificate ID for the CDN Cert
+    Type:                       String
+    Default:                    ASCAIVHXNV72FEOLJVUXQ
     ConstraintDescription:      Must be a valid SSL Cert ID
 
   AnalysisDatabasePassword:
     Description:                Password for connecting to AnalysisDatabase
     Type:                       String
     Default:                    Big Secret. Highly secure.
+
+  AnalysisPublicCDNAliases:
+    Description:                DNS Names for the public analysis cdn
+    Default:                    analysis-output.telemetry.mozilla.org
+    Type:                       CommaDelimitedList
 
 ##############################################################################
 
@@ -72,7 +83,7 @@ Resources:
         Timeout:                "5"
       Listeners:
           - {LoadBalancerPort: "80",  InstancePort: "80", Protocol: HTTP}
-          - {LoadBalancerPort: "443", InstancePort: "80", Protocol: HTTPS, SSLCertificateId: {Ref: SSLCert}}
+          - {LoadBalancerPort: "443", InstancePort: "80", Protocol: HTTPS, SSLCertificateId: {Ref: ELBSSLCertARN}}
       Tags:
         - {Key: Name,    Value: telemetry-analysis-lb}
         - {Key: App,     Value: telemetry}
@@ -325,6 +336,33 @@ Resources:
       Roles:
         - {Ref: AnalysisPrivateWorkerRole}
 
+  AnalysisPublicCDN:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          Ref: "AnalysisPublicCDNAliases"
+        DefaultCacheBehavior:
+          TargetOriginId: {'Fn::Join': ["-", ['custom', {'Fn::GetAtt': [ "AnalysisPublicDataBucket", "DomainName" ] }]]}
+          ForwardedValues:
+            QueryString: "True"
+          ViewerProtocolPolicy: "allow-all"
+        Origins:
+          -
+            DomainName: {'Fn::GetAtt': [ "AnalysisPublicDataBucket", "DomainName" ] }
+            Id: {'Fn::Join': ["-", ['custom', {'Fn::GetAtt': [ "AnalysisPublicDataBucket", "DomainName" ] }]]}
+            CustomOriginConfig:
+              HTTPPort: "80"
+              HTTPSPort: "443"
+              OriginProtocolPolicy: "match-viewer"
+        Enabled: "true"
+        PriceClass: "PriceClass_All"
+        ViewerCertificate:
+          IamCertificateId:
+            Ref: "CDNSSLCertID"
+          MinimumProtocolVersion: "TLSv1"
+          SslSupportMethod: "vip"
+
 Outputs:
   AnalysisDatabase:
     Description: Database containing scheduled job metadata
@@ -393,3 +431,11 @@ Outputs:
       ':',
       {'Fn::GetAtt': [ "AnalysisDatabase", "Endpoint.Port" ] },
       '/telemetry' ] ] }
+
+  AnalysisPublicCDN:
+    Description: CloudFront Distribution for the public analysis output
+    Value: {Ref: AnalysisPublicCDN}
+
+  AnalysisPublicCDNDomainName:
+    Description: Domain Name for CloudFront Distribution for public analysis output
+    Value: {'Fn::GetAtt': ["AnalysisPublicCDN", "DomainName"]}
