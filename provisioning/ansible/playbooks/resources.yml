@@ -22,6 +22,6 @@
           Env: "{{env}}"
           Stack: "{{stack_name}}"
         template_parameters:
-          SSLCert: "{{ ssl_cert_arn }}"
+          ELBSSLCertARN: "{{ ssl_cert_arn }}"
           AnalysisDatabasePassword : "{{ database_password }}"
       register: resources_cfn
