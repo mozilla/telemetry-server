@@ -1090,7 +1090,6 @@ def cluster_kill(jobflow_id):
         return login_manager.unauthorized()
 
     try:
-        jobflow = emr.describe_jobflow(jobflow_id)
         cluster = emr.describe_cluster(jobflow_id)
     except:
         return "No such cluster: {}".format(jobflow_id), 404
@@ -1105,8 +1104,8 @@ def cluster_kill(jobflow_id):
     return render_template(
         'cluster/kill.html',
         jobflow_id = jobflow_id,
-        jobflow_state = jobflow.state,
-        public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
+        jobflow_state = cluster.status.state,
+        public_dns = cluster.masterpublicdnsname if hasattr(cluster, "masterpublicdnsname") else None,
     )
 
 @app.route("/cluster/schedule", methods=["GET"])
