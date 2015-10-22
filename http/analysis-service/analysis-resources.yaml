@@ -216,6 +216,9 @@ Resources:
                   # Full access to the "intermediate results" bucket:
                   - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-analysis'
                   - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-analysis/*'
+                  # And the metrics dashboards data bucket
+                  - 'arn:aws:s3:::net-mozaws-prod-metrics-data'
+                  - 'arn:aws:s3:::net-mozaws-prod-metrics-data/*'
                   # And the public data bucket
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPublicDataBucket}]]}
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPublicDataBucket}, '/*']]}
@@ -286,6 +289,9 @@ Resources:
                   # Full access to the "intermediate results" bucket:
                   - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-analysis'
                   - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-analysis/*'
+                  # And the metrics dashboards data bucket
+                  - 'arn:aws:s3:::net-mozaws-prod-metrics-data'
+                  - 'arn:aws:s3:::net-mozaws-prod-metrics-data/*'
                   # And the private data bucket
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPrivateDataBucket}]]}
                   - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPrivateDataBucket}, '/*']]}
