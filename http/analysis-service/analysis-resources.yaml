@@ -66,7 +66,7 @@ Resources:
         - us-west-2c
       HealthCheck:
         Target:                 HTTP:80/status
-        HealthyThreshold:       "1"
+        HealthyThreshold:       "2"
         UnhealthyThreshold:     "3"
         Interval:               "30"
         Timeout:                "5"
