@@ -17,12 +17,3 @@ tar czvf "$TARBALL" \
         chromehangs.py
 
 echo "Packaged $NAME code as $TARBALL"
-if [ ! -z "$(which aws)" ]; then
-    # Private analysis:
-    aws s3 cp $TARBALL s3://telemetry-analysis-code/jobs/ChromeHangs/$TARBALL
-    # Public analysis:
-    aws s3 cp $TARBALL s3://telemetry-analysis-code/jobs/ChromeHangsWeekly/$TARBALL
-    echo "Code successfully uploaded to S3"
-else
-    echo "AWS CLI not found - you should manually upload to s3 via http://telemetry-dash.mozilla.org"
-fi
