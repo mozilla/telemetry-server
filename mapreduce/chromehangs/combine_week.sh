@@ -38,7 +38,7 @@ for f in $(seq 0 6); do
         cp "$BASE/chromehangs-common-$DAY.csv.gz" ./
     else
         echo "Fetching $DAY"
-        aws s3 cp s3://telemetry-public-analysis/$NAME/data/chromehangs-common-$DAY.csv.gz ./
+        aws s3 cp s3://telemetry-public-analysis-2/$NAME/data/chromehangs-common-$DAY.csv.gz ./
     fi
 done
 echo "Creating weekly data for $MONDAY to $SUNDAY"
