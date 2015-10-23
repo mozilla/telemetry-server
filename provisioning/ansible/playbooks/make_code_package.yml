@@ -1,0 +1,16 @@
+---
+- include: resources.yml
+
+- hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+  - name: get top level git dir
+    command: 'git rev-parse --show-toplevel'
+    register: top_level_dir
+
+  - name: build and upload telemetry code
+    command: make put SOURCES_BUCKET={{resources_cfn.stack_outputs.AnalysisSourcesBucket}} VERSION={{ sources_version }}
+    args:
+      chdir: "{{ top_level_dir.stdout }}/http/analysis-service"

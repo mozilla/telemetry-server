@@ -1,0 +1,441 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  This deploys the static resources required by the analysis service stack.
+
+################################################################################
+
+Parameters:
+  ELBSSLCertARN:
+    Description:                SSL Certificate ARN to use on the Load Balancer
+    Type:                       String
+    Default:                    arn:aws:iam::927034868273:server-certificate/exp20180829_star_telemetry_mozilla_org
+    ConstraintDescription:      Must be a valid SSL Cert ARN
+
+  CDNSSLCertID:
+    Description:                SSL Certificate ID for the CDN Cert
+    Type:                       String
+    Default:                    ASCAIVHXNV72FEOLJVUXQ
+    ConstraintDescription:      Must be a valid SSL Cert ID
+
+  AnalysisDatabasePassword:
+    Description:                Password for connecting to AnalysisDatabase
+    Type:                       String
+    Default:                    Big Secret. Highly secure.
+
+  AnalysisPublicCDNAliases:
+    Description:                DNS Names for the public analysis cdn
+    Default:                    analysis-output.telemetry.mozilla.org
+    Type:                       CommaDelimitedList
+
+##############################################################################
+
+Resources:
+  # Database containing scheduled job metadata
+  AnalysisDatabase:
+    Type:                       AWS::RDS::DBInstance
+    DeletionPolicy:             Snapshot
+    Properties:
+      DBSecurityGroups:
+        - Ref:                  AnalysisDBSecurityByEC2SecurityGroup
+      AllocatedStorage:         "10"
+      DBInstanceClass:          db.m1.small
+      Engine:                   postgres
+      EngineVersion:            9.4.1
+      AllowMajorVersionUpgrade: true
+      AvailabilityZone:         us-west-2c
+      DBName:                   telemetry
+      MasterUsername:           telemetry
+      MasterUserPassword:       {Ref: AnalysisDatabasePassword}
+      Port:                     5432
+      PubliclyAccessible:       false
+      Tags:
+        - {Key: Name,    Value: telemetry-analysis-db}
+        - {Key: App,     Value: telemetry}
+        - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # Bucket containing analysis job code and templates
+  AnalysisSourcesBucket:
+    Type:                       AWS::S3::Bucket
+    DeletionPolicy:             Retain
+    Properties:
+      BucketName:               telemetry-analysis-code-2
+      AccessControl:            Private
+      Tags:
+        - {Key: Name,    Value: telemetry-analysis-code}
+        - {Key: App,     Value: telemetry}
+        - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # Load balancer to front the analysis service
+  AnalysisLoadBalancer:
+    Type:                       AWS::ElasticLoadBalancing::LoadBalancer
+    DeletionPolicy:             Delete
+    Properties:
+      AvailabilityZones:
+        - us-west-2a
+        - us-west-2b
+        - us-west-2c
+      HealthCheck:
+        Target:                 HTTP:80/status
+        HealthyThreshold:       "2"
+        UnhealthyThreshold:     "3"
+        Interval:               "30"
+        Timeout:                "5"
+      Listeners:
+          - {LoadBalancerPort: "80",  InstancePort: "80", Protocol: HTTP}
+          - {LoadBalancerPort: "443", InstancePort: "80", Protocol: HTTPS, SSLCertificateId: {Ref: ELBSSLCertARN}}
+      Tags:
+        - {Key: Name,    Value: telemetry-analysis-lb}
+        - {Key: App,     Value: telemetry}
+        - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # Location where public analysis results will be stored
+  AnalysisPublicDataBucket:
+    Type:                       AWS::S3::Bucket
+    DeletionPolicy:             Retain
+    Properties:
+      BucketName:               telemetry-public-analysis-2
+      AccessControl:            Private
+      CorsConfiguration:
+        CorsRules:
+          -
+            AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+            MaxAge: "3600"
+            AllowedHeaders:
+              - "*"
+      Tags:
+        - {Key: Name,    Value: telemetry-public-analysis}
+        - {Key: App,     Value: telemetry}
+        - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # Grant everyone GET access (so web stuff works)
+  AnalysisPublicDataBucketPolicy:
+    Type:                       AWS::S3::BucketPolicy
+    Properties:
+      Bucket: {Ref: AnalysisPublicDataBucket}
+      PolicyDocument:
+        Statement:
+         - Action: ["s3:GetObject"]
+           Effect: Allow
+           Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "AnalysisPublicDataBucket" } , "/*" ]]}
+           Principal: "*"
+
+  # Location where private analysis results will be stored
+  AnalysisPrivateDataBucket:
+    Type:                       AWS::S3::Bucket
+    DeletionPolicy:             Retain
+    Properties:
+      BucketName:               telemetry-private-analysis-2
+      AccessControl:            Private
+      Tags:
+        - {Key: Name,    Value: telemetry-private-analysis}
+        - {Key: App,     Value: telemetry}
+        - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # Location where SSH Keys will be stored
+  AnalysisTemporaryBucket:
+    Type:                       AWS::S3::Bucket
+    DeletionPolicy:             Delete
+    Properties:
+      AccessControl:            Private
+      Tags:
+        - {Key: Name,    Value: telemetry-analysis-temp}
+        - {Key: App,     Value: telemetry}
+        - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # DB Security group that uses an EC2 security group
+  AnalysisDBSecurityByEC2SecurityGroup:
+    Type:                       AWS::RDS::DBSecurityGroup
+    Properties:
+      GroupDescription:          Ingress to Analysis DB for ec2
+      DBSecurityGroupIngress:
+        - {EC2SecurityGroupName: {Ref: "AnalysisDBSecurityGroup"}}
+      Tags:
+        - {Key: Name,    Value: telemetry-analysis-db-sg}
+        - {Key: App,     Value: telemetry}
+        - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # EC2 Security group that gives accesss to the Analysis DB
+  AnalysisDBSecurityGroup:
+    Type:                         AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:           Access to Telemetry Analysis DB
+      Tags:
+          - {Key: Name,    Value: telemetry-analysis-db-ec2-sg}
+          - {Key: App,     Value: telemetry}
+          - {Key: Owner,   Value: mreid@mozilla.com}
+
+  # TODO: Split the "read published data and send email" policy out instead of
+  #       repeating it all.
+
+  # IAM Role for public workers
+  AnalysisPublicWorkerRole:
+    Type:                         AWS::IAM::Role
+    DependsOn:
+      - AnalysisSourcesBucket
+      - AnalysisPublicDataBucket
+      - AnalysisTemporaryBucket
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect:               Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path:                       /telemetry/analysis/public-worker-instance/
+      Policies:
+        # Grant read access to required source data buckets
+        - PolicyName:             TelemetryPublicWorkerPublishedDataAccess
+          PolicyDocument:
+            Statement:
+              - Effect:           Allow
+                Action:
+                  - 's3:Get*'
+                  - 's3:List*'
+                Resource:
+                  # Old telemetry:
+                  - 'arn:aws:s3:::telemetry-published-v2'
+                  - 'arn:aws:s3:::telemetry-published-v2/*'
+                  # Pipeline data a.k.a. Unified Telemetry:
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-data'
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-data/*'
+                  # Pipeline metadata:
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-metadata'
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-metadata/*'
+                  # Sources bucket:
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisSourcesBucket}]]}
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisSourcesBucket}, '/*']]}
+                  # Temporary bucket (for SSH keys)
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisTemporaryBucket}, '/*']]}
+
+        # Grant read/write access to public data bucket and common analysis bucket
+        - PolicyName:             TelemetryPublicWorkerWriteData
+          PolicyDocument:
+            Statement:
+              - Effect:           Allow
+                Action:
+                  - 's3:Get*'
+                  - 's3:List*'
+                  - 's3:Put*'
+                  - 's3:DeleteObject'
+                Resource:
+                  # Full access to the "intermediate results" bucket:
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-analysis'
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-analysis/*'
+                  # And the metrics dashboards data bucket
+                  - 'arn:aws:s3:::net-mozaws-prod-metrics-data'
+                  - 'arn:aws:s3:::net-mozaws-prod-metrics-data/*'
+                  # And the public data bucket
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPublicDataBucket}]]}
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPublicDataBucket}, '/*']]}
+        # Grant access to send alert emails
+        - PolicyName:             TelemetryPublicWorkerSendEmail
+          PolicyDocument:
+            Statement:
+              Effect:             Allow
+              Action:
+                - 'ses:SendEmail'
+                - 'ses:SendRawEmail'
+              Resource:
+                - "*"
+
+  # IAM Role for private workers
+  AnalysisPrivateWorkerRole:
+    Type:                         AWS::IAM::Role
+    DependsOn:
+      - AnalysisSourcesBucket
+      - AnalysisPrivateDataBucket
+      - AnalysisTemporaryBucket
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect:               Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path:                       /telemetry/analysis/private-worker-instance/
+      Policies:
+        # Grant read access to required source data buckets
+        - PolicyName:             TelemetryPrivateWorkerPublishedDataAccess
+          PolicyDocument:
+            Statement:
+              - Effect:           Allow
+                Action:
+                  - 's3:Get*'
+                  - 's3:List*'
+                Resource:
+                  # Old telemetry:
+                  - 'arn:aws:s3:::telemetry-published-v2'
+                  - 'arn:aws:s3:::telemetry-published-v2/*'
+                  # Pipeline data a.k.a. Unified Telemetry:
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-data'
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-data/*'
+                  # Pipeline metadata:
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-metadata'
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-metadata/*'
+                  # Sources bucket:
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisSourcesBucket}]]}
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisSourcesBucket}, '/*']]}
+                  # Temporary bucket (for SSH keys)
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisTemporaryBucket}, '/*']]}
+
+        # Grant read/write access to private data bucket
+        - PolicyName:             TelemetryPrivateWorkerWriteData
+          PolicyDocument:
+            Statement:
+              - Effect:           Allow
+                Action:
+                  - 's3:Get*'
+                  - 's3:List*'
+                  - 's3:Put*'
+                  - 's3:DeleteObject'
+                Resource:
+                  # Full access to the "intermediate results" bucket:
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-analysis'
+                  - 'arn:aws:s3:::net-mozaws-prod-us-west-2-pipeline-analysis/*'
+                  # And the metrics dashboards data bucket
+                  - 'arn:aws:s3:::net-mozaws-prod-metrics-data'
+                  - 'arn:aws:s3:::net-mozaws-prod-metrics-data/*'
+                  # And the private data bucket
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPrivateDataBucket}]]}
+                  - {'Fn::Join': ["", ['arn:aws:s3:::', {Ref: AnalysisPrivateDataBucket}, '/*']]}
+        # Grant access to send alert emails
+        - PolicyName:             TelemetryPrivateWorkerSendEmail
+          PolicyDocument:
+            Statement:
+              Effect:             Allow
+              Action:
+                - 'ses:SendEmail'
+                - 'ses:SendRawEmail'
+              Resource:
+                - "*"
+
+  # Instance profiles for applying Roles to EC2 instances
+  AnalysisPublicWorkerProfile:
+    Type:                         AWS::IAM::InstanceProfile
+    DependsOn:
+      - AnalysisPublicWorkerRole
+    Properties:
+      Path:                       /telemetry/analysis/public-worker-instance/
+      Roles:
+        - {Ref: AnalysisPublicWorkerRole}
+
+  AnalysisPrivateWorkerProfile:
+    Type:                         AWS::IAM::InstanceProfile
+    DependsOn:
+      - AnalysisPrivateWorkerRole
+    Properties:
+      Path:                       /telemetry/analysis/private-worker-instance/
+      Roles:
+        - {Ref: AnalysisPrivateWorkerRole}
+
+  AnalysisPublicCDN:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          Ref: "AnalysisPublicCDNAliases"
+        DefaultCacheBehavior:
+          TargetOriginId: {'Fn::Join': ["-", ['custom', {'Fn::GetAtt': [ "AnalysisPublicDataBucket", "DomainName" ] }]]}
+          ForwardedValues:
+            QueryString: "True"
+          ViewerProtocolPolicy: "allow-all"
+        Origins:
+          -
+            DomainName: {'Fn::GetAtt': [ "AnalysisPublicDataBucket", "DomainName" ] }
+            Id: {'Fn::Join': ["-", ['custom', {'Fn::GetAtt': [ "AnalysisPublicDataBucket", "DomainName" ] }]]}
+            CustomOriginConfig:
+              HTTPPort: "80"
+              HTTPSPort: "443"
+              OriginProtocolPolicy: "match-viewer"
+        Enabled: "true"
+        PriceClass: "PriceClass_All"
+        ViewerCertificate:
+          IamCertificateId:
+            Ref: "CDNSSLCertID"
+          MinimumProtocolVersion: "TLSv1"
+          SslSupportMethod: "vip"
+
+Outputs:
+  AnalysisDatabase:
+    Description: Database containing scheduled job metadata
+    Value: {Ref: AnalysisDatabase}
+
+  AnalysisSourcesBucket:
+    Description: Bucket containing analysis job code and templates
+    Value: {Ref: AnalysisSourcesBucket}
+
+  AnalysisPublicDataBucket:
+    Description: Location where public analysis results will be stored
+    Value: {Ref: AnalysisPublicDataBucket}
+
+  AnalysisPrivateDataBucket:
+    Description: Location where private analysis results will be stored
+    Value: {Ref: AnalysisPrivateDataBucket}
+
+  AnalysisTemporaryBucket:
+    Description: Location where SSH Keys will be stored
+    Value: {Ref: AnalysisTemporaryBucket}
+
+  AnalysisLoadBalancer:
+    Description: Load balancer to front the analysis service
+    Value: {Ref: AnalysisLoadBalancer}
+  AnalysisLoadBalancerZone:
+    Description: Load balancer to front the analysis service
+    Value: {'Fn::GetAtt': [ "AnalysisLoadBalancer", "CanonicalHostedZoneName" ] }
+  AnalysisLoadBalancerZoneID:
+    Description: Load balancer to front the analysis service
+    Value: {'Fn::GetAtt': [ "AnalysisLoadBalancer", "CanonicalHostedZoneNameID" ] }
+  AnalysisLoadBalancerDNSName:
+    Description: Load balancer to front the analysis service
+    Value: {'Fn::GetAtt': [ "AnalysisLoadBalancer", "DNSName" ] }
+
+  AnalysisDBSecurityByEC2SecurityGroup:
+    Description: DB Security group that uses an EC2 security group
+    Value: {Ref: AnalysisDBSecurityByEC2SecurityGroup}
+
+  AnalysisDBSecurityGroup:
+    Description: EC2 Security group that gives accesss to the Analysis DB
+    Value: {Ref: AnalysisDBSecurityGroup}
+
+  AnalysisPublicWorkerRole:
+    Description: IAM Role for public workers
+    Value: {Ref: AnalysisPublicWorkerRole}
+
+  AnalysisPrivateWorkerRole:
+    Description: IAM Role for private workers
+    Value: {Ref: AnalysisPrivateWorkerRole}
+
+  AnalysisPublicWorkerProfile:
+    Description: IAM Profile for public workers
+    Value: {Ref: AnalysisPublicWorkerProfile}
+
+  AnalysisPrivateWorkerProfile:
+    Description: IAM Profile for private workers
+    Value: {Ref: AnalysisPrivateWorkerProfile}
+
+  AnalysisDatabaseURL:
+    Description: URL String for connecting to the Analysis Database
+    Value: {'Fn::Join': ['', [
+      'postgresql://telemetry:',
+      {Ref: AnalysisDatabasePassword},
+      '@',
+      {'Fn::GetAtt': [ "AnalysisDatabase", "Endpoint.Address" ] },
+      ':',
+      {'Fn::GetAtt': [ "AnalysisDatabase", "Endpoint.Port" ] },
+      '/telemetry' ] ] }
+
+  AnalysisPublicCDN:
+    Description: CloudFront Distribution for the public analysis output
+    Value: {Ref: AnalysisPublicCDN}
+
+  AnalysisPublicCDNDomainName:
+    Description: Domain Name for CloudFront Distribution for public analysis output
+    Value: {'Fn::GetAtt': ["AnalysisPublicCDN", "DomainName"]}

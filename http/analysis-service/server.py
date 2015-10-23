@@ -15,6 +15,7 @@ from urlparse import urljoin
 from uuid import uuid4
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.sql import select, func
+from sqlalchemy import event, DDL
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 from subprocess import check_output, CalledProcessError
@@ -31,7 +32,7 @@ app.config.from_object('config')
 # Connect to AWS
 emr  = emr_connect(app.config['AWS_REGION'])
 ec2 = ec2_connect(app.config['AWS_REGION'])
-ses = ses_connect('us-east-1') # only supported region!
+ses = ses_connect(app.config['AWS_REGION'])
 s3  = s3_connect(app.config['AWS_REGION'])
 bucket = s3.get_bucket(app.config['TEMPORARY_BUCKET'], validate = False)
 code_bucket = s3.get_bucket(app.config['CODE_BUCKET'], validate = False)
@@ -86,30 +87,13 @@ def initialize_db(db):
         Column("schedule_month",        String(20),  nullable=False),
         Column("schedule_day_of_week",  String(20),  nullable=False)
     )
+
+    # Postgres-specific stuff
+    seq_default = DDL("ALTER TABLE scheduled_jobs ALTER COLUMN id SET DEFAULT nextval('scheduled_jobs_id_seq');")
+    event.listen(scheduled_jobs, "after_create", seq_default.execute_if(dialect='postgresql'))
+
     # Create the table
     db['metadata'].create_all(tables=[scheduled_jobs])
-    # TODO: The above does not create the serial column properly in PostgreSQL.
-    #       Use this SQL:
-    # CREATE TABLE scheduled_jobs (
-    #     id                    SERIAL PRIMARY KEY,
-    #     owner                 VARCHAR(50) NOT NULL,
-    #     name                  VARCHAR(100) UNIQUE NOT NULL,
-    #     timeout_minutes       INT NOT NULL,
-    #     code_uri              VARCHAR(300) NOT NULL,
-    #     commandline           VARCHAR NOT NULL,
-    #     data_bucket           VARCHAR(200) NOT NULL,
-    #     num_workers           INT,
-    #     output_dir            VARCHAR(100) NOT NULL,
-    #     output_visibility     VARCHAR(10) NOT NULL,
-    #     schedule_minute       VARCHAR(20) NOT NULL,
-    #     schedule_hour         VARCHAR(20) NOT NULL,
-    #     schedule_day_of_month VARCHAR(20) NOT NULL,
-    #     schedule_month        VARCHAR(20) NOT NULL,
-    #     schedule_day_of_week  VARCHAR(20) NOT NULL
-    # );
-    # -- Make job id start from 1000
-    # ALTER SEQUENCE scheduled_jobs_id_seq RESTART WITH 1000;
-    # CREATE INDEX scheduled_jobs_owner_idx on scheduled_jobs(owner);
 
 def get_db():
     """Opens a new database connection if there is none yet for the
@@ -221,6 +205,8 @@ def build_config(job):
             "master_instance_type": app.config['MASTER_INSTANCE_TYPE'],
             "slave_instance_type": app.config['SLAVE_INSTANCE_TYPE'],
             "spark_version": app.config["SPARK_VERSION"],
+            "spark_instance_profile": app.config["SPARK_INSTANCE_PROFILE"],
+            "spark_emr_bucket": app.config["SPARK_EMR_BUCKET"],
             "ami_version": app.config["AMI_VERSION"],
             "cluster_name": "telemetry-analysis-{0}".format(job['name']),
             "owner": job['owner'],
@@ -231,20 +217,23 @@ def build_config(job):
             "application_tag": app.config["INSTANCE_APP_TAG"]
         }
     else:
-        iam_role = "telemetry-{}-analysis-worker".format(job.output_visibility)
+        iam_role = app.config['WORKER_PRIVATE_PROFILE']
+        if job.output_visibility == 'public':
+            iam_role = app.config['WORKER_PUBLIC_PROFILE']
         config = {
             "ssl_key_name": "mreid",
             "base_dir": "/mnt/telemetry",
             "instance_type": app.config['INSTANCE_TYPE'],
-            "image": "ami-1b36252b", # -> telemetry-worker-hvm-20150902 (Ubuntu 14.10)
+            "image": app.config['WORKER_AMI'],
+
             # TODO: ssh-only security group
-            "security_groups": ["telemetry"],
+            "security_groups": app.config['SECURITY_GROUPS'],
             "iam_role": iam_role,
             "region": app.config['AWS_REGION'],
             "shutdown_behavior": "terminate",
             "name": "telemetry-analysis-{0}".format(job['name']),
             "default_tags": {
-                "Owner": "mreid",
+                "Owner": "mreid@mozilla.com",
                 "Application": "telemetry-server"
             },
             "ephemeral_map": {
@@ -1020,7 +1009,7 @@ def cluster_spawn():
                                               ['-v', app.config['SPARK_VERSION']])
 
     setup_telemetry_bootstrap = BootstrapAction('Setup Telemetry',
-                                                's3://telemetry-spark-emr/telemetry.sh',
+                                                's3://{}/telemetry.sh'.format(app.config['SPARK_EMR_BUCKET']),
                                                 ['--public-key', pubkey])
 
     configure_yarn_bootstrap = BootstrapAction('Configure YARN',
@@ -1035,7 +1024,7 @@ def cluster_spawn():
                               num_instances = n_instances,
                               ami_version = app.config['AMI_VERSION'],
                               service_role = 'EMR_DefaultRole',
-                              job_flow_role = 'telemetry-spark-emr',
+                              job_flow_role = app.config['SPARK_INSTANCE_PROFILE'],
                               visible_to_all_users = True,
                               keep_alive = True,
                               bootstrap_actions = [install_spark_bootstrap,
@@ -1071,23 +1060,23 @@ def cluster_monitor(jobflow_id):
         return login_manager.unauthorized()
 
     try:
-        jobflow = emr.describe_jobflow(jobflow_id)
         cluster = emr.describe_cluster(jobflow_id)
-    except:
-        return "No such cluster: {}".format(jobflow_id), 404
+    except Exception as e:
+        return "No such cluster: {} -- error: {}".format(jobflow_id, e), 404
 
     if get_tag_value(cluster.tags, "Owner") != current_user.email:
         return "No such cluster: {}".format(jobflow_id), 404
 
     # Get a datetime representing when the cluster will be terminated
-    terminate_time = get_termination_time(getattr(jobflow, "creationdatetime", datetime.utcnow()))
+    creation_time = getattr(cluster.status.timeline, "creationdatetime", datetime.utcnow())
+    terminate_time = get_termination_time(creation_time)
 
     # Alright then, let's report status
     return render_template(
         'cluster/monitor.html',
         jobflow_id = jobflow_id,
-        instance_state = jobflow.state,
-        public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
+        instance_state = cluster.status.state,
+        public_dns = cluster.masterpublicdnsname if hasattr(cluster, "masterpublicdnsname") else None,
         terminate_url = abs_url_for('cluster_kill', jobflow_id = jobflow_id),
         terminate_time = terminate_time.strftime("%Y-%m-%d %H:%M:%S"),
         terminate_hours_left = get_hours_remaining(terminate_time)
@@ -1101,7 +1090,6 @@ def cluster_kill(jobflow_id):
         return login_manager.unauthorized()
 
     try:
-        jobflow = emr.describe_jobflow(jobflow_id)
         cluster = emr.describe_cluster(jobflow_id)
     except:
         return "No such cluster: {}".format(jobflow_id), 404
@@ -1116,8 +1104,8 @@ def cluster_kill(jobflow_id):
     return render_template(
         'cluster/kill.html',
         jobflow_id = jobflow_id,
-        jobflow_state = jobflow.state,
-        public_dns = jobflow.masterpublicdnsname if hasattr(jobflow, "masterpublicdnsname") else None,
+        jobflow_state = cluster.status.state,
+        public_dns = cluster.masterpublicdnsname if hasattr(cluster, "masterpublicdnsname") else None,
     )
 
 @app.route("/cluster/schedule", methods=["GET"])

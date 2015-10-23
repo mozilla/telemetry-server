@@ -10,8 +10,12 @@
 *~
 .idea/
 histogram_cache/
+http/analysis-service/analysis-resources.json
+http/analysis-service/analysis-service-stack.json
+http/analysis-service/telemetry-analysis-service.tar.gz
 node_modules/
 htmlcov/
 histogram_tools.py
 .DS_Store
 CMakeFiles
+provisioning/ansible/envs/dev_secrets.yml

@@ -6,7 +6,7 @@
   "upgrade_os": true,
   "base_dir": "/mnt/telemetry",
   "instance_type": "c3.2xlarge",
-  "image": "ami-eb4608db",
+  "image": "ami-2cfe1a1f",
   "security_groups": ["telemetry"],
   "region": "us-west-2",
   "placement": "us-west-2c",
