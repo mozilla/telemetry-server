@@ -981,6 +981,9 @@ def cluster_spawn():
         if val is None or val.strip() == '':
             errors[f] = "This field is required"
 
+    if ' ' in request.form['name']:
+        errors[f] = "Spaces are not allowed in the cluster name."
+
     try:
         n_workers = int(request.form["num_workers"])
         if n_workers <= 0 or n_workers > 20:
