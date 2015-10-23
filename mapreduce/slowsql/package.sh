@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION=0.3
+VERSION=0.4
 NAME=SlowSQL
 TARBALL=${NAME}-$VERSION.tar.gz
 if [ ! -d "combine.py" ]; then
