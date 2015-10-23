@@ -5,7 +5,7 @@ key_name: "20130730-svcops-base-key-dev"
 ssl_cert_arn: arn:aws:iam::927034868273:server-certificate/exp20180829_star_telemetry_mozilla_org
 
 # code version
-sources_version: 26
+sources_version: 27
 
 dns_name: "telemetry-analysis.dev.mozaws.net"
 dns_zone_name: "dev.mozaws.net."
