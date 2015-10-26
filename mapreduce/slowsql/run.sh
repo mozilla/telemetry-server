@@ -1,6 +1,7 @@
 #!/bin/bash
 
 OUTPUT=output
+NAME=SlowSQL
 TODAY=$(date +%Y%m%d)
 if [ ! -d "$OUTPUT" ]; then
     mkdir -p "$OUTPUT"
@@ -75,7 +76,7 @@ for f in $(seq 0 6); do
         cp $BASE/$OUTPUT/slowsql$DAY.csv.gz ./
     else
         echo "Fetching $DAY"
-        aws s3 cp s3://telemetry-public-analysis-2/slowsql/data/slowsql$DAY.csv.gz ./slowsql$DAY.csv.gz
+        aws s3 cp s3://telemetry-public-analysis-2/$NAME/data/slowsql$DAY.csv.gz ./slowsql$DAY.csv.gz
     fi
 done
 echo "Creating weekly data for $MONDAY to $SUNDAY"
