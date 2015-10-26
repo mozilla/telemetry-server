@@ -18,28 +18,34 @@ def parse_heka_record(record):
 
     for field in record.message.fields:
         name = field.name.split('.')
-        value = field.value_string
-        if field.value_type == 1:
-            value = field.value_bytes
-        elif field.value_type == 2:
-            value = field.value_integer
-        elif field.value_type == 3:
-            value = field.value_double
-        elif field.value_type == 4:
-            value = field.value_bool
+        value = _get_field_value(field)
 
 	if len(name) == 1:  # Treat top-level meta fields as strings
-	    result["meta"][name[0]] = value[0] if len(value) else ""
+	    result["meta"][name[0]] = value
 	else:
 	    _add_field(result, name, value)
 
     return result
 
+def _get_field_value(field):
+    value = field.value_string
+    if field.value_type == 1:
+        # TODO: Figure out how to support byte fields without blowing up. For
+        #       now, work around by skipping byte fields.
+        return ""
+    elif field.value_type == 2:
+        value = field.value_integer
+    elif field.value_type == 3:
+        value = field.value_double
+    elif field.value_type == 4:
+        value = field.value_bool
+    if len(value):
+        return value[0]
+    return ""
 
 def _add_field(container, keys, value):
     if len(keys) == 1:
-        blob = value[0] if len(value) else ""
-        container[keys[0]] = _lazyjson(blob)
+        container[keys[0]] = _lazyjson(value)
         return
 
     key = keys.pop(0)
