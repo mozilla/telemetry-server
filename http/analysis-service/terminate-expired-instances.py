@@ -7,7 +7,7 @@ from datetime import datetime
 import config
 
 ec2 = ec2_connect(config.AWS_REGION)
-ses = ses_connect('us-west-2')
+ses = ses_connect(config.AWS_REGION)
 
 def main():
     reservations = ec2.get_all_reservations(
