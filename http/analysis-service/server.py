@@ -200,14 +200,14 @@ def job_exists(name=None, job_id=None):
 def build_config(job):
     if job["code_uri"].endswith(".ipynb"):
         config = {
+            "region": app.config['AWS_REGION'],
             "ssl_key_name": "mozilla_vitillo",
             "num_workers": job['num_workers'],
             "master_instance_type": app.config['MASTER_INSTANCE_TYPE'],
             "slave_instance_type": app.config['SLAVE_INSTANCE_TYPE'],
-            "spark_version": app.config["SPARK_VERSION"],
             "spark_instance_profile": app.config["SPARK_INSTANCE_PROFILE"],
             "spark_emr_bucket": app.config["SPARK_EMR_BUCKET"],
-            "ami_version": app.config["AMI_VERSION"],
+            "emr_release": app.config["EMR_RELEASE"],
             "cluster_name": "telemetry-analysis-{0}".format(job['name']),
             "owner": job['owner'],
             "code_uri": job['code_uri'],
@@ -997,7 +997,7 @@ def cluster_spawn():
 
     # Bug 961200: Check that a proper OpenSSH public key was uploaded.
     # It should start with "ssh-rsa AAAAB3"
-    pubkey = request.files['public-ssh-key'].read()
+    pubkey = request.files['public-ssh-key'].read().rstrip()
     if not validate_public_key(pubkey):
         errors['public-ssh-key'] = "Supplied file does not appear to be a valid OpenSSH public key."
 
@@ -1006,33 +1006,18 @@ def cluster_spawn():
 
     # Create EMR cluster
     n_instances = n_workers if n_workers == 1 else n_workers + 1
-
-    install_spark_bootstrap = BootstrapAction('Install Spark',
-                                              's3://support.elasticmapreduce/spark/install-spark',
-                                              ['-v', app.config['SPARK_VERSION']])
-
-    setup_telemetry_bootstrap = BootstrapAction('Setup Telemetry',
-                                                's3://{}/telemetry.sh'.format(app.config['SPARK_EMR_BUCKET']),
-                                                ['--public-key', pubkey])
-
-    configure_yarn_bootstrap = BootstrapAction('Configure YARN',
-                                               's3://elasticmapreduce/bootstrap-actions/configure-hadoop',
-                                               ['-y', 'yarn.nodemanager.vmem-check-enabled=false',
-                                                '-y', 'yarn.nodemanager.pmem-check-enabled=false'])
-
-    jobflow_id = emr.run_jobflow(name = request.form['token'],
-                              ec2_keyname = 'mozilla_vitillo',
-                              master_instance_type = app.config['MASTER_INSTANCE_TYPE'],
-                              slave_instance_type = app.config['SLAVE_INSTANCE_TYPE'],
-                              num_instances = n_instances,
-                              ami_version = app.config['AMI_VERSION'],
-                              service_role = 'EMR_DefaultRole',
-                              job_flow_role = app.config['SPARK_INSTANCE_PROFILE'],
-                              visible_to_all_users = True,
-                              keep_alive = True,
-                              bootstrap_actions = [install_spark_bootstrap,
-                                                   setup_telemetry_bootstrap,
-                                                   configure_yarn_bootstrap])
+    out = check_output(["aws", "emr", "create-cluster",
+                        "--region", app.config["AWS_REGION"],
+                        "--name", request.form['token'],
+                        "--instance-type", app.config["INSTANCE_TYPE"],
+                        "--instance-count", str(n_instances),
+                        "--service-role", "EMR_DefaultRole",
+                        "--ec2-attributes", "KeyName=mozilla_vitillo,InstanceProfile={}".format(app.config["SPARK_INSTANCE_PROFILE"]),
+                        "--release-label", app.config["EMR_RELEASE"],
+                        "--applications", "Name=Spark",
+                        "--bootstrap-actions", "Path=s3://{}/bootstrap/telemetry.sh,Args=[\"--public-key\",\"{}\"]".format(app.config["SPARK_EMR_BUCKET"], pubkey),
+                        "--configurations", "https://s3-{}.amazonaws.com/{}/configuration/configuration.json".format(app.config["AWS_REGION"], app.config["SPARK_EMR_BUCKET"])])
+    jobflow_id = json.loads(out)["ClusterId"]
 
     # Associate a few tags
     emr.add_tags(jobflow_id, {
