@@ -1,4 +1,4 @@
-
+DEBUG = True
 SECRET_KEY         = 'Overwrite with a secret on deployment'
 
 # AWS EC2 configuration
@@ -13,9 +13,11 @@ WORKER_PUBLIC_PROFILE  = 'telemetry-example-profile'
 # setup bootstrap action depends on it to autotune the cluster.
 MASTER_INSTANCE_TYPE = INSTANCE_TYPE
 SLAVE_INSTANCE_TYPE = INSTANCE_TYPE
-EMR_RELEASE = 'emr-4.1.0'
-SPARK_INSTANCE_PROFILE = 'telemetry-example-profile'
-SPARK_EMR_BUCKET = 'example'
+EMR_RELEASE = 'emr-4.2.0'
+#SPARK_INSTANCE_PROFILE = 'telemetry-example-profile'
+SPARK_INSTANCE_PROFILE = 'telemetry-spark-cloudformation-TelemetrySparkInstanceProfile-1SATUBVEXG7E3'
+#SPARK_EMR_BUCKET = 'example'
+SPARK_EMR_BUCKET = 'telemetry-spark-emr-2'
 
 # Make sure the ephemeral map matches the instance type above.
 EPHEMERAL_MAP      = { "/dev/xvdb": "ephemeral0", "/dev/xvdc": "ephemeral1" }
@@ -26,6 +28,6 @@ EMAIL_SOURCE       = 'telemetry-alerts@mozilla.com'
 
 # Buckets for storing S3 data
 TEMPORARY_BUCKET   = 'bucket-for-ssh-keys'
-CODE_BUCKET        = 'telemetry-analysis-code'
-PUBLIC_DATA_BUCKET = 'telemetry-public-analysis'
-PRIVATE_DATA_BUCKET = 'telemetry-private-analysis'
+CODE_BUCKET        = 'telemetry-analysis-code-2'
+PUBLIC_DATA_BUCKET = 'telemetry-public-analysis-2'
+PRIVATE_DATA_BUCKET = 'telemetry-private-analysis-2'

@@ -67,13 +67,18 @@
     {% if is_update %}
 
     {% call macros.make_input('code-uri', 'S3 Code URI', required=False) %}
-    The location of the IPython notebook in S3. Either update this URI or upload a new
-    notebook below, but not both at the same time.
+    The location of the IPython notebook or JAR in S3. Either update this
+    URI or upload a new notebook or JAR below, but not both at the same time.
     {% endcall %}
 
-    {% call macros.make_input('code', 'IPython notebook', type='file', required=False) %}
-    If desired, upload a new IPython notebook. If you don't want to change the
-    notebook, leave this blank.
+    {% call macros.make_input('code', 'Notebook or JAR', type='file', required=False) %}
+    If desired, upload a new notebook or JAR. If you don't want to change it,
+    leave this blank.
+    {% endcall %}
+
+    {% call macros.make_input('commandline', 'spark-submit arguments', value='') %}
+    The arguments will be passed to spark-submit when a JAR file is submitted to the
+    Spark cluster, e.g. <code>--from-date 20151029 ExecutiveStream</code>
     {% endcall %}
 
     {% else %}
@@ -83,9 +88,14 @@
     well as part of the path to the data in S3.
     {% endcall %}
 
-    {% call macros.make_input('code', 'IPython Notebook', type='file') %}
-    This IPython notebook should contain all the code needed to run
+    {% call macros.make_input('code', 'Notebook or JAR', type='file') %}
+    The IPython notebook or JAR should contain all the code needed to run
     your job.
+    {% endcall %}
+
+    {% call macros.make_input('commandline', 'spark-submit arguments', value='') %}
+    The arguments will be passed to spark-submit when a JAR file is submitted to the
+    Spark cluster, e.g. <code>--from-date 20151029 ExecutiveStream</code>
     {% endcall %}
 
     {% endif %}
