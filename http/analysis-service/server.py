@@ -348,7 +348,8 @@ def job_to_form(job):
         "data-bucket": "data-bucket",
         "output_dir": "output-dir",
         "output_visibility": "output-visibility",
-        "schedule_hour": "schedule-time-of-day"
+        "schedule_hour": "schedule-time-of-day",
+        "num_workers": "num_workers"
     }
 
     for k, v in field_map.iteritems():

@@ -29,9 +29,9 @@ if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cl
     SUBMIT_ARGS=$(jq -r '.commandline' < "$JOB_CONFIG")
 
     if [ "${CODE##*.}" == "jar" ]; then
-        STEP_ARGS=\["s3://${EMR_BUCKET}/batch.sh","--job-name","$JOB_NAME","--jar","$CODE","--spark-submit-args","$SUBMIT_ARGS","--data-bucket","$DATA_BUCKET"\]
+        STEP_ARGS=\["s3://${EMR_BUCKET}/steps/batch.sh","--job-name","$JOB_NAME","--jar","$CODE","--spark-submit-args","$SUBMIT_ARGS","--data-bucket","$DATA_BUCKET"\]
     else
-        STEP_ARGS=\["s3://${EMR_BUCKET}/batch.sh","--job-name","$JOB_NAME","--notebook","$CODE","--data-bucket","$DATA_BUCKET"\]
+        STEP_ARGS=\["s3://${EMR_BUCKET}/steps/batch.sh","--job-name","$JOB_NAME","--notebook","$CODE","--data-bucket","$DATA_BUCKET"\]
     fi
 
     aws emr create-cluster \

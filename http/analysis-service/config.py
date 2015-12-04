@@ -1,4 +1,3 @@
-DEBUG = True
 SECRET_KEY         = 'Overwrite with a secret on deployment'
 
 # AWS EC2 configuration
@@ -14,10 +13,8 @@ WORKER_PUBLIC_PROFILE  = 'telemetry-example-profile'
 MASTER_INSTANCE_TYPE = INSTANCE_TYPE
 SLAVE_INSTANCE_TYPE = INSTANCE_TYPE
 EMR_RELEASE = 'emr-4.2.0'
-#SPARK_INSTANCE_PROFILE = 'telemetry-example-profile'
-SPARK_INSTANCE_PROFILE = 'telemetry-spark-cloudformation-TelemetrySparkInstanceProfile-1SATUBVEXG7E3'
-#SPARK_EMR_BUCKET = 'example'
-SPARK_EMR_BUCKET = 'telemetry-spark-emr-2'
+SPARK_INSTANCE_PROFILE = 'telemetry-example-profile'
+SPARK_EMR_BUCKET = 'example'
 
 # Make sure the ephemeral map matches the instance type above.
 EPHEMERAL_MAP      = { "/dev/xvdb": "ephemeral0", "/dev/xvdc": "ephemeral1" }
