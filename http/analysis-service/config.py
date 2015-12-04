@@ -1,4 +1,3 @@
-
 SECRET_KEY         = 'Overwrite with a secret on deployment'
 
 # AWS EC2 configuration
@@ -13,7 +12,7 @@ WORKER_PUBLIC_PROFILE  = 'telemetry-example-profile'
 # setup bootstrap action depends on it to autotune the cluster.
 MASTER_INSTANCE_TYPE = INSTANCE_TYPE
 SLAVE_INSTANCE_TYPE = INSTANCE_TYPE
-EMR_RELEASE = 'emr-4.1.0'
+EMR_RELEASE = 'emr-4.2.0'
 SPARK_INSTANCE_PROFILE = 'telemetry-example-profile'
 SPARK_EMR_BUCKET = 'example'
 
@@ -26,6 +25,6 @@ EMAIL_SOURCE       = 'telemetry-alerts@mozilla.com'
 
 # Buckets for storing S3 data
 TEMPORARY_BUCKET   = 'bucket-for-ssh-keys'
-CODE_BUCKET        = 'telemetry-analysis-code'
-PUBLIC_DATA_BUCKET = 'telemetry-public-analysis'
-PRIVATE_DATA_BUCKET = 'telemetry-private-analysis'
+CODE_BUCKET        = 'telemetry-analysis-code-2'
+PUBLIC_DATA_BUCKET = 'telemetry-public-analysis-2'
+PRIVATE_DATA_BUCKET = 'telemetry-private-analysis-2'

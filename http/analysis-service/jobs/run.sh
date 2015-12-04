@@ -18,7 +18,7 @@ if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cl
     SLAVE_TYPE=$(jq -r '.slave_instance_type' < "$JOB_CONFIG")
     CLUSTER_NAME=$(jq -r '.cluster_name' < "$JOB_CONFIG")
     JOB_NAME=$(jq -r '.job_name' < "$JOB_CONFIG")
-    NOTEBOOK=$(jq -r '.code_uri' < "$JOB_CONFIG")
+    CODE=$(jq -r '.code_uri' < "$JOB_CONFIG")
     TIMEOUT=$(jq -r '.timeout_minutes' < "$JOB_CONFIG")
     DATA_BUCKET=$(jq -r '.data_bucket' < "$JOB_CONFIG")
     SSH_KEY=$(jq -r '.ssl_key_name' < "$JOB_CONFIG")
@@ -26,6 +26,13 @@ if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cl
     APP_TAG=$(jq -r '.application_tag' < "$JOB_CONFIG")
     INSTANCE_PROFILE=$(jq -r '.spark_instance_profile' < "$JOB_CONFIG")
     EMR_BUCKET=$(jq -r '.spark_emr_bucket' < "$JOB_CONFIG")
+    SUBMIT_ARGS=$(jq -r '.commandline' < "$JOB_CONFIG")
+
+    if [ "${CODE##*.}" == "jar" ]; then
+        STEP_ARGS=\["s3://${EMR_BUCKET}/steps/batch.sh","--job-name","$JOB_NAME","--jar","$CODE","--spark-submit-args","$SUBMIT_ARGS","--data-bucket","$DATA_BUCKET"\]
+    else
+        STEP_ARGS=\["s3://${EMR_BUCKET}/steps/batch.sh","--job-name","$JOB_NAME","--notebook","$CODE","--data-bucket","$DATA_BUCKET"\]
+    fi
 
     aws emr create-cluster \
         --auto-terminate \
@@ -40,7 +47,7 @@ if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cl
         --applications Name=Spark \
         --bootstrap-actions Path=s3://${EMR_BUCKET}/bootstrap/telemetry.sh,Args=\["--timeout","$TIMEOUT"\] \
         --configurations https://s3-${REGION}.amazonaws.com/${EMR_BUCKET}/configuration/configuration.json \
-        --steps Type=CUSTOM_JAR,Name=CustomJAR,ActionOnFailure=TERMINATE_JOB_FLOW,Jar=s3://${REGION}.elasticmapreduce/libs/script-runner/script-runner.jar,Args=\["s3://${EMR_BUCKET}/batch.sh","--job-name","$JOB_NAME","--notebook","$NOTEBOOK","--data-bucket","$DATA_BUCKET"\]
+        --steps Type=CUSTOM_JAR,Name=CustomJAR,ActionOnFailure=TERMINATE_JOB_FLOW,Jar=s3://${REGION}.elasticmapreduce/libs/script-runner/script-runner.jar,Args="$STEP_ARGS"
 else
     cd ~/telemetry-server
     python -m provisioning.aws.launch_worker "$JOB_CONFIG"
