@@ -198,7 +198,7 @@ def job_exists(name=None, job_id=None):
     return False
 
 def build_config(job):
-    if job["code_uri"].endswith(".ipynb"):
+    if job["code_uri"].endswith(".ipynb") or job["code_uri"].endswith(".jar"):
         config = {
             "region": app.config['AWS_REGION'],
             "ssl_key_name": "mozilla_vitillo",
@@ -214,7 +214,8 @@ def build_config(job):
             "job_name": job['name'],
             "timeout_minutes": job['timeout_minutes'],
             "data_bucket": job['data_bucket'],
-            "application_tag": app.config["INSTANCE_APP_TAG"]
+            "application_tag": app.config["INSTANCE_APP_TAG"],
+            "commandline": job['commandline']
         }
     else:
         iam_role = app.config['WORKER_PRIVATE_PROFILE']
@@ -347,7 +348,8 @@ def job_to_form(job):
         "data-bucket": "data-bucket",
         "output_dir": "output-dir",
         "output_visibility": "output-visibility",
-        "schedule_hour": "schedule-time-of-day"
+        "schedule_hour": "schedule-time-of-day",
+        "num_workers": "num_workers"
     }
 
     for k, v in field_map.iteritems():
@@ -500,8 +502,8 @@ def _validate_job_form(is_cluster, request, is_update=True, old_job=None):
     if request.files['code']:
         filename = request.files['code'].filename
         if is_cluster:
-            if not (filename.endswith(".ipynb")):
-                errors['code'] = "File must be a valid IPython notebook."
+            if not (filename.endswith(".ipynb") or filename.endswith(".jar")):
+                errors['code'] = "File must be a valid IPython notebook or JAR."
         else:
             if not (filename.endswith(".tar.gz") or filename.endswith(".tgz")):
                 errors['code'] = "Code file must be in .tar.gz or .tgz format"
@@ -588,7 +590,7 @@ def _validate_job_form(is_cluster, request, is_update=True, old_job=None):
             job['num_workers'] = n_workers
         except:
             errors["num_workers"] = "This field should be a positive number within [1, 20]."
-        job["commandline"] = ""
+        job["commandline"] = request.form["commandline"]
         job["output_dir"] = ""
     else:
         job["commandline"] = request.form["commandline"]
