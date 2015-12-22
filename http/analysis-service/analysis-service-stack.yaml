@@ -252,6 +252,7 @@ Resources:
               "echo 'server {' > /etc/nginx/sites-enabled/default\n",
               "echo '        listen 80;' >> /etc/nginx/sites-enabled/default\n",
               "echo '        server_name analysisservice;' >> /etc/nginx/sites-enabled/default\n",
+              "echo '        client_max_body_size 100m;' >> /etc/nginx/sites-enabled/default\n",
               "echo '        location / { try_files $uri @analysisservice; }' >> /etc/nginx/sites-enabled/default\n",
               "echo '        location @analysisservice {' >> /etc/nginx/sites-enabled/default\n",
               "echo '                include uwsgi_params;' >> /etc/nginx/sites-enabled/default\n",
