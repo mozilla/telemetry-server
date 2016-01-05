@@ -568,36 +568,39 @@ def _validate_job_form(is_cluster, request, is_update=True, old_job=None):
     job_meta["job_dow"] = display_dow(day_of_week)
     job_meta["job_dom"] = display_dom(day_of_month)
 
-    job = {
-        "owner": current_user.email,
-        "name": request.form['job-name'],
-        "timeout_minutes": timeout,
-        "code_uri": job_meta["code_s3path"],
-        "data_bucket": data_bucket,
-        "output_visibility": visibility,
-        "schedule_minute": cron_bits[CRON_IDX_MIN],
-        "schedule_hour": cron_bits[CRON_IDX_HOUR],
-        "schedule_day_of_month": cron_bits[CRON_IDX_DOM],
-        "schedule_month": cron_bits[CRON_IDX_MON],
-        "schedule_day_of_week": cron_bits[CRON_IDX_DOW]
-    }
+    job = None
+    if not errors:
+        # Populate the 'job' dict only if we didn't encounter any form errors.
+        job = {
+            "owner": current_user.email,
+            "name": request.form['job-name'],
+            "timeout_minutes": timeout,
+            "code_uri": job_meta["code_s3path"],
+            "data_bucket": data_bucket,
+            "output_visibility": visibility,
+            "schedule_minute": cron_bits[CRON_IDX_MIN],
+            "schedule_hour": cron_bits[CRON_IDX_HOUR],
+            "schedule_day_of_month": cron_bits[CRON_IDX_DOM],
+            "schedule_month": cron_bits[CRON_IDX_MON],
+            "schedule_day_of_week": cron_bits[CRON_IDX_DOW]
+        }
 
-    if is_cluster:
-        try:
-            n_workers = int(request.form["num_workers"])
-            if n_workers <= 0 or n_workers > 20:
-                raise Exception
-            job['num_workers'] = n_workers
-        except:
-            errors["num_workers"] = "This field should be a positive number within [1, 20]."
-        job["commandline"] = request.form["commandline"]
-        job["output_dir"] = ""
-    else:
-        job["commandline"] = request.form["commandline"]
-        job["output_dir"] = request.form["output-dir"]
+        if is_cluster:
+            try:
+                n_workers = int(request.form["num_workers"])
+                if n_workers <= 0 or n_workers > 20:
+                    raise Exception
+                job['num_workers'] = n_workers
+            except:
+                errors["num_workers"] = "This field should be a positive number within [1, 20]."
+            job["commandline"] = request.form["commandline"]
+            job["output_dir"] = ""
+        else:
+            job["commandline"] = request.form["commandline"]
+            job["output_dir"] = request.form["output-dir"]
 
-    if old_job:
-        job['id'] = old_job['id']
+        if old_job:
+            job['id'] = old_job['id']
 
     return job, job_meta, errors
 
