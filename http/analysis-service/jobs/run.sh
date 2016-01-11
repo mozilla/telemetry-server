@@ -70,7 +70,7 @@ else
 Scheduled Telemetry job "$JOB_NAME" was forcibly terminated after the configured
 timeout ($JOB_TIMEOUT minutes).
 
-You can review the job's details at http://telemetry-dash.mozilla.org
+You can review the job's details at http://analysis.telemetry.mozilla.org
 END
     fi
 fi
