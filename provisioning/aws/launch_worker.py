@@ -20,7 +20,8 @@ class WorkerLauncher(SimpleLauncher):
             "MAIN": self.config.get("job_commandline", "./run.sh"),
             "DATA_BUCKET": self.config.get("job_data_bucket", "telemetry-public-analysis"),
             "OUTPUT_DIR": self.config.get("job_output_dir", "output"),
-            "REGION": self.config.get("region", "us-west-2")
+            "REGION": self.config.get("region", "us-west-2"),
+            "NOTIFY": self.config.get("job_owner", "telemetry-alerts@mozilla.com")
         }
 
         raid_config = ""
@@ -70,9 +71,10 @@ tar xzvf code.tar.gz
 set +e
 echo "Beginning job $JOB_NAME ..." >> "$LOG"
 $MAIN &>> "$LOG"
+JOB_EXIT_CODE=$?
 echo "Finished job $JOB_NAME" >> "$LOG"
 set -e
-echo "'$MAIN' exited with code $?" >> "$LOG"
+echo "'$MAIN' exited with code \$JOB_EXIT_CODE" >> "$LOG"
 cd $OUTPUT_DIR
 for f in \$(find . -type f); do
   # Remove the leading "./"
@@ -89,7 +91,16 @@ for f in \$(find . -type f); do
 done
 cd -
 gzip "$LOG"
-aws s3 cp "${LOG}.gz" "$S3_BASE/logs/$(basename "$LOG").gz" --content-type "text/plain" --content-encoding gzip
+S3_LOG=$S3_BASE/logs/$(basename "$LOG").gz
+aws s3 cp "${LOG}.gz" "\$S3_LOG" --content-type "text/plain" --content-encoding gzip
+if [ \$JOB_EXIT_CODE -ne 0 ]; then
+  aws ses send-email \\
+    --region $REGION \\
+    --from telemetry-alerts@mozilla.com \\
+    --to $NOTIFY \\
+    --subject "Job Error: $JOB_NAME Failed" \\
+    --text "$JOB_NAME exited with status \$JOB_EXIT_CODE. See full log at \$S3_LOG"
+fi
 EOF
 halt
 """
