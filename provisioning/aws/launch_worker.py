@@ -71,7 +71,7 @@ tar xzvf code.tar.gz
 set +e
 echo "Beginning job $JOB_NAME ..." >> "$LOG"
 $MAIN &>> "$LOG"
-JOB_EXIT_CODE=$?
+JOB_EXIT_CODE=\$?
 echo "Finished job $JOB_NAME" >> "$LOG"
 set -e
 echo "'$MAIN' exited with code \$JOB_EXIT_CODE" >> "$LOG"
