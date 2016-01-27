@@ -1,21 +1,21 @@
 stack_name: telemetry-analysis
 region: us-west-2
 env: dev
-key_name: "20130730-svcops-base-key-dev"
+key_name: "20151209-cloudservices-aws-ssh-dev"
 ssl_cert_arn: arn:aws:iam::927034868273:server-certificate/exp20180829_star_telemetry_mozilla_org
 
 # code version
-sources_version: 28
+sources_version: 31
 
 dns_name: "telemetry-analysis.dev.mozaws.net"
 dns_zone_name: "dev.mozaws.net."
 public_analysis_dns_name: "telemetry-analysis-output.dev.mozaws.net"
 
-instance_type: t2.micro
+instance_type: t2.medium
 server_ami_id: ami-a40bea97
 
 # this value can be updated using the build_ami playbook
-worker_ami_id: ami-0028c533
+worker_ami_id: ami-db8067bb
 
 spark_instance_profile: telemetry-spark-cloudformation-TelemetrySparkInstanceProfile-1SATUBVEXG7E3
 spark_emr_bucket: telemetry-spark-emr-2

@@ -175,5 +175,5 @@ Coming soon.
 [4]: ../mapreduce/job.py "MapReduce code"
 [5]: ../mapreduce/examples/filter_saved_session_Fx_prerelease.json "Example Filter"
 [6]: http://mreid-moz.github.io/blog/2013/11/06/current-state-of-telemetry-analysis/
-[7]: http://telemetry-dash.mozilla.org/
+[7]: https://analysis.telemetry.mozilla.org/
 [8]: http://docs.python.org/2/library/marshal.html#module-marshal "Python marshal module"
