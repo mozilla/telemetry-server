@@ -51,8 +51,8 @@ $RAID_CONFIGURATION
 pip install --upgrade awscli
 mkdir -p $BASE
 LOG="$BASE/$JOB_NAME.$(date +%Y%m%d%H%M%S).log"
-if [ ! -d "$(dirname $LOG)" ]; then
-  mkdir -p "$(dirname $LOG)"
+if [ ! -d "$(dirname "$LOG")" ]; then
+  mkdir -p "$(dirname "$LOG")"
 fi
 chown -R ubuntu:ubuntu $BASE
 sudo -Hu ubuntu bash <<EOF
@@ -91,7 +91,7 @@ for f in \$(find . -type f); do
 done
 cd -
 gzip "$LOG"
-S3_LOG=$S3_BASE/logs/$(basename "$LOG").gz
+S3_LOG="$S3_BASE/logs/$(basename "$LOG").gz"
 aws s3 cp "${LOG}.gz" "\$S3_LOG" --content-type "text/plain" --content-encoding gzip
 if [ \$JOB_EXIT_CODE -ne 0 ]; then
   aws ses send-email \\
