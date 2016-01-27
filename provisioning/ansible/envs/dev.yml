@@ -15,7 +15,7 @@ instance_type: t2.medium
 server_ami_id: ami-a40bea97
 
 # this value can be updated using the build_ami playbook
-worker_ami_id: ami-4bb2a92a
+worker_ami_id: ami-db8067bb
 
 spark_instance_profile: telemetry-spark-cloudformation-TelemetrySparkInstanceProfile-1SATUBVEXG7E3
 spark_emr_bucket: telemetry-spark-emr-2
