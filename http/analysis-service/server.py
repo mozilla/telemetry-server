@@ -1019,7 +1019,7 @@ def cluster_spawn():
                         "--service-role", "EMR_DefaultRole",
                         "--ec2-attributes", "KeyName=mozilla_vitillo,InstanceProfile={}".format(app.config["SPARK_INSTANCE_PROFILE"]),
                         "--release-label", app.config["EMR_RELEASE"],
-                        "--applications", "Name=Spark",
+                        "--applications", "Name=Spark", "Name=Hive",
                         "--bootstrap-actions", "Path=s3://{}/bootstrap/telemetry.sh,Args=[\"--public-key\",\"{}\"]".format(app.config["SPARK_EMR_BUCKET"], pubkey),
                         "--configurations", "https://s3-{}.amazonaws.com/{}/configuration/configuration.json".format(app.config["AWS_REGION"], app.config["SPARK_EMR_BUCKET"])])
     jobflow_id = json.loads(out)["ClusterId"]

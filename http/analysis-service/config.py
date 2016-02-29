@@ -12,7 +12,7 @@ WORKER_PUBLIC_PROFILE  = 'telemetry-example-profile'
 # setup bootstrap action depends on it to autotune the cluster.
 MASTER_INSTANCE_TYPE = INSTANCE_TYPE
 SLAVE_INSTANCE_TYPE = INSTANCE_TYPE
-EMR_RELEASE = 'emr-4.2.0'
+EMR_RELEASE = 'emr-4.3.0'
 SPARK_INSTANCE_PROFILE = 'telemetry-example-profile'
 SPARK_EMR_BUCKET = 'example'
 
