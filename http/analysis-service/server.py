@@ -588,7 +588,7 @@ def _validate_job_form(is_cluster, request, is_update=True, old_job=None):
         if is_cluster:
             try:
                 n_workers = int(request.form["num_workers"])
-                if n_workers <= 0 or n_workers > 20:
+                if n_workers <= 0 or n_workers > 30:
                     raise Exception
                 job['num_workers'] = n_workers
             except:
