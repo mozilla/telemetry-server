@@ -48,7 +48,7 @@ apt-get update
 export DEBIAN_FRONTEND=noninteractive; apt-get --yes install python-pip
 S3_BASE="s3://$DATA_BUCKET/$JOB_NAME"
 $RAID_CONFIGURATION
-pip install --upgrade awscli
+pip install --upgrade awscli boto3
 mkdir -p $BASE
 LOG="$BASE/$JOB_NAME.$(date +%Y%m%d%H%M%S).log"
 if [ ! -d "$(dirname "$LOG")" ]; then
