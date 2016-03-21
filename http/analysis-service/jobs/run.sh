@@ -80,7 +80,7 @@ if [ ! -z "$NOTIFY_SUBJECT" ]; then
         TO=$FROM
         NOTIFY_SUBJECT="$NOTIFY_SUBJECT (and had no owner)"
     fi
-    NOTIFY_BODY="$NOTIFY_BODY You can review the job's details at http://analysis.telemetry.mozilla.org"
+    NOTIFY_BODY="$NOTIFY_BODY You can review the job's details at https://analysis.telemetry.mozilla.org"
 
     aws ses send-email \
         --region $REGION \
