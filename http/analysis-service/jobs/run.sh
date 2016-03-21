@@ -53,10 +53,7 @@ if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cl
     if [ $EXIT_CODE -ne 0 ]; then
         # Error creating emr cluster. Notify owner.
         NOTIFY_SUBJECT="Scheduled Spark job '$JOB_NAME' encountered an error"
-        NOTIFY_BODY=<<END
-Scheduled Telemetry Spark job '$JOB_NAME' exited with a code of $EXIT_CODE which
-indicates it probably encountered an error.
-END
+        NOTIFY_BODY="Scheduled Telemetry Spark job '$JOB_NAME' exited with a code of $EXIT_CODE which indicates it probably encountered an error."
     fi
 else
     cd ~/telemetry-server
@@ -67,17 +64,11 @@ else
         # Job timed out.  Notify owner.
         JOB_TIMEOUT=$(jq -r '.job_timeout_minutes' < "$JOB_CONFIG")
         NOTIFY_SUBJECT="Scheduled Telemetry job '$JOB_NAME' timed out"
-        NOTIFY_BODY=<<END
-Scheduled Telemetry job '$JOB_NAME' was forcibly terminated after the configured
-timeout ($JOB_TIMEOUT minutes).
-END
+        NOTIFY_BODY="Scheduled Telemetry job '$JOB_NAME' was forcibly terminated after the configured timeout ($JOB_TIMEOUT minutes)."
     elif [ $EXIT_CODE -ne 0 ]; then
         # Error running job. Notify owner.
         NOTIFY_SUBJECT="Scheduled Telemetry job '$JOB_NAME' encountered an error"
-        NOTIFY_BODY=<<END
-Scheduled Telemetry job '$JOB_NAME' exited with code $EXIT_CODE which indicates
-it probably encountered an error.
-END
+        NOTIFY_BODY="Scheduled Telemetry job '$JOB_NAME' exited with code $EXIT_CODE which indicates it probably encountered an error."
     fi
 fi
 
@@ -89,11 +80,8 @@ if [ ! -z "$NOTIFY_SUBJECT" ]; then
         TO=$FROM
         NOTIFY_SUBJECT="$NOTIFY_SUBJECT (and had no owner)"
     fi
-    NOTIFY_BODY=<<END
-$NOTIFY_BODY
+    NOTIFY_BODY="$NOTIFY_BODY You can review the job's details at https://analysis.telemetry.mozilla.org"
 
-You can review the job's details at http://analysis.telemetry.mozilla.org
-END
     aws ses send-email \
         --region $REGION \
         --from "$FROM" \
