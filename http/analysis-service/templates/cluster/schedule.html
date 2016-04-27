@@ -76,7 +76,7 @@
     leave this blank.
     {% endcall %}
 
-    {% call macros.make_input('commandline', 'Spark submission args', value='') %}
+    {% call macros.make_input('commandline', 'Spark submission args', value='', required=False) %}
     The arguments will be passed to spark-submit when a JAR file is submitted to the
     Spark cluster, e.g. <code>--from-date 20151029 ExecutiveStream</code>
     {% endcall %}
