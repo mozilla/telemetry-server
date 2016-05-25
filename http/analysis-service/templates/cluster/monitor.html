@@ -70,6 +70,9 @@
   Now you can launch your <a href="http://localhost:8888" target="_blank">
     IPython notebook</a> from Firefox.
 </p>
+<p>
+  Be aware that <strong>only one notebook can run on your cluster at a time</strong>. To run a second notebook, you must first stop the running notebook via the <a href="http://localhost:8888" target="_blank">iPython home page for your cluster</a>, by choosing File->"Close and Halt" from the running notebook's menu, or by executing "sc.stop()" in the running notebook.
+</p>
 {% else %}
 <p>
   Your cluster is still launching. Please wait and the connection
@@ -86,4 +89,3 @@
 
 <h3> Good luck :)</h3>
 {% endblock %}
-
