@@ -882,7 +882,9 @@ def spawn_worker_instance():
     ec2.create_tags([instance.id], {
         "Owner":            current_user.email,
         "Name":             request.form['name'],
-        "Application":      app.config['INSTANCE_APP_TAG']
+        "Application":      app.config['INSTANCE_APP_TAG'],
+        "App":              app.config['ACCOUNTING_APP_TAG'],
+        "Type":             app.config['ACCOUNTING_TYPE_TAG']
     })
 
     # Send an email to the user who launched it
@@ -1028,7 +1030,9 @@ def cluster_spawn():
     emr.add_tags(jobflow_id, {
         "Owner": current_user.email,
         "Name": request.form['name'],
-        "Application": app.config['INSTANCE_APP_TAG']
+        "Application": app.config['INSTANCE_APP_TAG'],
+        "App": app.config['ACCOUNTING_APP_TAG'],
+        "Type": app.config['ACCOUNTING_TYPE_TAG']
     })
 
     # Send an email to the user who launched it
