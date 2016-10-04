@@ -23,6 +23,10 @@ INSTANCE_PROFILE   = 'telemetry-analysis-profile'
 INSTANCE_APP_TAG   = 'telemetry-analysis-worker-instance'
 EMAIL_SOURCE       = 'telemetry-alerts@mozilla.com'
 
+# Tags for accounting purposes
+ACCOUNTING_APP_TAG  = 'telemetry-analysis'
+ACCOUNTING_TYPE_TAG = 'worker'
+
 # Buckets for storing S3 data
 TEMPORARY_BUCKET   = 'bucket-for-ssh-keys'
 CODE_BUCKET        = 'telemetry-analysis-code-2'
