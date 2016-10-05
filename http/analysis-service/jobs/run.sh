@@ -48,6 +48,7 @@ if [ "$(jq -r '.num_workers|type' < $JOB_CONFIG)" == "number" ]; then # Spark cl
         --applications Name=Spark Name=Hive \
         --bootstrap-actions Path=s3://${EMR_BUCKET}/bootstrap/telemetry.sh,Args=\["--timeout","$TIMEOUT"\] \
         --configurations https://s3-${REGION}.amazonaws.com/${EMR_BUCKET}/configuration/configuration.json \
+        --log-uri "s3://${DATA_BUCKET}/${JOB_NAME}/logs" \
         --steps Type=CUSTOM_JAR,Name=CustomJAR,ActionOnFailure=TERMINATE_JOB_FLOW,Jar=s3://${REGION}.elasticmapreduce/libs/script-runner/script-runner.jar,Args="$STEP_ARGS"
     EXIT_CODE=$?
     if [ $EXIT_CODE -ne 0 ]; then
