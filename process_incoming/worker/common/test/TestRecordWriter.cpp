@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(test_converter)
   fs::create_directory(uploadDir);
 
   RecordWriter writer(workDir.string(), uploadDir.string(), 1048576, 1000, 0);
-  string payload = "431ab5c3-2712-4ab7-a4b6-e9b61f3a1f30	{\"ver\":2,\"histograms\":{\"A11Y_IATABLE_USAGE_FLAG\":[1,0,0,0,-1,-1,1.23415,1.01]},\"info\":{\"revision\":\"http://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302\"}}";
+  string payload = "431ab5c3-2712-4ab7-a4b6-e9b61f3a1f30	{\"ver\":2,\"histograms\":{\"A11Y_IATABLE_USAGE_FLAG\":[1,0,0,0,-1,-1,1.23415,1.01]},\"info\":{\"revision\":\"https://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302\"}}";
   string prefix = "output";
   writer.Write(prefix, payload.c_str(), payload.size() + 1);
   writer.Finalize();

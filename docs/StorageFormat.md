@@ -15,7 +15,7 @@ but we do not want to store anything more than we need.
 In particular, the Histograms section does not need to include all the metadata
 about each histogram.
 
-The Histogram metadata can be retrieved from [Histograms.json](http://hg.mozilla.org/mozilla-central/file/tip/toolkit/components/telemetry/Histograms.json)
+The Histogram metadata can be retrieved from [Histograms.json](https://hg.mozilla.org/mozilla-central/file/tip/toolkit/components/telemetry/Histograms.json)
 in the Mozilla source, as long as we know which revision to look at for each
 payload.
 

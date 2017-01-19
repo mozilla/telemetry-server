@@ -103,7 +103,7 @@ When the server validates a v4 payload, it expects the following:
   - `payload/histograms` should be present (object)
   - If "type" is `saved-session`, `payload/environment` should be present (object)
   - `payload/info/revision` should point to the mercurial revision of the build (and hence Histograms.json)
-  - `payload/histograms` should not contain any invalid histograms per the spec in [Histograms.json](http://hg.mozilla.org/releases/mozilla-release/raw-file/tip/toolkit/components/telemetry/Histograms.json)
+  - `payload/histograms` should not contain any invalid histograms per the spec in [Histograms.json](https://hg.mozilla.org/releases/mozilla-release/raw-file/tip/toolkit/components/telemetry/Histograms.json)
 
 Example minimal version 4 payload:
 ```js

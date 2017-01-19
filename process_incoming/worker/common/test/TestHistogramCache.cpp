@@ -15,14 +15,14 @@ using namespace mozilla::telemetry;
 BOOST_AUTO_TEST_CASE(test_valid)
 {
   HistogramCache cache("localhost:9898");
-  auto h = cache.FindHistogram("http://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302");
+  auto h = cache.FindHistogram("https://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302");
   BOOST_REQUIRE(h);
 }
 
 BOOST_AUTO_TEST_CASE(test_unknown_revision)
 {
   HistogramCache cache("localhost:9898");
-  auto h = cache.FindHistogram("http://hg.mozilla.org/releases/mozilla-release/rev/f55c55edf302");
+  auto h = cache.FindHistogram("https://hg.mozilla.org/releases/mozilla-release/rev/f55c55edf302");
   BOOST_REQUIRE(!h);
 }
 
