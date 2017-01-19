@@ -18,9 +18,9 @@ using namespace mozilla::telemetry;
 
 BOOST_AUTO_TEST_CASE(test_converter)
 {
-  const char* hist = "{\"ver\":1,\"histograms\":{\"A11Y_IATABLE_USAGE_FLAG\":{\"range\":[1,2],\"bucket_count\":3,\"histogram_type\":3,\"values\":{\"0\":1,\"1\":0},\"sum\":4984161763,\"sum_squares_lo\":1.23415,\"sum_squares_hi\":1.01}},\"info\":{\"revision\":\"http://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302\"}}";
+  const char* hist = "{\"ver\":1,\"histograms\":{\"A11Y_IATABLE_USAGE_FLAG\":{\"range\":[1,2],\"bucket_count\":3,\"histogram_type\":3,\"values\":{\"0\":1,\"1\":0},\"sum\":4984161763,\"sum_squares_lo\":1.23415,\"sum_squares_hi\":1.01}},\"info\":{\"revision\":\"https://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302\"}}";
 
-  const char* conv = "{\"ver\":2,\"histograms\":{\"A11Y_IATABLE_USAGE_FLAG\":[1,0,0,4984161763,-1,-1,1.23415,1.01]},\"info\":{\"revision\":\"http://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302\"}}";
+  const char* conv = "{\"ver\":2,\"histograms\":{\"A11Y_IATABLE_USAGE_FLAG\":[1,0,0,4984161763,-1,-1,1.23415,1.01]},\"info\":{\"revision\":\"https://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302\"}}";
 
   RapidjsonDocument d;
   d.Parse<0>(hist);

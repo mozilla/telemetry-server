@@ -33,7 +33,7 @@ class ConvertTest(unittest.TestCase):
         shutil.rmtree(cls.cache_dir)
 
     def get_revision(self):
-        return "http://hg.mozilla.org/mozilla-central/rev/26cb30a532a1"
+        return "https://hg.mozilla.org/mozilla-central/rev/26cb30a532a1"
 
     def get_payload(self, desc):
         if desc == "anr":

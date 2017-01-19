@@ -210,7 +210,7 @@ Without the histogram server running it will produce something like this:
 
     processing file:"telemetry1.log"
     LoadHistogram - connect: Connection refused
-    ConvertHistogramData - histogram not found: http://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302
+    ConvertHistogramData - histogram not found: https://hg.mozilla.org/releases/mozilla-release/rev/a55c55edf302
     done processing file:"telemetry1.log" processed:1 failures:1 time:0.001871 throughput (MiB/s):9.3563 data in (B):18356 data out (B):0
 
 With the histogram server running:

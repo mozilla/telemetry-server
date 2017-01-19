@@ -15,10 +15,10 @@ import telemetry.util.files as fu
 
 # TODO:
 # [ ] Pre-fetch (and cache) all revisions of Histograms.json using something like:
-#      http://hg.mozilla.org/mozilla-central/log/tip/toolkit/components/telemetry/Histograms.json
-#      http://hg.mozilla.org/releases/mozilla-aurora/log/tip/toolkit/components/telemetry/Histograms.json
-#      http://hg.mozilla.org/releases/mozilla-beta/log/tip/toolkit/components/telemetry/Histograms.json
-#      http://hg.mozilla.org/releases/mozilla-release/log/tip/toolkit/components/telemetry/Histograms.json
+#      https://hg.mozilla.org/mozilla-central/log/tip/toolkit/components/telemetry/Histograms.json
+#      https://hg.mozilla.org/releases/mozilla-aurora/log/tip/toolkit/components/telemetry/Histograms.json
+#      https://hg.mozilla.org/releases/mozilla-beta/log/tip/toolkit/components/telemetry/Histograms.json
+#      https://hg.mozilla.org/releases/mozilla-release/log/tip/toolkit/components/telemetry/Histograms.json
 #     then link other repository revisions to the relevant Histograms.json revision.
 class RevisionCache:
     """A class for fetching and caching revisions of a file in mercurial"""
@@ -68,11 +68,11 @@ class RevisionCache:
 
     def get_histograms_for_revision(self, revision_url, parse=True):
         # revision_url is like
-        #    http://hg.mozilla.org/releases/mozilla-aurora/rev/089956e907ed
+        #    https://hg.mozilla.org/releases/mozilla-aurora/rev/089956e907ed
         # and path should be like
         #    toolkit/components/telemetry/Histograms.json
         # to produce a full URL like
-        #    http://hg.mozilla.org/releases/mozilla-aurora/raw-file/089956e907ed/toolkit/components/telemetry/Histograms.json
+        #    https://hg.mozilla.org/releases/mozilla-aurora/raw-file/089956e907ed/toolkit/components/telemetry/Histograms.json
         repo, revision = self.revision_url_to_parts(revision_url)
         return self.get_revision(repo, revision, parse)
 
@@ -93,7 +93,7 @@ class RevisionCache:
         return histograms
 
     def fetch_server(self, repo, revision, parse=True):
-        url = '/'.join(('http:/', self._server, repo, 'raw-file', revision, self._hist_filepath))
+        url = '/'.join(('https:/', self._server, repo, 'raw-file', revision, self._hist_filepath))
         histograms = None
         try:
             response = urllib2.urlopen(url)
