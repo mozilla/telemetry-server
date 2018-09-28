@@ -1,6 +1,10 @@
 Telemetry Server
 ================
 
+**This repository is deprecated.** Details on the current server for Firefox Telemetry can be found [here](https://docs.telemetry.mozilla.org/concepts/pipeline/data_pipeline.html) and [here](https://docs.telemetry.mozilla.org/concepts/pipeline/http_edge_spec.html).
+
+---
+
 Server components to receive, validate, convert, store, and process Telemetry
 data from the [Mozilla Firefox](http://www.mozilla.org) browser.
 
